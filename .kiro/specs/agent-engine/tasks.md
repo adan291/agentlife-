@@ -29,7 +29,7 @@
   - fast-check property test of requirement 3.6
   - _Requirements: 3.4, 3.5, 3.6, 5.1, 5.2, 5.3_
 
-- [ ] 7. HTTP server and routes
+- [x] 7. HTTP server and routes
   - node:http router, zod validation, 400/404/409, token header, bind 127.0.0.1:8788
   - Route tests on an ephemeral port
   - _Requirements: 1.1, 1.3, 1.4, 6.2, 6.3_

@@ -93,3 +93,27 @@ export const RunExportSchema = z.object({
   artifacts: z.array(z.object({ id: z.string().min(1), kind: z.string().min(1), content: z.string() })),
 });
 export type RunExport = z.infer<typeof RunExportSchema>;
+
+// ---- HTTP responses of the engine ----
+
+export const HealthResponseSchema = z.object({
+  ok: z.literal(true),
+  protocol: z.number().int().positive(),
+  /** Highest event seq stored; clients that only want new events start `GET /events?since=` here. */
+  lastSeq: z.number().int().nonnegative(),
+});
+export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+
+export const StartJobResponseSchema = z.object({ taskId: z.string().min(1) });
+export type StartJobResponse = z.infer<typeof StartJobResponseSchema>;
+
+export const OkResponseSchema = z.object({ ok: z.literal(true) });
+export type OkResponse = z.infer<typeof OkResponseSchema>;
+
+/** Error body for 400/401/404/409/500. `issues` lists zod issue paths for 400. */
+export const ErrorResponseSchema = z.object({
+  error: z.string().min(1),
+  message: z.string().optional(),
+  issues: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
