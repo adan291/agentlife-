@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Shared sanitize, agent.activity event and protocol
+- [x] 1. Shared sanitize, agent.activity event and protocol
   - Move `sanitize` to `shared/src/sanitize.ts` (crew-map re-exports), `agent.activity` event, `activity` server message, `welcome.activity`
   - Tests: schemas, sanitize property test in shared
   - _Requirements: 4.1, 4.5, 6.1_

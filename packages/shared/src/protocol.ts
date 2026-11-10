@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentStateSchema, ApprovalDecisionSchema, JobStateSchema } from "./events.ts";
+import { ACTIVITY_TEXT_MAX, AgentStateSchema, ApprovalDecisionSchema, JobStateSchema } from "./events.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
 
 export const MAX_MESSAGE_BYTES = 16 * 1024;
@@ -64,6 +64,16 @@ export const ApprovalSchema = z.object({
 });
 export type Approval = z.infer<typeof ApprovalSchema>;
 
+export const ACTIVITY_BUFFER_SIZE = 50;
+
+/** One line of the activity terminal. */
+export const ActivityLineSchema = z.object({
+  ts: z.number().int().nonnegative(),
+  agentId: AgentIdSchema,
+  text: z.string().min(1).max(ACTIVITY_TEXT_MAX),
+});
+export type ActivityLine = z.infer<typeof ActivityLineSchema>;
+
 export const ReportSchema = z.object({
   reportId: z.string().min(1),
   taskId: z.string().min(1),
@@ -109,6 +119,8 @@ export const WelcomeMsgSchema = z.object({
   agents: z.array(AgentStatusSchema),
   /** Model label per role, filled by the world-server from the engine. Absent when unknown. */
   models: z.partialRecord(AgentIdSchema, z.string().min(1).max(100)).optional(),
+  /** Last activity lines (max 50, newest last) so a reload does not start with an empty terminal. */
+  activity: z.array(ActivityLineSchema).max(ACTIVITY_BUFFER_SIZE).optional(),
 });
 export type WelcomeMsg = z.infer<typeof WelcomeMsgSchema>;
 
@@ -136,6 +148,7 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("job_update"), job: JobViewSchema }),
   z.object({ type: z.literal("approval"), approval: ApprovalSchema }),
   z.object({ type: z.literal("report"), report: ReportSchema }),
+  z.object({ type: z.literal("activity"), line: ActivityLineSchema }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

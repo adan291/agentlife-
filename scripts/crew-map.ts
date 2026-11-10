@@ -3,28 +3,14 @@
 // absolute paths, secrets or command arguments.
 
 import type { Activity, CrewEvent } from "../packages/shared/src/crew.ts";
+import { MAX_TEXT, sanitize } from "../packages/shared/src/sanitize.ts";
 
-export const MAX_TEXT = 80;
+// One implementation of `sanitize` for engine, runner and tests; see packages/shared/src/sanitize.ts.
+export { MAX_TEXT, sanitize };
 const MAX_COMMIT_TEXT = 60;
 
 /** Commands whose second word (a sub-command such as `check` or `add`) is safe and useful to show. */
 const SUBCOMMAND_TOOLS = new Set(["pnpm", "npm", "npx", "git", "docker", "kiro-cli", "node", "yarn", "gh"]);
-
-/** Removes absolute paths and secret-looking tokens, collapses whitespace and caps the length. */
-export function sanitize(text: string, max = MAX_TEXT): string {
-  let out = text;
-  for (let i = 0; i < 5; i++) {
-    const before = out;
-    out = out
-      .replace(/[A-Za-z]:[\\/]\S*/g, "") // drive-letter paths
-      .replace(/(^|\s)[\\/]{1,2}[^\s]*/g, "$1") // rooted or UNC paths
-      .replace(/ksk_\w*/gi, "")
-      .replace(/\$env:\S*/gi, "") // PowerShell env access, value included
-      .replace(/\b[A-Za-z_][A-Za-z0-9_]*=\S*/g, ""); // NAME=value assignments
-    if (out === before) break;
-  }
-  return out.replace(/\s+/g, " ").trim().slice(0, max).trim();
-}
 
 /** Last segment of a path, accepting both separators. */
 export function baseName(p: string): string {
