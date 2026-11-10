@@ -19,9 +19,9 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 |---|---|---|---|
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 11 / 13 | main | Tasks 1–11 done and merged. Engine runs real kiro-cli roles (architect/qa claude-haiku-5.5, developer auto; ambient lines from local Ollama). Next: live runs with the user (tasks 12–13) |
+| agent-pipeline | 11 / 13 | main | Live run 1 OK (~70 s per job: analyze 29 s, develop 17 s, tests 1.5 s, review 19 s). Run 2 waiting for approval. Next: run 3, then task 13 (export demo run) |
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
-| room-hints | 5 / 5 | feat/room-hints | Tasks 1–5 done, not merged. Manual browser check pending (see below) |
+| room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
