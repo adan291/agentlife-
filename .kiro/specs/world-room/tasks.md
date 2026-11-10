@@ -17,7 +17,7 @@
   - Author `packages/world-server/rooms/office.json` (about 12×10 tiles) and a test that it validates
   - _Requirements: 1.1, 1.2, 1.4, 4.1, 4.3, 9.2_
 
-- [ ] 4. Protocol and agent event schemas
+- [x] 4. Protocol and agent event schemas
   - `shared/src/protocol.ts` (ClientMsg, ServerMsg) and `shared/src/events.ts` (AgentEvent) as zod discriminated unions
   - Tests: valid samples parse, malformed samples are rejected
   - _Requirements: 6.1, 5.5_
