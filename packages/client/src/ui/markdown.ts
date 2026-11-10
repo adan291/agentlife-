@@ -10,7 +10,18 @@ export type Block =
   | { kind: "heading"; level: number; inline: Inline[] }
   | { kind: "paragraph"; inline: Inline[] }
   | { kind: "list"; ordered: boolean; items: Inline[][] }
-  | { kind: "code"; text: string };
+  | { kind: "code"; text: string; lang?: string };
+
+/** How a line of a unified diff is coloured. */
+export type DiffLineKind = "add" | "del" | "hunk" | "meta" | "ctx";
+
+export function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") || line.startsWith("index ")) return "meta";
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
+  return "ctx";
+}
 
 export function parseInline(src: string): Inline[] {
   const out: Inline[] = [];
@@ -46,9 +57,10 @@ export function parseMarkdown(src: string): Block[] {
     if (line.trimStart().startsWith("```")) {
       flushPara();
       flushList();
+      const lang = line.trimStart().slice(3).trim().split(/\s+/)[0]?.toLowerCase() ?? "";
       const code: string[] = [];
       for (i++; i < lines.length && !(lines[i] ?? "").trimStart().startsWith("```"); i++) code.push(lines[i] ?? "");
-      blocks.push({ kind: "code", text: code.join("\n") });
+      blocks.push(lang ? { kind: "code", text: code.join("\n"), lang } : { kind: "code", text: code.join("\n") });
       continue;
     }
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
@@ -140,7 +152,18 @@ export function renderMarkdown(doc: Document, src: string): DocumentFragment {
     } else {
       const pre = doc.createElement("pre");
       const code = doc.createElement("code");
-      code.textContent = b.text;
+      if (b.lang === "diff") {
+        pre.className = "al-diff";
+        for (const line of b.text.split("\n")) {
+          // One block element per line; text only, so the diff content is never interpreted as HTML.
+          const row = doc.createElement("span");
+          row.className = `al-diff-line al-diff-${diffLineKind(line)}`;
+          row.textContent = line === "" ? " " : line;
+          code.appendChild(row);
+        }
+      } else {
+        code.textContent = b.text;
+      }
       pre.appendChild(code);
       frag.appendChild(pre);
     }

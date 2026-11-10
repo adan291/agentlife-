@@ -7,6 +7,8 @@ import { createHud } from "./ui/hud.ts";
 import { createPanels } from "./ui/panels.ts";
 import { createGuide } from "./ui/guide.ts";
 import { MailboxState } from "./ui/mailbox-state.ts";
+import { createTerminal } from "./ui/terminal.ts";
+import { createTheme } from "./ui/theme.ts";
 import { createTooltip } from "./ui/tooltip.ts";
 
 const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
@@ -24,11 +26,13 @@ document.body.appendChild(app.canvas);
 const transport = new LiveTransport(WORLD_URL);
 const sprites = new ProceduralSprites(app.renderer);
 
+const theme = createTheme();
 const hud = createHud(
   () => {
     hud.setZoomLabel(world.toggleZoom());
   },
   () => guide.open(),
+  theme,
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
@@ -39,6 +43,8 @@ hud.setZoomLabel(world.zoom);
 const panels = createPanels((msg) => transport.send(msg));
 const guide = createGuide();
 const mailbox = new MailboxState();
+const terminal = createTerminal();
+theme.onChange(() => terminal.refresh());
 
 transport.onStatus((s) => hud.setStatus(s));
 transport.onMessage((msg) => {
@@ -48,7 +54,12 @@ transport.onMessage((msg) => {
     hud.setNotice(mailbox.pendingCount > 0 ? "Plan waiting for your approval" : null);
   }
   panels.handle(msg);
-  if (msg.type === "welcome") hud.setZoomLabel(world.zoom);
+  if (msg.type === "welcome") {
+    hud.setZoomLabel(world.zoom);
+    terminal.seed(msg.activity ?? []);
+  } else if (msg.type === "activity") {
+    terminal.push(msg.line);
+  }
 });
 
 app.ticker.add(() => world.tick(Date.now()));

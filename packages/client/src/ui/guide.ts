@@ -1,3 +1,5 @@
+import { UI_COLOURS } from "./theme.ts";
+
 export const GUIDE_FLAG = "agentlife-guide-seen";
 
 export const GUIDE_STEPS = [
@@ -32,12 +34,12 @@ export function markGuideSeen(storage: FlagStorage | undefined): void {
 }
 
 const CSS = `
-.al-guide { position: fixed; z-index: 25; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 20px)); background: #14101f; color: #e8e0ff; border: 1px solid #ff8a1f; border-radius: 6px; padding: 12px 16px; font: 13px/1.5 monospace; box-sizing: border-box; }
+.al-guide { position: fixed; z-index: 25; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 90vw); background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 12px 16px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-guide[hidden] { display: none; }
-.al-guide h3 { margin: 0 0 8px; color: #ffb347; }
+.al-guide h3 { margin: 0 0 8px; color: ${UI_COLOURS.accentText}; }
 .al-guide ol { margin: 0 0 8px; padding-left: 22px; }
 .al-guide li { margin: 4px 0; }
-.al-guide p { margin: 0 0 10px; color: #9d93c0; }
+.al-guide p { margin: 0 0 10px; color: ${UI_COLOURS.muted}; }
 `;
 
 export interface Guide {

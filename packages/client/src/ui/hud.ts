@@ -1,18 +1,25 @@
 import type { ConnectionStatus } from "../transport.ts";
+import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
-.al-hud { position: fixed; z-index: 10; font: 12px/1.3 monospace; color: #e8e0ff; }
+.al-hud { position: fixed; z-index: 10; font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; }
 .al-hud-top { top: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
-.al-btn { background: #14101f; color: #e8e0ff; border: 1px solid #4d3b80; border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
-.al-btn:hover { border-color: #ff8a1f; }
-.al-status { top: 10px; left: 10px; background: #14101f; border: 1px solid #4d3b80; border-radius: 4px; padding: 4px 10px; }
+.al-btn { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.al-btn:hover { border-color: ${UI_COLOURS.accent}; }
+.al-status { top: 10px; left: 10px; background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 4px 10px; }
 .al-status[data-status="open"] { display: none; }
-.al-status[data-status="reconnecting"] { border-color: #ff8a1f; color: #ffb347; }
-.al-notice { top: 10px; left: 50%; transform: translateX(-50%); background: #14101f; border: 1px solid #ff8a1f; border-radius: 4px; padding: 4px 12px; color: #ffb347; }
+.al-status[data-status="reconnecting"] { border-color: ${UI_COLOURS.accent}; color: ${UI_COLOURS.accentText}; }
+.al-notice { top: 52px; left: 50%; transform: translateX(-50%); background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 4px 12px; color: ${UI_COLOURS.accentText}; }
 .al-notice[hidden] { display: none; }
-.al-toast { bottom: 16px; left: 50%; transform: translateX(-50%); background: #14101f; border: 1px solid #ff8a1f; border-radius: 4px; padding: 6px 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.al-toast { bottom: calc(var(--al-terminal-h, 0px) + 16px); left: 50%; transform: translateX(-50%); background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 6px 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
 `;
+
+/** Text size controls (A− / A+). */
+export interface FontControls {
+  smaller(): void;
+  bigger(): void;
+}
 
 export interface Hud {
   setStatus(status: ConnectionStatus): void;
@@ -22,8 +29,8 @@ export interface Hud {
   setNotice(text: string | null): void;
 }
 
-/** Small DOM overlay: zoom button, connection banner and transient messages. */
-export function createHud(onZoom: () => void, onHelp: () => void = () => {}): Hud {
+/** Small DOM overlay: zoom button, text size, connection banner and transient messages. */
+export function createHud(onZoom: () => void, onHelp: () => void = () => {}, font?: FontControls): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -44,6 +51,21 @@ export function createHud(onZoom: () => void, onHelp: () => void = () => {}): Hu
   help.setAttribute("aria-label", "How it works");
   help.addEventListener("click", onHelp);
   top.appendChild(help);
+  if (font) {
+    for (const [text, label, act] of [
+      ["A−", "Smaller text", font.smaller],
+      ["A+", "Larger text", font.bigger],
+    ] as const) {
+      const b = document.createElement("button");
+      b.className = "al-btn";
+      b.type = "button";
+      b.textContent = text;
+      b.title = label;
+      b.setAttribute("aria-label", label);
+      b.addEventListener("click", act);
+      top.appendChild(b);
+    }
+  }
 
   const status = document.createElement("div");
   status.className = "al-hud al-status";

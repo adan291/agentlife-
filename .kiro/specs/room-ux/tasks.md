@@ -14,7 +14,7 @@
   - Buffer of 50, `welcome.activity`, forward `activity` messages
   - _Requirements: 4.5, 6.3_
 
-- [ ] 4. Client: terminal and readability
+- [x] 4. Client: terminal and readability
   - `ui/terminal.ts` (ring 300, filter, auto-scroll, collapse/resize), `ui/theme.ts` (14 px base, A−/A+), wider panels, diff colouring in reports, legible room labels
   - _Requirements: 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.2_
 
