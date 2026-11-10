@@ -25,7 +25,8 @@ interface Session {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PLAN = join(ROOT, "scripts", "sessions.json");
-const LOG = join(ROOT, "docs", "session-log.md");
+// Kept in git-ignored data/ so it works across feature branches and never dirties the tree.
+const LOG = join(ROOT, "data", "sessions", "log.md");
 const RUNS = join(ROOT, "data", "sessions");
 const BUILDER = "agentlife-builder";
 const REVIEWER = "agentlife-reviewer";
@@ -54,6 +55,7 @@ function completedIds(): Set<string> {
 
 function recordRun(s: Session, status: "ok" | "failed", minutes: number, logFile: string): void {
   if (!existsSync(LOG)) {
+    mkdirSync(dirname(LOG), { recursive: true });
     writeFileSync(LOG, "# Session log\n\nWritten by scripts/run-session.ts.\n\n| Session | Date | Model | Effort | Minutes | Status | Raw log |\n|---|---|---|---|---|---|---|\n");
   }
   const date = new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -62,7 +64,10 @@ function recordRun(s: Session, status: "ok" | "failed", minutes: number, logFile
 }
 
 function run(cmd: string, args: string[]): { code: number; out: string } {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", windowsHide: true });
+  // pnpm is a .cmd/.ps1 shim on Windows and cannot be spawned without a shell. Args here are fixed
+  // literals from this file, never user or model input, so the shell is safe.
+  const shell = cmd === "pnpm" && process.platform === "win32";
+  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", windowsHide: true, shell });
   if (r.error) fail(`could not run ${cmd}: ${r.error.message}`);
   return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
@@ -88,7 +93,9 @@ function preflight(s: Session, models: Set<string>): void {
 }
 
 function kiroArgs(agent: string, model: string, effort: string, prompt: string, headless: boolean): string[] {
-  const args = ["chat", "--v3", "--agent", agent, "--model", model, "--effort", effort];
+  const args = ["chat", "--v3", "--agent", agent, "--model", model];
+  // "auto" picks its own model per request and offers no effort levels (kiro-cli warns and ignores it).
+  if (model !== "auto") args.push("--effort", effort);
   if (headless) args.push("--no-interactive", "--output-format", "stream-json");
   args.push(prompt);
   return args;
@@ -134,7 +141,8 @@ async function main(): Promise<void> {
 
   const headless = !session.interactive;
   const args = kiroArgs(BUILDER, session.model, session.effort, session.prompt, headless);
-  console.log(`[session] ${session.id} | spec ${session.spec} | model ${session.model} | effort ${session.effort}${headless ? "" : " | interactive"}`);
+  const effort = session.model === "auto" ? "n/a (auto)" : session.effort;
+  console.log(`[session] ${session.id} | spec ${session.spec} | model ${session.model} | effort ${effort}${headless ? "" : " | interactive"}`);
 
   if (dryRun) {
     console.log(`kiro-cli ${args.map(quote).join(" ")}`);

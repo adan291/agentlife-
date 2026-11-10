@@ -10,4 +10,5 @@ Follow .kiro/steering/workflow.md exactly:
 Because no one can answer you:
 - If a task is blocked (missing credential, failing external tool, design that does not work), do not improvise a different architecture. Stop work on that task, write the blocker under "Open problems" in docs/STATUS.md with the exact error, commit, and finish.
 - Never push, merge, rebase, reset or delete branches.
+- Shell commands outside the allowed list are denied without asking. Prefer the read, search and list tools over shell for reading files. Run one simple command per shell call; do not chain commands or use variables like `$LASTEXITCODE`.
 - Do not install global tools. Adding workspace dependencies with `pnpm add` is allowed when the spec design calls for them.

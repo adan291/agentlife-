@@ -11,9 +11,9 @@ pnpm session next              # ejecutar la siguiente con su modelo y effort
 pnpm session next --review     # y después la revisión con agentlife-reviewer (Haiku)
 ```
 
-- Fija `--model` y `--effort` de cada sesión. Si tu cuenta no tiene ese modelo, **se detiene antes de gastar** y no lo sustituye por otro.
+- Fija `--model` y `--effort` de cada sesión (con Auto no hay effort: Auto lo decide). Si tu cuenta no tiene ese modelo, **se detiene antes de gastar** y no lo sustituye por otro.
 - Se niega a arrancar con cambios sin commit.
-- Al terminar ejecuta `pnpm check` y apunta el resultado en `docs/session-log.md`. `next` salta las sesiones marcadas como `ok`.
+- Al terminar ejecuta `pnpm check` y apunta el resultado en `data/sessions/log.md` (local, no se sube). `next` salta las sesiones marcadas como `ok`.
 - Si una sesión falla, no sigas con la siguiente: lee `docs/STATUS.md` y usa la sesión X (rescate).
 - S10 es interactiva (ejecuciones en vivo contigo): el script abre un chat normal con su modelo.
 - Para cambiar un modelo, edita `scripts/sessions.json`, no este documento.
