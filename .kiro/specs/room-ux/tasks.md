@@ -10,7 +10,7 @@
   - Tests: mapping, throttle 1/s, test-count parsing, no secrets
   - _Requirements: 4.1, 4.2, 6.1_
 
-- [ ] 3. World-server: activity ring buffer and forwarding
+- [x] 3. World-server: activity ring buffer and forwarding
   - Buffer of 50, `welcome.activity`, forward `activity` messages
   - _Requirements: 4.5, 6.3_
 

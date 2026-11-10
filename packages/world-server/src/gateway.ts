@@ -1,13 +1,14 @@
 import { WebSocketServer } from "ws";
 import type { RawData, WebSocket } from "ws";
 import {
+  ACTIVITY_BUFFER_SIZE,
   ClientMsgSchema,
   MAX_MESSAGES_PER_SECOND,
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   ServerMsgSchema,
 } from "@agentlife/shared";
-import type { AgentEvent, AgentId, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
+import type { ActivityLine, AgentEvent, AgentId, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
 import type { EngineLink } from "./engine-link.ts";
 
 export interface GatewayOptions {
@@ -72,6 +73,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   // Panel data and job state mirrored from engine events, so a panel can be filled when it opens.
   const approvals = new Map<string, Approval>();
   const reports = new Map<string, Report>();
+  /** Last activity lines, newest last. Sent in `welcome` so a reload does not start with an empty terminal. */
+  const activity: ActivityLine[] = [];
   let currentTaskId: string | null = null;
   let jobActive = false;
 
@@ -176,6 +179,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           if (ws) send(ws, { type: "report", report: r });
           break;
         }
+        case "agent.activity": {
+          const line: ActivityLine = { ts: ev.ts, agentId: ev.agentId, text: ev.text };
+          activity.push(line);
+          if (activity.length > ACTIVITY_BUFFER_SIZE) activity.splice(0, activity.length - ACTIVITY_BUFFER_SIZE);
+          if (ws) send(ws, { type: "activity", line });
+          break;
+        }
         default:
           break;
       }
@@ -238,7 +248,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (current) current.ws.close(4000, "replaced by a newer connection");
     const { you, welcome } = sim.join();
     current = { ws, userId: you };
-    send(ws, models ? { ...welcome, models } : welcome);
+    send(ws, { ...welcome, ...(models ? { models } : {}), ...(activity.length > 0 ? { activity: [...activity] } : {}) });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of approvals.values()) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     refreshModels();

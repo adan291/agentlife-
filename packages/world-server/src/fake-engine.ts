@@ -132,6 +132,7 @@ export class FakeEngineLink implements EngineLink {
     const goto = (agentId: "architect" | "developer" | "qa", anchor: "desk" | "board" | "computer" | "mailbox" | "home") =>
       this.emit(id, { type: "agent.goto", agentId, anchor });
     const say = (agentId: "architect" | "developer" | "qa", text: string) => this.emit(id, { type: "agent.say", agentId, text });
+    const act = (agentId: "architect" | "developer" | "qa", text: string) => this.emit(id, { type: "agent.activity", agentId, text });
     const step = async () => {
       await this.pause();
       return !this.stopped;
@@ -144,13 +145,16 @@ export class FakeEngineLink implements EngineLink {
     state("analyzing");
     goto("architect", "board");
     agent("architect", "thinking", "Reading the repo");
+    act("architect", "Analysing the repo");
     if (!(await step())) return;
     say("architect", "Let me read the haunted-todo repo...");
+    act("architect", "Reading: src/todo.ts");
     goto("architect", "desk");
     agent("architect", "working", "Drafting a plan");
     if (!(await step())) return;
     this.emit(id, { type: "artifact.created", agentId: "architect", kind: "plan", artifactId: `plan-${id}`, title: "Plan" });
     state("awaiting_plan_approval");
+    act("architect", "Plan ready: 2 tasks");
     agent("architect", "waiting_approval", "Plan ready for approval");
     goto("architect", "mailbox");
     this.emit(id, {
@@ -174,29 +178,36 @@ export class FakeEngineLink implements EngineLink {
       return;
     }
     agent("architect", "done", "Plan approved");
+    act("architect", "Approved task 1");
     goto("architect", "home");
 
     // 3. Developer develops.
     state("developing");
     goto("developer", "desk");
     agent("developer", "working", "Editing files");
+    act("developer", "Editing: src/todo.ts");
     if (!(await step())) return;
     say("developer", "Patch is ready.");
     this.emit(id, { type: "artifact.created", agentId: "developer", kind: "diff", artifactId: `diff-${id}`, title: "Patch" });
     agent("developer", "done", "Patch ready");
+    act("developer", "Patch ready");
 
     // 4. Tests.
     state("testing");
     goto("qa", "computer");
     agent("qa", "working", "Running tests");
+    act("qa", "Running tests");
     if (!(await step())) return;
+    act("qa", "Tests passed 3/3");
 
     // 5. QA reviews.
     state("reviewing");
     goto("qa", "desk");
     agent("qa", "thinking", "Reviewing the patch");
+    act("qa", "Reviewing the patch");
     if (!(await step())) return;
     agent("qa", "done", "Review finished");
+    act("qa", "Review: pass (risk low)");
 
     // 6. Report.
     state("report_ready");
