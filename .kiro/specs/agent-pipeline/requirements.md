@@ -32,7 +32,7 @@ Context: docs/agent-system-design.md, .kiro/steering/security.md. Depends on age
 
 #### Acceptance Criteria
 1. THE runtime SHALL spawn `kiro-cli chat --v3 --no-interactive --agent <name> --output-format stream-json` with the prompt on stdin, `cwd` set to the step's directory, and `KIRO_HOME` set to `data/kiro-home`.
-2. THE engine SHALL install the role agents from `packages/agent-engine/agents/*.md` into `data/kiro-home/agents/` at startup.
+2. THE engine SHALL install the role agents from `packages/agent-engine/agents/*.json` into `data/kiro-home/agents/` at startup.
 3. THE runtime SHALL map stream-json records to `RuntimeEvent` (progress, output, usage) and keep the raw lines in `data/runs/<taskId>/<step>.jsonl`.
 4. WHEN the step is aborted or times out, THE runtime SHALL kill the process tree.
 5. IF kiro-cli exits non-zero, THEN the step SHALL fail with the exit code and the last 20 lines of stderr (secrets redacted).

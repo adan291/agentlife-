@@ -16,7 +16,7 @@
   - _Requirements: 2.2_
 
 - [ ] 4. Role agents and prompts
-  - `agents/agentlife-{architect,developer,qa}.md` using the syntax confirmed in the spike; install into `data/kiro-home/agents` at startup
+  - `agents/agentlife-{architect,developer,qa}.json` (same shape as `.kiro/agents/agentlife-reviewer.json`) using the syntax confirmed in the spike; install into `data/kiro-home/agents` at startup
   - `prompts/*.md` templates with the untrusted-content rule
   - Validate each agent with `kiro-cli agent validate --path`
   - _Requirements: 3.2, 4.1, 5.2, 7.1_

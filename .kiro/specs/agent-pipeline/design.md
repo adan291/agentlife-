@@ -22,9 +22,9 @@ All steps implement the agent-engine `Steps` interface. Nothing here changes the
 
 ```
 packages/agent-engine/
-  agents/agentlife-architect.md   # kiro custom agents (markdown + frontmatter), installed into data/kiro-home/agents
-  agents/agentlife-developer.md
-  agents/agentlife-qa.md
+  agents/agentlife-architect.json # kiro custom agents (JSON: kiro-cli 2.34 `agent validate` rejects markdown), installed into data/kiro-home/agents
+  agents/agentlife-developer.json
+  agents/agentlife-qa.json
   prompts/architect.md, developer.md, qa.md   # templates with {{goal}}, {{task}}, {{diff}}, {{testLog}}
   docker/runner.Dockerfile
   src/steps/{materialise,analyze,develop,validate-diff,test,review,report}.ts

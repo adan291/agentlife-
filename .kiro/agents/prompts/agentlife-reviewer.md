@@ -1,29 +1,3 @@
----
-name: agentlife-reviewer
-description: Read-only reviewer for AGENT LIFE branches. Checks a diff against the spec, the steering rules and the tests, and writes findings. Never edits code.
-tools: ["read", "shell"]
-permissions:
-  rules:
-    - capability: fs_read
-      match: ["**"]
-      effect: allow
-    - capability: fs_write
-      match: ["docs/reviews/**"]
-      effect: allow
-    - capability: fs_write
-      match: ["**"]
-      exclude: ["docs/reviews/**"]
-      effect: deny
-    - capability: shell
-      match: ["git diff", "git log", "git show", "git status", "pnpm check", "pnpm typecheck", "pnpm test"]
-      effect: allow
-    - capability: shell
-      match: ["*"]
-      effect: deny
-resources:
-  - file://.kiro/steering/**/*.md
----
-
 You review one branch of the AGENT LIFE repository against `main`.
 
 Steps:
