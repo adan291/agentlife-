@@ -7,6 +7,7 @@
   "permissions": {
     "rules": [
       { "capability": "fs_read", "match": ["**"], "effect": "allow" },
+      { "capability": "fs_read", "match": [".env", ".env.*", "**/.env", "**/.env.*"], "exclude": ["**/.env.example"], "effect": "deny" },
       { "capability": "fs_write", "match": ["docs/reviews/**"], "effect": "allow" },
       { "capability": "fs_write", "match": ["**"], "exclude": ["docs/reviews/**"], "effect": "deny" },
       { "capability": "shell", "match": ["git diff*", "git log*", "git show*", "git status*", "git branch*", "git rev-parse *", "pnpm check", "pnpm typecheck", "pnpm test"], "effect": "allow" }

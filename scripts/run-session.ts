@@ -123,11 +123,26 @@ function quote(a: string): string {
   return /[\s"]/.test(a) ? `"${a.replaceAll('"', '\\"')}"` : a;
 }
 
+/** KIRO_API_KEY from the git-ignored .env, passed only through the child environment. The agents
+ *  are denied reading .env, so the key never enters a prompt, a log or a commit. */
+function sessionEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  const file = join(ROOT, ".env");
+  if (!env.KIRO_API_KEY && existsSync(file)) {
+    const line = readFileSync(file, "utf8").replace(/^\uFEFF/, "").split(/\r?\n/).find((l) => l.startsWith("KIRO_API_KEY="));
+    const key = line?.slice("KIRO_API_KEY=".length).trim().replace(/^["']|["']$/g, "");
+    if (key) env.KIRO_API_KEY = key;
+  }
+  return env;
+}
+
 async function runHeadless(label: string, args: string[], logFile: string): Promise<number> {
   mkdirSync(RUNS, { recursive: true });
   const out = createWriteStream(logFile);
   console.log(`[session] ${label}: running (raw log: ${logFile})`);
-  const child = spawn("kiro-cli", args, { cwd: ROOT, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  const env = sessionEnv();
+  console.log(`[session] KIRO_API_KEY ${env.KIRO_API_KEY ? "available to the session" : "not set"}`);
+  const child = spawn("kiro-cli", args, { cwd: ROOT, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   child.stdout.on("data", (chunk: Buffer) => {
     out.write(chunk);
     process.stdout.write(".");

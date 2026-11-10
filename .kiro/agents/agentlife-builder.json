@@ -6,6 +6,7 @@
   "permissions": {
     "rules": [
       { "capability": "fs_read", "match": ["**"], "effect": "allow" },
+      { "capability": "fs_read", "match": [".env", ".env.*", "**/.env", "**/.env.*"], "exclude": ["**/.env.example"], "effect": "deny" },
       { "capability": "fs_write", "match": ["packages/**", "fixtures/**", "docs/**", "scripts/**", ".kiro/specs/**", ".github/workflows/**", "*.md", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json", ".gitignore"], "effect": "allow" },
       { "capability": "fs_write", "match": ["data/kiro-home/**", "data/spikes/**"], "effect": "allow" },
       { "capability": "fs_write", "match": [".env", ".env.*", "**/.env", "**/.env.*", "data/**", ".kiro/steering/**", "LICENSE"], "exclude": ["data/kiro-home/**", "data/spikes/**"], "effect": "deny" },
