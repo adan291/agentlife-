@@ -20,7 +20,8 @@ describe("loadConfig", () => {
     const cfg = loadConfig();
     expect(cfg.repos.map((r) => r.id)).toContain("haunted-todo");
     expect(cfg.limits.timeoutsMs.analyze).toBe(300000);
-    expect(cfg.agents.ambient.runtime).toBe("none");
+    expect(cfg.agents.ambient.runtime).toBe("llm");
+    expect(cfg.agents.architect.runtime).toBe("kiro-cli");
   });
 
   it("reports an invalid runtime with file and path", () => {
