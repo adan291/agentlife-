@@ -36,6 +36,7 @@ CREATE TABLE approvals(id TEXT PRIMARY KEY, task_id TEXT, kind TEXT, status TEXT
 - `appendEvent(ev)` is the only write path for state; JobView is a pure fold over events (`foldJob(events)`), cached in memory and rebuilt on startup.
 - Artifact contents live in `data/runs/<taskId>/` (plan.json, diff.patch, test_log.txt, review.json, report.md); DB rows point to them. Paths built with `node:path`.
 - DB path: `data/engine.db` (env `ENGINE_DB`). Tests use `:memory:`.
+- Fold conventions (jobs/fold.ts): steps are derived from `task.state_changed` (analyzing→analyze, developing→develop, testing→test, reviewing→review, report_ready→report); the QA verdict is the reason `verdict:pass|fail` on the transition into `report_ready` (`task.failed` also sets verdict fail). Requires `pnpm-workspace.yaml` `allowBuilds: better-sqlite3: true`.
 
 ## Event bus and SSE
 

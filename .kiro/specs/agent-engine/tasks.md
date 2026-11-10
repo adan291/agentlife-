@@ -10,7 +10,7 @@
   - Placeholder repo entry `haunted-todo` (source filled in agent-pipeline)
   - _Requirements: 4.2, 6.1_
 
-- [ ] 3. Store and event log
+- [x] 3. Store and event log
   - better-sqlite3 schema, `appendEvent`, artifact write/read under `data/runs/<taskId>/`, `foldJob`
   - Property test: fold of random event sequences equals incremental view
   - _Requirements: 2.1, 2.3, 7.2_
