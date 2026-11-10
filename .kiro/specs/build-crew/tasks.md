@@ -5,7 +5,7 @@
   - office.json: builder desk + chair + `home_builder`; room still validates; existing tests updated where they enumerate agents
   - _Requirements: 1.1, 1.2, 2.1_
 
-- [ ] 2. Engine: crew relay and route
+- [x] 2. Engine: crew relay and route
   - `src/crew.ts` relay with 3 s say throttle; `POST /crew/events`; JobView ignores `build:*` task ids
   - Tests: 400 on invalid body, mapping, throttle, no task.* events, job + build session at the same time
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.6, 4.2_
