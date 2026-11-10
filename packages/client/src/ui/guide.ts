@@ -34,7 +34,7 @@ export function markGuideSeen(storage: FlagStorage | undefined): void {
 }
 
 const CSS = `
-.al-guide { position: fixed; z-index: 25; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 90vw); background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 12px 16px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
+.al-guide { position: absolute; z-index: 25; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 12px 16px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-guide[hidden] { display: none; }
 .al-guide h3 { margin: 0 0 8px; color: ${UI_COLOURS.accentText}; }
 .al-guide ol { margin: 0 0 8px; padding-left: 22px; }
@@ -49,7 +49,10 @@ export interface Guide {
 }
 
 /** Dismissible "how it works" card. Opens on the first visit; `open()` reopens it. Esc and the button close it. */
-export function createGuide(storage: FlagStorage | undefined = typeof localStorage === "undefined" ? undefined : localStorage): Guide {
+export function createGuide(
+  storage: FlagStorage | undefined = typeof localStorage === "undefined" ? undefined : localStorage,
+  host: HTMLElement = document.body,
+): Guide {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -75,7 +78,7 @@ export function createGuide(storage: FlagStorage | undefined = typeof localStora
   ok.className = "al-btn";
   ok.textContent = "Got it";
   root.append(title, list, note, ok);
-  document.body.appendChild(root);
+  host.appendChild(root);
 
   const close = () => {
     if (root.hidden) return;

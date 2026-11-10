@@ -6,7 +6,7 @@ import { PanelState } from "./panel-state.ts";
 import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
-.al-panel { position: fixed; z-index: 20; top: 64px; left: 50%; transform: translateX(-50%); width: min(720px, 90vw); max-height: calc(100vh - 64px - var(--al-terminal-h, 0px) - 16px); overflow: auto; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 10px 14px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
+.al-panel { position: absolute; z-index: 20; top: 8px; left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 10px 14px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-panel[hidden] { display: none; }
 .al-panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .al-panel h3, .al-panel h4, .al-panel h5, .al-panel h6 { margin: 8px 0 4px; color: ${UI_COLOURS.accentText}; }
@@ -40,7 +40,7 @@ export interface Panels {
 }
 
 /** DOM panels for computer, mailbox and board. Hidden panels take no space and never block the canvas. `onChange` runs after every re-render (open, close, refresh). */
-export function createPanels(send: (msg: ClientMsg) => void, onChange: () => void = () => {}): Panels {
+export function createPanels(send: (msg: ClientMsg) => void, onChange: () => void = () => {}, host: HTMLElement = document.body): Panels {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -63,7 +63,7 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
   header.append(title, closeBtn);
   const body = document.createElement("div");
   root.append(header, body);
-  document.body.appendChild(root);
+  host.appendChild(root);
 
   const render = () => {
     if (!state.open) {

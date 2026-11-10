@@ -4,7 +4,7 @@
   - `ui/shell.ts` with `shellTemplate` (pure, tested), grid regions, ResizeObserver → renderer resize + re-fit; remove the room-fixes free-viewport code
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 7.1_
 
-- [ ] 2. Move components into regions
+- [x] 2. Move components into regions
   - Team bar → side, terminal → dock, stepper + status + HUD controls → top bar; toast, tooltip, guide, panels → stage (absolute); remove all `position: fixed` shell rules
   - _Requirements: 1.5, 4.1, 4.2_
 

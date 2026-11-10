@@ -3,11 +3,7 @@ import type { AgentId, AgentState, ServerMsg } from "@agentlife/shared";
 import { ROLE_COLOURS, STATE_COLOURS } from "../palette.ts";
 import { formatDuration } from "./duration.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
-
-/** Team bar geometry (px). */
-const TEAM_WIDTH_PX = 220;
-const TEAM_COLLAPSED_PX = 48;
-const TEAM_LEFT_PX = 10;
+import type { Shell } from "./shell.ts";
 
 export interface TeamRow {
   agentId: AgentId;
@@ -119,10 +115,10 @@ function stateLabel(state: AgentState): string {
 }
 
 const CSS = `
-.al-team { position: fixed; z-index: 10; left: ${TEAM_LEFT_PX}px; top: 52px; width: ${TEAM_WIDTH_PX}px; max-height: calc(100vh - 52px - var(--al-terminal-h, 0px) - 16px); overflow-y: auto; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 6px; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
-.al-team[data-collapsed="true"] { width: ${TEAM_COLLAPSED_PX}px; }
+.al-team { height: 100%; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
 .al-team-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; }
 .al-team-head b { color: ${UI_COLOURS.accentText}; }
+.al-team[data-collapsed="true"] .al-team-head { justify-content: center; }
 .al-team[data-collapsed="true"] .al-team-head b, .al-team[data-collapsed="true"] .al-team-text { display: none; }
 .al-team-row { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-top: 1px solid ${UI_COLOURS.border}; border-left: 3px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; box-sizing: border-box; }
 .al-team-row:hover, .al-team-row:focus-visible { background: ${UI_COLOURS.inputBg}; }
@@ -157,16 +153,15 @@ interface RowEls {
   elapsed: HTMLElement;
 }
 
-/** Left-edge list of agents with state, model, last activity and time in state. Click a row to focus the agent. */
-export function createTeamBar(onFocus: (id: AgentId) => void): TeamBar {
+/** Agent list in the side bar with state, model, last activity and time in state. Click a row to focus the agent. */
+export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): TeamBar {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
 
   const model = new TeamModel();
-  const root = document.createElement("aside");
+  const root = document.createElement("div");
   root.className = "al-team";
-  root.setAttribute("aria-label", "Team");
   const head = document.createElement("div");
   head.className = "al-team-head";
   const title = document.createElement("b");
@@ -181,8 +176,9 @@ export function createTeamBar(onFocus: (id: AgentId) => void): TeamBar {
     toggle.setAttribute("aria-label", toggle.title);
     toggle.setAttribute("aria-expanded", String(!c));
   };
-  toggle.addEventListener("click", () => setCollapsed(root.dataset["collapsed"] !== "true"));
-  setCollapsed(false);
+  toggle.addEventListener("click", () => shell.toggleSide());
+  setCollapsed(shell.template.sideCollapsed);
+  shell.onChange((t) => setCollapsed(t.sideCollapsed));
   head.append(title, toggle);
   root.appendChild(head);
 
@@ -217,7 +213,7 @@ export function createTeamBar(onFocus: (id: AgentId) => void): TeamBar {
     root.appendChild(button);
     els.set(id, { button, state, model: modelEl, activity, elapsed });
   }
-  document.body.appendChild(root);
+  shell.side.appendChild(root);
 
   const paint = (row: TeamRow, now: number) => {
     const e = els.get(row.agentId)!;

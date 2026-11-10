@@ -111,7 +111,7 @@ export function stepLabel(step: StepperStep): string {
 }
 
 const CSS = `
-.al-stepper { position: fixed; z-index: 10; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 470px); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin: 0; padding: 4px 6px; list-style: none; background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 6px; font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; box-sizing: border-box; }
+.al-stepper { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; min-width: 0; max-width: 100%; overflow-x: auto; margin: 0; padding: 0; list-style: none; font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; box-sizing: border-box; }
 .al-stepper[hidden] { display: none; }
 .al-step { padding: 2px 8px; border: 1px solid transparent; border-radius: 4px; background: none; color: ${UI_COLOURS.muted}; font: inherit; white-space: nowrap; }
 .al-step[data-status="done"] { color: ${UI_COLOURS.text}; }
@@ -125,8 +125,8 @@ export interface Stepper {
   update(job: JobView | null): void;
 }
 
-/** Top-centre progress strip. The "Your turn" step is a button that calls `onYourTurn`. */
-export function createStepper(onYourTurn: () => void): Stepper {
+/** Progress strip in the top bar. The "Your turn" step is a button that calls `onYourTurn`. */
+export function createStepper(onYourTurn: () => void, host: HTMLElement = document.body): Stepper {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -135,7 +135,7 @@ export function createStepper(onYourTurn: () => void): Stepper {
   root.className = "al-stepper";
   root.setAttribute("aria-label", "Job progress");
   root.hidden = true;
-  document.body.appendChild(root);
+  host.appendChild(root);
 
   return {
     update(job) {

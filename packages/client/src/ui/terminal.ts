@@ -3,11 +3,11 @@ import type { ActivityLine, AgentId } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import { formatTime } from "./board.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
+import { DOCK_HEADER_PX } from "./shell.ts";
+import type { Shell } from "./shell.ts";
 
 /** The terminal keeps this many lines; older ones are dropped. */
 export const TERMINAL_MAX_LINES = 300;
-/** Lines visible at the default height. */
-export const TERMINAL_DEFAULT_LINES = 6;
 export type TerminalFilter = AgentId | "all";
 export const TERMINAL_AGENTS: readonly AgentId[] = ["architect", "developer", "qa", "builder"];
 
@@ -50,13 +50,13 @@ export function shouldAutoScroll(scrollTop: number, clientHeight: number, scroll
 }
 
 const CSS = `
-.al-term { position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; background: ${UI_COLOURS.inputBg}; border-top: 1px solid ${UI_COLOURS.border}; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; display: flex; flex-direction: column; }
-.al-term-grip { height: 6px; cursor: ns-resize; background: ${UI_COLOURS.border}; flex: none; touch-action: none; }
+.al-term { height: 100%; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; display: flex; flex-direction: column; }
+.al-term-grip { position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; background: ${UI_COLOURS.border}; touch-action: none; }
 .al-term[data-collapsed="true"] .al-term-grip, .al-term[data-collapsed="true"] .al-term-body { display: none; }
-.al-term-head { display: flex; gap: 8px; align-items: center; padding: 2px 8px; flex: none; }
+.al-term-head { display: flex; gap: 8px; align-items: center; height: ${DOCK_HEADER_PX}px; padding: 0 8px; box-sizing: border-box; flex: none; }
 .al-term-head b { color: ${UI_COLOURS.accentText}; margin-right: auto; }
 .al-term-head select { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; font: inherit; padding: 0 4px; }
-.al-term-body { overflow-y: auto; overflow-x: hidden; padding: 2px 8px 4px; flex: none; }
+.al-term-body { overflow-y: auto; overflow-x: hidden; padding: 2px 8px 4px; flex: 1; min-height: 0; }
 .al-term-row { white-space: pre-wrap; overflow-wrap: anywhere; }
 .al-term-time { color: ${UI_COLOURS.muted}; margin-right: 1.5ch; }
 .al-term-role { font-weight: bold; margin-right: 1.5ch; }
@@ -66,20 +66,19 @@ const CSS = `
 export interface Terminal {
   push(line: ActivityLine): void;
   seed(lines: readonly ActivityLine[]): void;
-  /** Recompute the default height after a font size change. */
-  refresh(): void;
   readonly model: TerminalModel;
 }
 
-/** Docked activity terminal at the bottom. Publishes its height as `--al-terminal-h` so panels and the team bar stay clear of it. */
-export function createTerminal(): Terminal {
+/** Activity terminal in the dock. The shell owns its height (drag the top edge, or collapse to the header row). */
+export function createTerminal(shell: Shell): Terminal {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
 
   const model = new TerminalModel();
-  const root = document.createElement("section");
+  const root = document.createElement("div");
   root.className = "al-term";
+  root.setAttribute("role", "region");
   root.setAttribute("aria-label", "Agent activity");
 
   const grip = document.createElement("div");
@@ -114,27 +113,20 @@ export function createTerminal(): Terminal {
   body.setAttribute("role", "log");
   body.setAttribute("aria-live", "off");
   root.append(grip, head, body);
-  document.body.appendChild(root);
-
-  let bodyPx: number | null = null; // null: default height from the font size
-  const defaultBodyPx = () => {
-    const font = parseFloat(getComputedStyle(root).fontSize) || 14;
-    return Math.round(font * 1.5 * TERMINAL_DEFAULT_LINES) + 6;
-  };
-  const applyHeight = () => {
-    body.style.height = `${bodyPx ?? defaultBodyPx()}px`;
-  };
-  const publishHeight = () => {
-    document.documentElement.style.setProperty("--al-terminal-h", `${root.offsetHeight}px`);
-  };
+  shell.dock.appendChild(root);
 
   const setCollapsed = (collapsed: boolean) => {
     root.dataset["collapsed"] = String(collapsed);
     toggle.textContent = collapsed ? "Show" : "Hide";
     toggle.setAttribute("aria-expanded", String(!collapsed));
-    publishHeight();
   };
-  toggle.addEventListener("click", () => setCollapsed(root.dataset["collapsed"] !== "true"));
+  toggle.addEventListener("click", () => shell.toggleDock());
+  setCollapsed(shell.template.dockCollapsed);
+  shell.onChange((t) => {
+    const was = root.dataset["collapsed"] === "true";
+    setCollapsed(t.dockCollapsed);
+    if (was && !t.dockCollapsed) body.scrollTop = body.scrollHeight;
+  });
 
   const render = () => {
     const stick = shouldAutoScroll(body.scrollTop, body.clientHeight, body.scrollHeight);
@@ -170,17 +162,12 @@ export function createTerminal(): Terminal {
     body.scrollTop = body.scrollHeight;
   });
 
-  // Resize by dragging the grip upwards.
+  // Resize by dragging the top edge upwards; the shell keeps the height between 3 lines and half the window.
   grip.addEventListener("pointerdown", (e) => {
     const startY = e.clientY;
     const startH = body.offsetHeight;
     grip.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => {
-      const max = Math.max(60, window.innerHeight * 0.6);
-      bodyPx = Math.round(Math.min(max, Math.max(40, startH + (startY - ev.clientY))));
-      applyHeight();
-      publishHeight();
-    };
+    const move = (ev: PointerEvent) => shell.setDockBody(startH + (startY - ev.clientY));
     const up = () => {
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", up);
@@ -191,20 +178,10 @@ export function createTerminal(): Terminal {
     grip.addEventListener("pointercancel", up);
   });
 
-  setCollapsed(false);
-  applyHeight();
   render();
-  publishHeight();
-  if (typeof ResizeObserver !== "undefined") new ResizeObserver(publishHeight).observe(root);
-  window.addEventListener("resize", publishHeight);
 
   return {
     model,
-    refresh() {
-      // A font size change alters the default height.
-      if (bodyPx === null) applyHeight();
-      publishHeight();
-    },
     push(line) {
       model.push(line);
       render();

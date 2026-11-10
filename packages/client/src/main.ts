@@ -44,6 +44,7 @@ const transport = new LiveTransport(WORLD_URL);
 const sprites = new ProceduralSprites(app.renderer);
 
 const hud = createHud(
+  { left: shell.topLeft, right: shell.topRight, banners: shell.banners, stage: stageEl },
   () => {
     hud.setZoomLabel(world.toggleZoom());
   },
@@ -63,14 +64,12 @@ const mailbox = new MailboxState();
 const panels = createPanels(
   (msg) => transport.send(msg),
   () => turn.update(mailbox.pendingCount, panels.state.open),
+  stageEl,
 );
-const guide = createGuide();
-const terminal = createTerminal();
-theme.onChange(() => {
-  shell.refresh();
-  terminal.refresh();
-});
-const teamBar = createTeamBar((id) => world.focusAgent(id));
+const guide = createGuide(undefined, stageEl);
+const terminal = createTerminal(shell);
+theme.onChange(() => shell.refresh());
+const teamBar = createTeamBar((id) => world.focusAgent(id), shell);
 
 /** Opens the mailbox from the toast or the stepper: no walking, the client already holds the data. */
 function openMailbox(): void {
@@ -79,8 +78,8 @@ function openMailbox(): void {
   }
   panels.open("mailbox");
 }
-const stepper = createStepper(openMailbox);
-const turn = createYourTurnToast(openMailbox);
+const stepper = createStepper(openMailbox, shell.topCentre);
+const turn = createYourTurnToast(openMailbox, shell.banners);
 
 transport.onStatus((s) => hud.setStatus(s));
 transport.onMessage((msg) => {
