@@ -7,10 +7,13 @@ import {
   PROTOCOL_VERSION,
   ServerMsgSchema,
 } from "@agentlife/shared";
-import type { ErrorCode, ServerMsg, WorldSim } from "@agentlife/shared";
+import type { AgentEvent, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
+import type { EngineLink } from "./engine-link.ts";
 
 export interface GatewayOptions {
   sim: WorldSim;
+  /** Source of jobs and agent events. Without it, job commands reply `engine_unavailable`. */
+  engine?: EngineLink;
   host?: string;
   /** 0 picks an ephemeral port. */
   port?: number;
@@ -56,16 +59,152 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   });
 
   let current: { ws: WebSocket; userId: number } | null = null;
+  const currentWs = (): WebSocket | undefined => current?.ws;
 
   const send = (ws: WebSocket, msg: ServerMsg) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(ServerMsgSchema.parse(msg)));
   };
   const sendError = (ws: WebSocket, code: ErrorCode, message: string) => send(ws, { type: "error", code, message });
-  const sendAll = (msgs: ServerMsg[]) => {
-    if (current) for (const m of msgs) send(current.ws, m);
+  const engine = options.engine;
+
+  // Panel data and job state mirrored from engine events, so a panel can be filled when it opens.
+  const approvals = new Map<string, Approval>();
+  const reports = new Map<string, Report>();
+  let currentTaskId: string | null = null;
+  let jobActive = false;
+
+  /** Serialises outgoing messages so panel data always precedes its `open_panel`. */
+  let outbox: Promise<void> = Promise.resolve();
+  const enqueue = (task: () => Promise<void> | void) => {
+    outbox = outbox.then(task).catch(() => undefined);
   };
 
-  const tick = setInterval(() => sendAll(sim.dueMessages()), options.tickMs ?? 50);
+  const jobUpdate = async (ws: WebSocket) => {
+    if (!engine || !currentTaskId) return;
+    try {
+      send(ws, { type: "job_update", job: await engine.getJob(currentTaskId) });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot read job state");
+    }
+  };
+
+  const panelData = async (ws: WebSocket, panel: string) => {
+    if (panel === "computer") {
+      if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
+      try {
+        send(ws, { type: "repos", repos: await engine.listRepos() });
+      } catch {
+        sendError(ws, "engine_unavailable", "cannot list repositories");
+      }
+    } else if (panel === "mailbox") {
+      for (const a of approvals.values()) send(ws, { type: "approval", approval: a });
+      for (const r of reports.values()) send(ws, { type: "report", report: r });
+    } else if (panel === "board") {
+      await jobUpdate(ws);
+    }
+  };
+
+  /** Send simulation output; `open_panel` is preceded by the panel's data. */
+  const deliver = (msgs: ServerMsg[]) => {
+    if (msgs.length === 0) return;
+    const target = current?.ws;
+    if (!target) return;
+    enqueue(async () => {
+      for (const m of msgs) {
+        if (m.type === "open_panel") await panelData(target, m.panel);
+        send(target, m);
+      }
+    });
+  };
+
+  const onEngineEvent = (ev: AgentEvent) => {
+    deliver(sim.handleAgentEvent(ev));
+    enqueue(async () => {
+      const ws = current?.ws;
+      switch (ev.type) {
+        case "task.created":
+          currentTaskId = ev.taskId;
+          jobActive = true;
+          approvals.clear();
+          reports.clear();
+          if (ws) await jobUpdate(ws);
+          break;
+        case "task.state_changed":
+          if (ws && ev.taskId === currentTaskId) await jobUpdate(ws);
+          break;
+        case "task.failed":
+        case "task.completed":
+          if (ev.taskId === currentTaskId) jobActive = false;
+          if (ws && ev.taskId === currentTaskId) await jobUpdate(ws);
+          break;
+        case "approval.requested": {
+          const a: Approval = {
+            approvalId: ev.approvalId,
+            taskId: ev.taskId,
+            kind: ev.kind,
+            summary: ev.summary,
+            status: "pending",
+            ...(ev.options ? { options: ev.options } : {}),
+          };
+          approvals.set(a.approvalId, a);
+          if (ws) send(ws, { type: "approval", approval: a });
+          break;
+        }
+        case "approval.resolved": {
+          const a = approvals.get(ev.approvalId);
+          if (a) {
+            a.status = ev.decision === "approve" ? "approved" : "rejected";
+            if (ws) send(ws, { type: "approval", approval: a });
+          }
+          break;
+        }
+        case "report.ready": {
+          const r: Report = { reportId: ev.reportId, taskId: ev.taskId, title: ev.title, markdown: ev.markdown };
+          reports.set(r.reportId, r);
+          if (ws) send(ws, { type: "report", report: r });
+          break;
+        }
+        default:
+          break;
+      }
+    });
+  };
+
+  if (engine) {
+    void (async () => {
+      try {
+        for await (const ev of engine.events()) onEngineEvent(ev);
+      } catch {
+        const ws = currentWs();
+        if (ws) sendError(ws, "engine_unavailable", "engine event stream ended");
+      }
+    })();
+  }
+
+  const startJob = async (ws: WebSocket, repoId: string, goal: string) => {
+    if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
+    if (jobActive) return sendError(ws, "busy", "a job is already running");
+    jobActive = true;
+    try {
+      const { taskId } = await engine.startJob(repoId, goal);
+      currentTaskId = taskId;
+    } catch (e) {
+      jobActive = false;
+      sendError(ws, "engine_unavailable", e instanceof Error ? e.message.slice(0, 200) : "cannot start job");
+    }
+  };
+
+  const resolveApproval = async (ws: WebSocket, approvalId: string, decision: "approve" | "reject", note?: string) => {
+    if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
+    if (approvals.get(approvalId)?.status !== "pending") return sendError(ws, "bad_message", "unknown or resolved approval");
+    try {
+      await engine.resolveApproval(approvalId, decision, note);
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot resolve approval");
+    }
+  };
+
+  const tick = setInterval(() => deliver(sim.dueMessages()), options.tickMs ?? 50);
 
   wss.on("connection", (ws) => {
     // One user session in the MVP: a second connection replaces the first.
@@ -93,7 +232,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         if (msg.protocol !== PROTOCOL_VERSION) sendError(ws, "bad_message", `protocol ${PROTOCOL_VERSION} required`);
         return;
       }
-      for (const out of sim.handleIntent(current.userId, msg)) send(ws, out);
+      if (msg.type === "start_job") {
+        void startJob(ws, msg.repoId, msg.goal);
+      } else if (msg.type === "approve") {
+        void resolveApproval(ws, msg.approvalId, msg.decision, msg.note);
+      } else {
+        deliver(sim.handleIntent(current.userId, msg));
+      }
     });
 
     ws.on("close", () => {
@@ -112,6 +257,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         close: () =>
           new Promise<void>((done) => {
             clearInterval(tick);
+            engine?.close?.();
             for (const c of wss.clients) c.terminate();
             wss.close(() => done());
           }),

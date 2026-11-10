@@ -1,0 +1,157 @@
+import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
+import { AgentEventSchema, ServerMsgSchema, WorldSim } from "@agentlife/shared";
+import type { AgentEvent, ServerMsg } from "@agentlife/shared";
+import { FakeEngineLink } from "../src/fake-engine.ts";
+import { startGateway } from "../src/gateway.ts";
+import type { Gateway } from "../src/gateway.ts";
+import { loadRoomFile } from "../src/load-room.ts";
+
+/** Collect events from the engine into an array until closed. */
+function collect(engine: FakeEngineLink) {
+  const events: AgentEvent[] = [];
+  const done = (async () => {
+    for await (const ev of engine.events()) events.push(ev);
+  })();
+  return { events, done };
+}
+
+const tick = () => new Promise<void>((r) => setTimeout(r, 20));
+
+describe("FakeEngineLink", () => {
+  it("lists the fake repo and rejects other repos", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    expect((await engine.listRepos()).map((r) => r.id)).toEqual(["haunted-todo"]);
+    await expect(engine.startJob("evil", "x")).rejects.toThrow(/allowlisted/);
+    engine.close();
+  });
+
+  it("reaches report.ready only after an approve", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    const { events, done } = collect(engine);
+    const { taskId } = await engine.startJob("haunted-todo", "fix the failing test");
+    await tick();
+
+    const request = events.find((e) => e.type === "approval.requested");
+    expect(request).toBeDefined();
+    expect(events.some((e) => e.type === "report.ready")).toBe(false);
+    expect((await engine.getJob(taskId)).state).toBe("awaiting_plan_approval");
+
+    // Still waiting after more time passes.
+    await tick();
+    expect(events.some((e) => e.type === "report.ready")).toBe(false);
+
+    if (request?.type !== "approval.requested") throw new Error("unreachable");
+    await engine.resolveApproval(request.approvalId, "approve");
+    await tick();
+
+    const types = events.map((e) => e.type);
+    expect(types).toContain("report.ready");
+    expect(types.indexOf("report.ready")).toBeGreaterThan(types.indexOf("approval.resolved"));
+    expect((await engine.getJob(taskId)).state).toBe("delivered");
+    // Every event is a valid AgentEvent with increasing seq.
+    for (const e of events) AgentEventSchema.parse(e);
+    expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i));
+    engine.close();
+    await done;
+  });
+
+  it("stops without a report when the plan is rejected", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    const { events } = collect(engine);
+    const { taskId } = await engine.startJob("haunted-todo", "g");
+    await tick();
+    await engine.resolveApproval(`appr-${taskId}`, "reject");
+    await tick();
+    expect(events.some((e) => e.type === "report.ready")).toBe(false);
+    expect(events.some((e) => e.type === "task.failed")).toBe(true);
+    expect((await engine.getJob(taskId)).state).toBe("cancelled");
+    engine.close();
+  });
+
+  it("rejects an unknown approval", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    await expect(engine.resolveApproval("nope", "approve")).rejects.toThrow();
+    engine.close();
+  });
+});
+
+describe("gateway with the fake engine", () => {
+  const gateways: Gateway[] = [];
+  const sockets: WebSocket[] = [];
+  afterEach(async () => {
+    for (const s of sockets.splice(0)) s.terminate();
+    for (const g of gateways.splice(0)) await g.close();
+  });
+
+  async function setup() {
+    const sim = new WorldSim(loadRoomFile(), Date.now, { msPerTile: 5 });
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    const gateway = await startGateway({ sim, engine, port: 0, tickMs: 5 });
+    gateways.push(gateway);
+    const ws = new WebSocket(`ws://127.0.0.1:${gateway.port}`);
+    sockets.push(ws);
+    const received: ServerMsg[] = [];
+    const waiters: (() => void)[] = [];
+    ws.on("message", (d) => {
+      received.push(ServerMsgSchema.parse(JSON.parse(d.toString())));
+      waiters.splice(0).forEach((w) => w());
+    });
+    const next = async (pred: (m: ServerMsg) => boolean, timeoutMs = 2000): Promise<ServerMsg> => {
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        const i = received.findIndex(pred);
+        if (i >= 0) return received.splice(i, 1)[0]!;
+        const left = deadline - Date.now();
+        if (left <= 0) throw new Error("timed out waiting for message");
+        await new Promise<void>((r) => {
+          waiters.push(r);
+          setTimeout(r, left);
+        });
+      }
+    };
+    await new Promise<void>((r) => ws.once("open", () => r()));
+    const send = (m: unknown) => ws.send(JSON.stringify(m));
+    return { ws, received, next, send };
+  }
+
+  it("sends repos before open_panel for the computer", async () => {
+    const c = await setup();
+    c.send({ type: "use", itemId: "computer_desk_1" });
+    const repos = await c.next((m) => m.type === "repos");
+    expect(repos).toMatchObject({ repos: [{ id: "haunted-todo" }] });
+    expect(await c.next((m) => m.type === "open_panel")).toMatchObject({ panel: "computer" });
+  });
+
+  it("runs a job: approval arrives, report only after approve", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
+
+    const approval = await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+    if (approval.type !== "approval") throw new Error("unreachable");
+    expect(await c.next((m) => m.type === "job_update")).toMatchObject({ job: { goal: "fix it" } });
+    expect(await c.next((m) => m.type === "walk" && m.id === "architect")).toBeDefined();
+    expect(await c.next((m) => m.type === "agent_state" && m.agentId === "architect")).toBeDefined();
+    expect(c.received.some((m) => m.type === "report")).toBe(false);
+
+    // A second job is refused while this one runs.
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "another" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "busy" });
+
+    c.send({ type: "approve", approvalId: approval.approval.approvalId, decision: "approve" });
+    expect(await c.next((m) => m.type === "report")).toMatchObject({ report: { taskId: approval.approval.taskId } });
+    expect(await c.next((m) => m.type === "approval" && m.approval.status === "approved")).toBeDefined();
+  });
+
+  it("rejects an approve for an unknown approval", async () => {
+    const c = await setup();
+    c.send({ type: "approve", approvalId: "nope", decision: "approve" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "bad_message" });
+  });
+
+  it("replies engine_unavailable for a non-allowlisted repo", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "evil", goal: "x" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "engine_unavailable" });
+  });
+});

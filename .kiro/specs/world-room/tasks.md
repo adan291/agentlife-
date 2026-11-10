@@ -33,7 +33,7 @@
   - Tests with a real ws client on an ephemeral port
   - _Requirements: 1.3, 6.2, 6.3, 6.4_
 
-- [ ] 7. EngineLink and fake engine
+- [x] 7. EngineLink and fake engine
   - `engine-link.ts` interface, `fake-engine.ts` scripted scenario that waits for approval
   - Wire panel data requests (`repos`, `job_update`, `approval`, `report`) through the gateway
   - Test: scenario reaches `report.ready` only after an approve
