@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Update STATUS before stopping",
+      "trigger": "Stop",
+      "description": "Reminds the agent to keep docs/STATUS.md and tasks.md in sync at the end of a run.",
+      "action": {
+        "type": "agent",
+        "prompt": "If this run changed code or completed spec tasks: make sure the completed tasks are checked in the spec's tasks.md, docs/STATUS.md reflects what was done and what is next, and `pnpm check` passed. If any of that is missing, do it now. If the run changed nothing, do nothing."
+      }
+    }
+  ]
+}
