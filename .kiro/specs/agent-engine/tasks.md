@@ -34,7 +34,7 @@
   - Route tests on an ephemeral port
   - _Requirements: 1.1, 1.3, 1.4, 6.2, 6.3_
 
-- [ ] 8. SSE events endpoint
+- [x] 8. SSE events endpoint
   - Replay + live without gaps, `Last-Event-ID`, heartbeat
   - Reconnection test from requirement 2.2
   - _Requirements: 2.2_

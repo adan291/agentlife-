@@ -1,6 +1,7 @@
 import type http from "node:http";
 import { loadConfig, type EngineConfig } from "./config.ts";
 import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, type Route } from "./http/server.ts";
+import { createEventsRoute } from "./http/sse.ts";
 import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
@@ -26,6 +27,8 @@ export interface EngineOptions {
   ambient?: AgentRuntime;
   reportTimeoutMs?: number;
   extraRoutes?: Route[];
+  /** SSE heartbeat interval in ms (default 15000). */
+  heartbeatMs?: number;
 }
 
 export interface Engine {
@@ -75,7 +78,10 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     config,
     logger,
     token: opts.token,
-    ...(opts.extraRoutes ? { extraRoutes: opts.extraRoutes } : {}),
+    extraRoutes: [
+      createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
+      ...(opts.extraRoutes ?? []),
+    ],
   });
   const host = opts.host ?? DEFAULT_HOST;
   const port = await listen(server, host, opts.port ?? DEFAULT_PORT);
