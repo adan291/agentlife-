@@ -47,8 +47,8 @@
   - Template, artifact, `report.ready`, also on failure; snapshot test
   - _Requirements: 8.1, 8.2_
 
-- [ ] 11. Wire real steps into JobRunner
-  - `config/agents.json` set to kiro-cli for the three roles; FakeRuntime stays the CI default
+- [x] 11. Wire real steps into JobRunner
+  - `config/agents.json` set to kiro-cli for the three roles; FakeRuntime stays the CI default (`RUNTIME=fake`, set by `packages/agent-engine/vitest.config.ts`)
   - _Requirements: 9.1_
 
 - [ ] 12. Live runs

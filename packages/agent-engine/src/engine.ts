@@ -11,6 +11,8 @@ import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import { FakeRuntime } from "./runtimes/fake.ts";
+import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
+import { createPipelineSteps } from "./steps/index.ts";
 import { LlmRuntime } from "./runtimes/llm.ts";
 import type { AgentRuntime, Role } from "./runtimes/types.ts";
 import { Store, type StoreOptions } from "./store.ts";
@@ -47,13 +49,26 @@ export interface Engine {
   close(): Promise<void>;
 }
 
-function buildRuntimes(config: EngineConfig, fakeDelayMs: number): Record<Role, AgentRuntime> {
+/** RUNTIME=fake overrides config/agents.json: every role runs on FakeRuntime (tests, CI, demos without a key). */
+function forceFake(): boolean {
+  return process.env["RUNTIME"] === "fake";
+}
+
+/** True when at least one role runs on kiro-cli, so the real pipeline steps are used. */
+function usesRealPipeline(config: EngineConfig): boolean {
+  return !forceFake() && ROLES.some((r) => config.agents[r].runtime === "kiro-cli");
+}
+
+export function buildRuntimes(config: EngineConfig, fakeDelayMs: number, kiroHome: string): Record<Role, AgentRuntime> {
   const out = {} as Record<Role, AgentRuntime>;
-  const forceFake = process.env["RUNTIME"] === "fake";
-  for (const role of ["architect", "developer", "qa"] as const) {
-    const kind = config.agents[role].runtime;
-    if (forceFake || kind === "fake") out[role] = new FakeRuntime({ delayMs: fakeDelayMs });
-    else throw new Error(`config: runtime '${kind}' for ${role} is not available yet (agent-pipeline spec); use "fake"`);
+  const models: Partial<Record<Role, string>> = {};
+  for (const role of ROLES) {
+    const model = config.agents[role].model;
+    if (model) models[role] = model;
+  }
+  const kiro = new KiroCliRuntime({ kiroHome, models });
+  for (const role of ROLES) {
+    out[role] = !forceFake() && config.agents[role].runtime === "kiro-cli" ? kiro : new FakeRuntime({ delayMs: fakeDelayMs });
   }
   return out;
 }
@@ -62,12 +77,22 @@ function buildRuntimes(config: EngineConfig, fakeDelayMs: number): Record<Role, 
 export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const config = opts.config ?? loadConfig();
   const logger = opts.logger ?? noopLogger;
-  const store = opts.store ?? new Store(opts.storeOptions);
-  if (!opts.steps && process.env["RUNTIME"] !== "fake" && ROLES.some((r) => config.agents[r].runtime === "kiro-cli")) {
-    const installed = installAgents({ kiroHome: dataPaths(opts.dataDir).kiroHome });
-    logger.info("role agents installed", { dir: installed.dir, agents: installed.installed });
+  const paths = dataPaths(opts.dataDir);
+  // With a custom dataDir the run logs (store) and the raw logs (steps) must land in the same place.
+  const store =
+    opts.store ?? new Store({ ...(opts.dataDir ? { runsDir: paths.runs } : {}), ...opts.storeOptions });
+  let steps = opts.steps;
+  if (!steps) {
+    const real = usesRealPipeline(config);
+    if (real) {
+      const installed = installAgents({ kiroHome: paths.kiroHome });
+      logger.info("role agents installed", { dir: installed.dir, agents: installed.installed });
+    }
+    const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
+    steps = real
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger })
+      : createRuntimeSteps({ runtimes, store, logger });
   }
-  const steps = opts.steps ?? createRuntimeSteps({ runtimes: buildRuntimes(config, opts.fakeDelayMs ?? 0), store, logger });
   const ambient =
     opts.ambient ??
     (config.agents.ambient.runtime === "llm"

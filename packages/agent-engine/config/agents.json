@@ -1,6 +1,6 @@
 {
-  "architect": { "runtime": "fake" },
-  "developer": { "runtime": "fake" },
-  "qa": { "runtime": "fake" },
+  "architect": { "runtime": "kiro-cli" },
+  "developer": { "runtime": "kiro-cli" },
+  "qa": { "runtime": "kiro-cli" },
   "ambient": { "runtime": "none" }
 }
