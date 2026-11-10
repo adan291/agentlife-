@@ -18,7 +18,8 @@ Phase 0 done: scaffold, steering, CI, discovery docs, the four specs, reviewer a
 - KIRO_API_KEY not configured yet (needed for S2).
 - Codex CLI not on PATH; reviews can use the Codex app or extension.
 - kiro-cli is logged in with a Google account that only lists Free-tier models. Confirm which account holds the hackathon credits before S2.
-- Model and effort per session: see docs/sessions.md.
+- Model and effort per session: see docs/sessions.md. Automated runner: `pnpm session next` (plan in scripts/sessions.json, agent agentlife-builder). Not yet run for real.
+- The other account's email was removed from docs/sessions.md but is still in commit 4e16788; rewrite history before the first push if the user confirms.
 - The four specs were written by hand. If the Kiro Specs panel does not list them, open each with "Generate a spec from #requirements.md" or run its tasks from a normal session.
 
 ## Key dates
