@@ -21,6 +21,6 @@
   - Sim or world-server test: builder goto desk and back home
   - _Requirements: 1.3, 1.4, 1b.1, 1b.2, 1b.3, 4.3_
 
-- [ ] 5. Manual check
+- [x] 5. Manual check
   - With engine + world-server (ENGINE=http) + client running, run one short real session and record in docs/STATUS.md what was seen
   - _Requirements: 1.4, 2.4, 3.3_

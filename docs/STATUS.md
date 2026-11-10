@@ -20,10 +20,11 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
 | agent-pipeline | 11 / 13 | main | Live run 1 OK (~70 s per job: analyze 29 s, develop 17 s, tests 1.5 s, review 19 s). Run 2 waiting for approval. Next: run 3, then task 13 (export demo run) |
-| build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
+| build-crew | 5 / 5 | main | Done. Seen by the user during S10D: Builder bubbles and terminal lines followed the session (git add, commits) |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
 | room-fixes | 3 / 3 | feat/room-fixes | Done, not merged; `pnpm check` passes. Browser look pending (user) |
+| ui-shell | 0 / 5 | — | One CSS-grid app shell instead of 6 fixed overlays (fixes overlap when collapsing/resizing), responsive rules, polish, Playwright layout test. S10E (Sonnet 5.5) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
