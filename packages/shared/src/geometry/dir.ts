@@ -1,6 +1,6 @@
 /**
  * Eight logical directions, clockwise from north (-y): 0 N, 1 NE, 2 E, 3 SE, 4 S, 5 SW, 6 W, 7 NW.
- * Only 5 are drawn; 5, 6, 7 mirror 3, 2, 1.
+ * Only 5 are drawn; 0, 1, 2 mirror 6, 5, 4 (a screen mirror swaps dx and dy).
  */
 export type Dir = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 

@@ -104,6 +104,8 @@ class WorldSim {
 
 No I/O, no timers: walking state is derived from `startedAt + index * msPerTile` and the clock. This makes it deterministic and testable, and lets the replay transport reuse it.
 
+Implemented addition (client): a horizontal screen mirror swaps dx and dy, so the mirrored directions are 0↔6, 1↔5, 2↔4 (not 5,6,7→3,2,1 numerically). Drawn views are 3, 4, 5, 6, 7; directions 0, 1, 2 are mirrors (`viewFor` in `scene/figure.ts`). Still 5 drawn and 3 mirrored.
+
 Implemented addition: deferred messages (the `face` and `open_panel` that follow a walk) are collected by the host with `dueMessages()`; `nextDeferredAt()` tells it when to wake. A new walk by the same avatar cancels its pending deferred messages. Unreachable `agent.goto` targets are ignored silently; unreachable user `move`/`use` return `no_path`.
 
 `use` on an interactive item: the sim returns `walk` to the use tile plus a deferred `open_panel` that the gateway (or replay transport) sends when the walk ends. Panel data (repos, approvals, reports, timeline) comes from the engine link, not from the sim.
