@@ -23,7 +23,7 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 | build-crew | 5 / 5 | main | Done. Seen by the user during S10D: Builder bubbles and terminal lines followed the session (git add, commits) |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
-| room-fixes | 3 / 3 | feat/room-fixes | Done, not merged; `pnpm check` passes. Browser look pending (user) |
+| room-fixes | 3 / 3 | main | Done and merged (no reconnect on replaced, layout fit, Builder row) |
 | ui-shell | 0 / 5 | — | One CSS-grid app shell instead of 6 fixed overlays (fixes overlap when collapsing/resizing), responsive rules, polish, Playwright layout test. S10E (Sonnet 5.5) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
