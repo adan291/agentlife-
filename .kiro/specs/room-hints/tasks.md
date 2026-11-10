@@ -8,7 +8,7 @@
   - `FurniDef.hint` + catalog texts, `shared/src/roles.ts`, `welcome.models`, engine `GET /config/roles`, world-server fills `models` (fake engine: "fake")
   - _Requirements: 1.4, 3.1, 3.2_
 
-- [ ] 3. Client: tooltips for furniture and agents
+- [x] 3. Client: tooltips for furniture and agents
   - `ui/tooltip.ts`, hover resolution for items and avatars, hide rules
   - _Requirements: 1.1, 1.2, 1.3, 3.1_
 

@@ -1,7 +1,7 @@
 import { Container } from "pixi.js";
 import type { Application, FederatedPointerEvent } from "pixi.js";
 import { FURNI_CATALOG, footprintTiles, screenToTile } from "@agentlife/shared";
-import type { AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@agentlife/shared";
+import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 import { AvatarView } from "./avatar-view.ts";
@@ -13,10 +13,14 @@ import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
+import { agentTooltip } from "../ui/tooltip.ts";
+import type { HoverSink } from "../ui/tooltip.ts";
 
 export interface WorldViewHooks {
   /** Server `error` messages (no_path, rate_limited, ...). */
   onError?(code: ErrorCode, message: string): void;
+  /** Receives hover targets for tooltips. */
+  tooltip?: HoverSink;
 }
 
 interface AvatarEntry {
@@ -38,6 +42,8 @@ export class WorldView {
   private readonly avatars = new Map<AvatarId, AvatarEntry>();
   private zoomLevel: Zoom = 1;
   private zoomChosen = false;
+  private models: Partial<Record<AgentId, string>> = {};
+  private readonly agentStatus = new Map<AgentId, { state?: AgentState; text?: string | undefined }>();
 
   constructor(
     private readonly app: Application,
@@ -76,7 +82,11 @@ export class WorldView {
   handle(msg: ServerMsg, now = Date.now()): void {
     switch (msg.type) {
       case "welcome":
+        this.hooks.tooltip?.hide();
         this.rebuild(msg);
+        break;
+      case "open_panel":
+        this.hooks.tooltip?.hide();
         break;
       case "walk":
         this.avatars.get(msg.id)?.view.setWalk(msg.path, msg.msPerTile, msg.startedAt, now);
@@ -85,6 +95,7 @@ export class WorldView {
         this.avatars.get(msg.id)?.view.setDir(msg.dir);
         break;
       case "agent_state":
+        this.agentStatus.set(msg.agentId, { state: msg.state, text: msg.text });
         this.avatars.get(msg.agentId)?.overlay.setState(msg.state, msg.text);
         if (msg.agentId === "builder" && msg.state === "idle") this.avatars.get("builder")?.overlay.setName(builderTagName("Builder", null));
         break;
@@ -126,6 +137,9 @@ export class WorldView {
       this.objects.addChild(fv.sprite);
     }
 
+    this.models = msg.models ?? {};
+    this.agentStatus.clear();
+    for (const a of msg.agents) this.agentStatus.set(a.agentId, { state: a.state, text: a.text });
     const status = new Map(msg.agents.map((a) => [a.agentId, a]));
     for (const a of msg.avatars) {
       const role: RoleKey = typeof a.id === "string" ? a.id : "user";
@@ -180,24 +194,58 @@ export class WorldView {
   private onPointerMove(e: FederatedPointerEvent): void {
     const h = this.hit(e);
     if (!h) return;
+    const agent = this.agentAt(e.global.x, e.global.y);
+    if (agent) {
+      this.app.canvas.style.cursor = "default";
+      h.room.setHover(null);
+      this.hooks.tooltip?.hover(`agent:${agent}`, e.clientX, e.clientY, () => {
+        const s = this.agentStatus.get(agent);
+        return agentTooltip(agent, s?.state, s?.text, this.models[agent]);
+      });
+      return;
+    }
     if (h.item) {
       const def = FURNI_CATALOG[h.item.defId];
       if (def) {
         h.room.setHover(footprintTiles(h.item, def), def.interaction ? "use" : "floor");
         this.app.canvas.style.cursor = def.interaction ? "pointer" : "default";
+        if (def.interaction && def.hint) {
+          const hint = def.hint;
+          this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.clientX, e.clientY, () => ({ title: def.name, lines: [hint] }));
+        } else {
+          this.hooks.tooltip?.hide();
+        }
         return;
       }
     }
+    this.hooks.tooltip?.hide();
     this.app.canvas.style.cursor = "default";
     h.room.setHover(h.room.isFloor(h.tile) ? [h.tile] : null, "floor");
   }
 
+  /** Front-most agent (not the user) whose sprite is under the point, in canvas coordinates. */
+  private agentAt(gx: number, gy: number): AgentId | undefined {
+    let best: AgentId | undefined;
+    let bestY = -Infinity;
+    for (const [id, { view }] of this.avatars) {
+      if (typeof id !== "string" || !view.sprite.visible) continue;
+      if (!view.sprite.getBounds().containsPoint(gx, gy)) continue;
+      if (view.feetY > bestY) {
+        best = id;
+        bestY = view.feetY;
+      }
+    }
+    return best;
+  }
+
   private clearHover(): void {
     this.room?.setHover(null);
+    this.hooks.tooltip?.hide();
     this.app.canvas.style.cursor = "default";
   }
 
   private onPointerTap(e: FederatedPointerEvent): void {
+    this.hooks.tooltip?.hide();
     const h = this.hit(e);
     if (!h) return;
     if (h.item) {

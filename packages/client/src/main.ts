@@ -5,6 +5,7 @@ import { WorldView } from "./scene/world-view.ts";
 import { LiveTransport } from "./transport.ts";
 import { createHud } from "./ui/hud.ts";
 import { createPanels } from "./ui/panels.ts";
+import { createTooltip } from "./ui/tooltip.ts";
 
 const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
 
@@ -26,6 +27,7 @@ const hud = createHud(() => {
 });
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
+  tooltip: createTooltip(),
 });
 hud.setZoomLabel(world.zoom);
 
