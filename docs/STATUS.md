@@ -3,7 +3,7 @@
 Updated: 2026-11-11
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (272 tests, 2 live-only skipped). agent-pipeline tasks 1–5 (S2, S8) are done on feat/agent-pipeline, not merged. Next: S9 (tasks 6–9: analyze, develop + diff validation, Docker runner, review).
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. agent-pipeline tasks 1–10 are done on feat/agent-pipeline, not merged (`pnpm check`: 184 engine tests pass, 6 live-only skipped). Next: tasks 11–13 (wire the real steps into JobRunner, three live runs, export a demo run).
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
@@ -19,7 +19,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 |---|---|---|---|
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 5 / 13 | feat/agent-pipeline | Tasks 1–5 done: spike, fixture, materialise, role agents + prompts, KiroCliRuntime (not wired into the engine yet, task 11). Next: tasks 6–9 |
+| agent-pipeline | 10 / 13 | feat/agent-pipeline | Tasks 1–10 done. Steps exist as plain functions in `src/steps/` but are not wired into the engine yet (task 11). Next: tasks 11–13 |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
@@ -43,6 +43,13 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 - Engine restarts: the HttpEngineLink starts from the engine's head (`/health.lastSeq`), so a world-server restart does not replay old jobs; it reconnects with the last seq and resets if the engine DB has a lower seq.
 - agent-engine naming: the engine-side job view is `EngineJobViewSchema` (`JobView` already exists as the client-facing view in protocol.ts); recorded in design.md. Fold conventions (steps from state changes, verdict via reason `verdict:pass|fail` on the transition into `report_ready`) are in design.md. Token/credit per step is not in events yet (task 9).
 - `pnpm-workspace.yaml` now has `allowBuilds: better-sqlite3: true` (needed for the prebuilt binary).
+- agent-pipeline tasks 6–10 (S9, S10), what exists and what to know for tasks 11–13 (all in `packages/agent-engine/src/steps/`, design details in the spec's design.md under "Decisions made while implementing"):
+  - Steps are plain functions over `PipelineDeps` (`steps/deps.ts`: runtimes, store, `dataPaths`, repos, limits): `analyzeStep`, `developStep`, `testStep`, `reviewStep`, `reportStep`. Task 11 must compose them into a `Steps` object in `engine.ts` (pass `ctx` and the step inputs through) and give `buildRuntimes` a `KiroCliRuntime` per role (`kiroHome` = `dataPaths().kiroHome`, `models` from config). `createRuntimeSteps` (fake) stays the CI default; the real steps need fenced `json` replies, which `FakeRuntime` does not produce.
+  - `Steps.develop` and `Steps.review` now take `task`, and `ReportInput` has `task`; `TestResult` has `exitCode`. JobRunner builds the first plan task (approval stays approve/reject; the `approval.requested` options list one entry per task and the summary says task 1 is built). Choosing another task needs a protocol and mailbox change; not done.
+  - `DiffRejectedError` (errors.ts): the runner stores the rejected patch as `diff-rejected.patch` and the report shows it.
+  - Docker Desktop was not running at the start of the session; `docker desktop start` brought it up. Image `agentlife-runner:1` was built with `pnpm --filter @agentlife/agent-engine runner:build` and the live Docker tests passed (`$env:AGENTLIFE_LIVE='1'` then `pnpm --filter @agentlife/agent-engine exec vitest run test/docker-runner.test.ts`): `D:\...` mounts work, no network, read-only `/src`, non-root, timeout kills the container. Anyone running live jobs must build the image first (otherwise the test step fails with `runner_image_missing`).
+  - The test log artifact is `test_log-<attempt>.txt` (runner convention), not `test_log.txt`.
+  - Not run live: the Architect, Developer and QA prompts with the real `kiro-cli` through these steps (only the unit tests with scripted runtimes). Task 12 is the first end-to-end run; expect prompt tuning.
 - agent-pipeline tasks 2–5 (S8), what exists and what to know for tasks 6–9:
   - Fixture `fixtures/repos/haunted-todo` (outside the pnpm workspace; own `package-lock.json`, Vitest 5.1.0, 7 passing + 1 skipped test). `config/repos.json` source is now `fixtures/repos/haunted-todo`. `steps/materialise.ts` creates `data/repos/<id>` (single commit, author `AGENT LIFE Engine`, fixed date, so the commit id is stable). `git.ts` has the `git()` helper (no shell, no user/system git config, `NUL` as global config on Windows) and the `DEVELOPER_IDENTITY` for task 7. `paths.ts` has `dataPaths()` and `isInside()`.
   - Role agents in `packages/agent-engine/agents/*.json` (system prompt inline), task templates in `prompts/*.md` (placeholders goal, task, feedback, diff, testLog, testStatus; no retry placeholder, the retry appends the zod error). `prompts.ts` has `renderPrompt` (one pass) and `fence` (untrusted text in a fence the text cannot close). `installAgents()` runs from `startEngine` when a role uses `kiro-cli`.
