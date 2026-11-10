@@ -32,3 +32,13 @@ export class JobCancelledError extends Error {
     this.name = "JobCancelledError";
   }
 }
+
+/** The Developer's change failed the engine's checks. `diff` is kept (possibly truncated) for the report. */
+export class DiffRejectedError extends Error {
+  readonly diff: string;
+  constructor(reason: string, diff: string) {
+    super(`diff rejected: ${reason}`);
+    this.name = "DiffRejectedError";
+    this.diff = diff;
+  }
+}

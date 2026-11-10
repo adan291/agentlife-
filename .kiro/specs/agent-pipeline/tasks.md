@@ -30,7 +30,7 @@
   - Prompt, `extractJsonBlock`, PlanSchema validation with one retry, store plan.json, request approval with one option per task
   - _Requirements: 4.2, 4.3, 4.4_
 
-- [ ] 7. Develop step and diff validation
+- [x] 7. Develop step and diff validation
   - Worktree + branch, run developer agent, validate diff (property test for path rules), commit, store diff.patch
   - _Requirements: 5.1, 5.3, 5.4, 5.5_
 

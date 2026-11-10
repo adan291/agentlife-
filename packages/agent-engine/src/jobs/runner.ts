@@ -12,7 +12,7 @@ import {
   type SemanticAnchor,
 } from "@agentlife/shared";
 import type { LimitsConfig } from "../config.ts";
-import { ConflictError, JobCancelledError, NotFoundError, StepTimeoutError } from "../errors.ts";
+import { ConflictError, DiffRejectedError, JobCancelledError, NotFoundError, StepTimeoutError } from "../errors.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import type { AgentRuntime } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
@@ -267,6 +267,15 @@ export class JobRunner {
       return;
     }
     const reason = trunc(errorText(e), 500);
+    if (e instanceof DiffRejectedError && e.diff) {
+      // Requirement 5.4: the rejected patch is kept for the report.
+      a.data.diff = e.diff;
+      try {
+        this.store.saveArtifact({ taskId: id, agentId: "developer", kind: "diff", title: "Rejected patch", filename: "diff-rejected.patch", content: e.diff });
+      } catch (e2) {
+        this.log.warn("could not store the rejected patch", { taskId: id, error: errorText(e2) });
+      }
+    }
     this.log.error("job failed", { taskId: id, ...(a.lastStep ? { step: a.lastStep } : {}), error: reason });
     if (this.state(id) !== "failed" && this.state(id) !== "report_ready") {
       this.transition(id, "failed", reason);
