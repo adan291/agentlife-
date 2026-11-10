@@ -57,8 +57,10 @@ function completedIds(): Set<string> {
  *  unattended). Exit code 0 therefore does not mean the tasks were done. */
 function blockerSince(startRef: string): string | null {
   const msgs = run("git", ["log", "--format=%s", `${startRef}..HEAD`]).out;
-  const status = existsSync(join(ROOT, "docs", "STATUS.md")) ? readFileSync(join(ROOT, "docs", "STATUS.md"), "utf8") : "";
-  const line = [...msgs.split("\n"), ...status.split("\n")].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b/.test(l));
+  // Only lines this session added to STATUS.md, so an old, already-resolved blocker does not count.
+  const added = run("git", ["diff", "-U0", `${startRef}..HEAD`, "--", "docs/STATUS.md"]).out
+    .split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
+  const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b/.test(l));
   return line ? line.trim().slice(0, 300) : null;
 }
 
