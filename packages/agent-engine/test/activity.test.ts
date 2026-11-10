@@ -223,7 +223,7 @@ describe("activity never carries secrets (review blocker)", () => {
     const store = new Store({ dbPath: ":memory:", redact: createRedactor([secret]) });
     const emitter = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
     emitter.line("task-1", "developer", `Reading config: token ${secret} found`);
-    const stored = JSON.stringify(store.eventsAfter(0));
+    const stored = JSON.stringify(store.eventsSince(0));
     expect(stored).not.toContain(secret);
   });
 
