@@ -3,12 +3,12 @@
 Updated: 2026-11-10
 
 ## Phase
-Phase 0 done. Session S1 done: world-room tasks 1–4 (geometry, pathfinding, room/furniture schemas + office.json, protocol and event schemas). `pnpm check` passes (98 tests). Next session per `pnpm session next`: S2 (kiro-cli spike), then S3 (world-room 5–7).
+Phase 0 done. Session S1 done: world-room tasks 1–4 (geometry, pathfinding, room/furniture schemas + office.json, protocol and event schemas). `pnpm check` passes (98 tests). Session S3 done: world-room tasks 5–7 (WorldSim, gateway, EngineLink + fake engine; `ws` 8.x added to world-server; shared tsconfig now has node types for tests). `pnpm check` passes. Next: world-room tasks 8–12 (client).
 
 ## Specs
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
-| world-room | 4 / 12 | feat/world-room | Next: tasks 5–7 (S3) |
+| world-room | 7 / 12 | feat/world-room | Next: tasks 8–12 (client) |
 | agent-engine | 0 / 10 | — | S6–S7 |
 | agent-pipeline | 0 / 13 | — | Task 1 (kiro-cli spike) in S2; it gates this spec |
 | demo-replay | 0 / 7 | — | S11–S13 |
