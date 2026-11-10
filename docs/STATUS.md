@@ -1,20 +1,24 @@
 # Status
 
-Updated: 2026-11-10
+Updated: 2026-11-11
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. S6 done on branch feat/agent-engine (agent-engine tasks 1–5: engine-api schemas, config, SQLite store + foldJob, transition table, runtimes); `pnpm check` passes. Next: S7 (agent-engine tasks 6–10), starting with JobRunner. S2 (kiro-cli spike) is blocked on a security finding, see below.
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine is complete on branch feat/agent-engine (S6 tasks 1–5, S7 tasks 6–10: JobRunner, HTTP API, SSE, export/observability, HttpEngineLink); `pnpm check` passes (61 engine tests, 29 world-server tests). Next: review and merge feat/agent-engine (user), then agent-pipeline. S2 (kiro-cli spike) is blocked on a security finding, see below.
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
 - `pnpm --filter @agentlife/world-server start`
 - `pnpm --filter @agentlife/client dev` then open http://localhost:5173/ (Z or the button toggles 1×/2×)
 
+With the real engine (RUNTIME=fake, branch feat/agent-engine): start the engine first, then the world-server with `ENGINE=http` (`ENGINE_URL` default http://127.0.0.1:8788, `ENGINE_TOKEN` optional on both):
+- `pnpm --filter @agentlife/agent-engine start` (`FAKE_DELAY_MS`, default 800, sets the pace of the fake agents)
+- PowerShell: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start`
+
 ## Specs
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
-| agent-engine | 5 / 10 | feat/agent-engine | Tasks 1–5 done; next S7 (6–10) |
+| agent-engine | 10 / 10 | feat/agent-engine | Done, not merged. End-to-end check below |
 | agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
@@ -32,11 +36,15 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
-- Design gap for agent-engine task 6: the transition table has no `reviewing -> failed` (nor `awaiting_plan_approval -> failed`), but requirement 5.1/5.2 says a review timeout records `task.failed`. Decide before task 6: add `failed` to `reviewing`'s targets (recommended), or map a review timeout to `report_ready` with `verdict:fail`. Table currently implemented exactly as designed (jobs/transitions.ts).
+- Decided in agent-engine task 6 (recorded in the spec's design.md): the transition table gained `created -> failed`, `awaiting_plan_approval -> failed` and `reviewing -> failed` (review timeout and restart recovery, as recommended). Other conventions: plan rejection and cancel end in `cancelled` with no report; a step error or timeout ends `failed -> report_ready -> delivered` with a failure report; `report_ready`/`failed` are not cancellable (409). Not in risks-and-decisions.md because it is not architectural.
+- agent-engine e2e check (agent-engine task 10): done with an in-process script (real engine + HttpEngineLink + gateway + WebSocket client, fake runtime): start_job -> approval -> approve -> delivered + report in ~1.3 s with 150 ms fake delay. Running the engine and world-server as two background processes from the unattended shell did not stay up, so the two-process run and the browser run are still for the user.
+- Gateway change made in task 10: `jobActive` is cleared when the current task reaches `cancelled` or `delivered` (the real engine does not send task.failed/completed after a rejected plan, which would have left the UI on "Job running...").
+- agent-engine notes: approval `note` is accepted by the API but not stored (the `approval.resolved` event has no note field). Per-step credits/tokens come from the run logs `data/runs/<taskId>/<step>.jsonl` and are summed in the export; no event carries them. The `test` step is a canned pass until agent-pipeline adds the Docker runner; `kiro-cli` runtime in config/agents.json is rejected at startup until agent-pipeline.
+- Engine restarts: the HttpEngineLink starts from the engine's head (`/health.lastSeq`), so a world-server restart does not replay old jobs; it reconnects with the last seq and resets if the engine DB has a lower seq.
 - agent-engine naming: the engine-side job view is `EngineJobViewSchema` (`JobView` already exists as the client-facing view in protocol.ts); recorded in design.md. Fold conventions (steps from state changes, verdict via reason `verdict:pass|fail` on the transition into `report_ready`) are in design.md. Token/credit per step is not in events yet (task 9).
 - `pnpm-workspace.yaml` now has `allowBuilds: better-sqlite3: true` (needed for the prebuilt binary).
 - S2 (agent-pipeline task 1, kiro-cli spike) on feat/agent-pipeline: auth with KIRO_API_KEY, agent lookup, write-in-cwd and shell-deny OK; write OUTSIDE cwd was NOT denied (spike used --trust-all-tools). Proposed fix awaiting user OK: no --trust-all-tools + explicit outside-path deny, keep engine-side containment check; then re-run only that check. Findings: docs/spikes/kiro-cli.md on feat/agent-pipeline.
-- Review suggestions not done yet (non-blocking): gateway sends some messages twice (`job_update`, `approval`); no in-flight state on approve (double click); `jobActive` has no timeout; engine error text is forwarded to the client (max 200 chars). Address in agent-engine integration (S7, task 10).
+- Review suggestions not done yet (non-blocking): gateway sends some messages twice (`job_update`, `approval`); no in-flight state on approve (double click); engine error text is forwarded to the client (max 200 chars). `jobActive` timeout is partly covered (cleared on cancelled/delivered). Revisit with the next review.
 - Server packages must avoid constructor parameter properties and enums (`--experimental-strip-types`). Mirrored avatar directions are 0↔6, 1↔5, 2↔4 (design.md).
 - GitHub public repo not created yet (needs user).
 - The other account's email is still in commit 4e16788; rewrite history before the first push if the user confirms.
