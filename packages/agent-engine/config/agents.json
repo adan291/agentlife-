@@ -1,6 +1,6 @@
 {
-  "architect": { "runtime": "kiro-cli" },
-  "developer": { "runtime": "kiro-cli" },
-  "qa": { "runtime": "kiro-cli" },
-  "ambient": { "runtime": "none" }
+  "architect": { "runtime": "kiro-cli", "model": "claude-haiku-5.5" },
+  "developer": { "runtime": "kiro-cli", "model": "auto" },
+  "qa": { "runtime": "kiro-cli", "model": "claude-haiku-5.5" },
+  "ambient": { "runtime": "llm" }
 }
