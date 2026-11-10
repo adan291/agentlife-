@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Shell grid and stage-sized canvas
+- [x] 1. Shell grid and stage-sized canvas
   - `ui/shell.ts` with `shellTemplate` (pure, tested), grid regions, ResizeObserver → renderer resize + re-fit; remove the room-fixes free-viewport code
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 7.1_
 

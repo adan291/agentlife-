@@ -10,26 +10,39 @@ import { MailboxState } from "./ui/mailbox-state.ts";
 import { createTerminal } from "./ui/terminal.ts";
 import { createTheme } from "./ui/theme.ts";
 import { createTooltip } from "./ui/tooltip.ts";
+import { createShell } from "./ui/shell.ts";
 import { createStepper } from "./ui/stepper.ts";
 import { createTeamBar } from "./ui/team-bar.ts";
 import { createYourTurnToast } from "./ui/toast.ts";
 
 const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
 
+const theme = createTheme();
+const shell = createShell({ getLineHeight: () => Math.round(theme.size * 1.5) });
+const stageEl = shell.stage;
+
 const app = new Application();
 await app.init({
-  resizeTo: window,
+  width: Math.max(1, Math.floor(stageEl.clientWidth)),
+  height: Math.max(1, Math.floor(stageEl.clientHeight)),
   background: PALETTE.background,
   antialias: false,
   resolution: window.devicePixelRatio || 1,
   autoDensity: true,
 });
-document.body.appendChild(app.canvas);
+stageEl.appendChild(app.canvas);
+
+/** The canvas follows the stage cell, not the window: the browser lays the cell out, we only read its size. */
+function fitCanvasToStage(): void {
+  const w = Math.max(1, Math.floor(stageEl.clientWidth));
+  const h = Math.max(1, Math.floor(stageEl.clientHeight));
+  if (w !== app.screen.width || h !== app.screen.height) app.renderer.resize(w, h);
+}
+new ResizeObserver(fitCanvasToStage).observe(stageEl);
 
 const transport = new LiveTransport(WORLD_URL);
 const sprites = new ProceduralSprites(app.renderer);
 
-const theme = createTheme();
 const hud = createHud(
   () => {
     hud.setZoomLabel(world.toggleZoom());
@@ -40,7 +53,7 @@ const hud = createHud(
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
-  tooltip: createTooltip(),
+  tooltip: createTooltip(stageEl),
   onZoomChange: (z) => hud.setZoomLabel(z),
 });
 hud.setZoomLabel(world.zoom);
@@ -53,7 +66,10 @@ const panels = createPanels(
 );
 const guide = createGuide();
 const terminal = createTerminal();
-theme.onChange(() => terminal.refresh());
+theme.onChange(() => {
+  shell.refresh();
+  terminal.refresh();
+});
 const teamBar = createTeamBar((id) => world.focusAgent(id));
 
 /** Opens the mailbox from the toast or the stepper: no walking, the client already holds the data. */

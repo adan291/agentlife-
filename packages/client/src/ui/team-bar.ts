@@ -3,12 +3,11 @@ import type { AgentId, AgentState, ServerMsg } from "@agentlife/shared";
 import { ROLE_COLOURS, STATE_COLOURS } from "../palette.ts";
 import { formatDuration } from "./duration.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
-import { setInsets } from "../scene/viewport.ts";
 
-/** Team bar geometry (px); the layout code reads the same numbers to find the free viewport. */
-const TEAM_LEFT_PX = 10;
+/** Team bar geometry (px). */
 const TEAM_WIDTH_PX = 220;
 const TEAM_COLLAPSED_PX = 48;
+const TEAM_LEFT_PX = 10;
 
 export interface TeamRow {
   agentId: AgentId;
@@ -181,7 +180,6 @@ export function createTeamBar(onFocus: (id: AgentId) => void): TeamBar {
     toggle.title = c ? "Show the team bar" : "Collapse the team bar";
     toggle.setAttribute("aria-label", toggle.title);
     toggle.setAttribute("aria-expanded", String(!c));
-    setInsets({ left: TEAM_LEFT_PX + (c ? TEAM_COLLAPSED_PX : TEAM_WIDTH_PX) });
   };
   toggle.addEventListener("click", () => setCollapsed(root.dataset["collapsed"] !== "true"));
   setCollapsed(false);

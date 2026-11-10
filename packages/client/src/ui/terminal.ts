@@ -3,7 +3,6 @@ import type { ActivityLine, AgentId } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import { formatTime } from "./board.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
-import { setInsets } from "../scene/viewport.ts";
 
 /** The terminal keeps this many lines; older ones are dropped. */
 export const TERMINAL_MAX_LINES = 300;
@@ -127,7 +126,6 @@ export function createTerminal(): Terminal {
   };
   const publishHeight = () => {
     document.documentElement.style.setProperty("--al-terminal-h", `${root.offsetHeight}px`);
-    setInsets({ bottom: root.offsetHeight });
   };
 
   const setCollapsed = (collapsed: boolean) => {
