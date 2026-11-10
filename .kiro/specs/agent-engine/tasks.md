@@ -39,7 +39,7 @@
   - Reconnection test from requirement 2.2
   - _Requirements: 2.2_
 
-- [ ] 9. Export and observability
+- [x] 9. Export and observability
   - `GET /tasks/:id/export`, JSON-lines logger, per-step metrics, secret redaction test
   - _Requirements: 2.4, 7.1, 7.3, 7.4_
 

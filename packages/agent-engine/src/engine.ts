@@ -2,6 +2,7 @@ import type http from "node:http";
 import { loadConfig, type EngineConfig } from "./config.ts";
 import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, type Route } from "./http/server.ts";
 import { createEventsRoute } from "./http/sse.ts";
+import { createExportRoute } from "./http/export.ts";
 import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
@@ -57,7 +58,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const config = opts.config ?? loadConfig();
   const logger = opts.logger ?? noopLogger;
   const store = opts.store ?? new Store(opts.storeOptions);
-  const steps = opts.steps ?? createRuntimeSteps({ runtimes: buildRuntimes(config, opts.fakeDelayMs ?? 0), store });
+  const steps = opts.steps ?? createRuntimeSteps({ runtimes: buildRuntimes(config, opts.fakeDelayMs ?? 0), store, logger });
   const ambient =
     opts.ambient ??
     (config.agents.ambient.runtime === "llm"
@@ -80,6 +81,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     token: opts.token,
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
+      createExportRoute(store),
       ...(opts.extraRoutes ?? []),
     ],
   });

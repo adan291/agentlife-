@@ -1,5 +1,6 @@
 import { PlanSchema, ReviewSchema, type Plan, type Review } from "@agentlife/shared";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
+import type { Logger } from "../log.ts";
 import type { Store } from "../store.ts";
 import { fallbackReport } from "./runner.ts";
 import type { StepContext, Steps, TestResult } from "./steps.ts";
@@ -11,6 +12,7 @@ export interface RuntimeStepsOptions {
   cwdFor?: (repoId: string) => string;
   /** Runs the target repo's tests. Default: a canned pass (the Docker runner arrives in agent-pipeline). */
   runTests?: (ctx: StepContext, diff: string) => Promise<TestResult>;
+  logger?: Logger;
 }
 
 function dataPrompt(goal: string): string {
@@ -45,6 +47,14 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
     })) {
       opts.store.appendRunLog(ctx.taskId, step, { n: ctx.stepIndex, ts: Date.now(), ...ev });
       if (ev.kind === "output") outputs.push(ev.text);
+      if (ev.kind === "usage") {
+        opts.logger?.info("step usage", {
+          taskId: ctx.taskId,
+          step,
+          ...(ev.credits === undefined ? {} : { credits: ev.credits }),
+          ...(ev.tokens === undefined ? {} : { tokens: ev.tokens }),
+        });
+      }
     }
     return outputs.join("\n");
   }

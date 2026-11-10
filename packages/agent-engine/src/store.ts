@@ -21,6 +21,8 @@ export interface StoreOptions {
   /** SQLite path or ":memory:". Defaults to env ENGINE_DB, then data/engine.db. */
   dbPath?: string;
   runsDir?: string;
+  /** Removes secrets from everything persisted: events, artifacts and run logs. */
+  redact?: (text: string) => string;
 }
 
 export interface SaveArtifactInput {
@@ -55,11 +57,13 @@ export class Store {
   readonly bus = new EventEmitter();
   private readonly db: Database.Database;
   private readonly runsDir: string;
+  private readonly redact: (text: string) => string;
   private readonly views = new Map<string, EngineJobView>();
 
   constructor(opts: StoreOptions = {}) {
     const dbPath = opts.dbPath ?? process.env["ENGINE_DB"] ?? DEFAULT_DB_PATH;
     this.runsDir = opts.runsDir ?? DEFAULT_RUNS_DIR;
+    this.redact = opts.redact ?? ((t: string) => t);
     if (dbPath !== ":memory:") mkdirSync(path.dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.bus.setMaxListeners(0);
@@ -91,7 +95,9 @@ export class Store {
   appendEvent(input: NewEvent): AgentEvent {
     const ts = input.ts ?? Date.now();
     // Validate shape first (seq is a placeholder until the insert assigns it).
-    const checked = AgentEventSchema.parse({ ...input, ts, seq: 0 });
+    const parsed = AgentEventSchema.parse({ ...input, ts, seq: 0 });
+    // Redact on the serialised form so every string field is covered; re-validate the result.
+    const checked = AgentEventSchema.parse(JSON.parse(this.redact(JSON.stringify(parsed))));
     const { seq: _s, ts: _t, taskId, type, ...rest } = checked;
     const { agentId, ...payload } = rest as { agentId?: string } & Record<string, unknown>;
 
@@ -165,7 +171,7 @@ export class Store {
     const dir = this.taskDir(input.taskId);
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, input.filename);
-    writeFileSync(file, input.content, "utf8");
+    writeFileSync(file, this.redact(input.content), "utf8");
     const n = (this.db.prepare("SELECT COUNT(*) AS c FROM artifacts WHERE task_id = ?").get(input.taskId) as { c: number }).c;
     const id = `${input.taskId}-a${n + 1}`;
     this.db
@@ -201,7 +207,7 @@ export class Store {
     if (!SAFE_ID.test(step)) throw new Error("invalid step name");
     const dir = this.taskDir(taskId);
     mkdirSync(dir, { recursive: true });
-    appendFileSync(path.join(dir, `${step}.jsonl`), JSON.stringify(record) + "\n", "utf8");
+    appendFileSync(path.join(dir, `${step}.jsonl`), this.redact(JSON.stringify(record)) + "\n", "utf8");
   }
 
   /** Parsed lines of a step run log; missing file gives []. */
