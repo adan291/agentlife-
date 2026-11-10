@@ -215,3 +215,24 @@ describe("JobRunner milestones", () => {
     expect(lines.join("\n")).not.toMatch(/C:\\/);
   });
 });
+
+describe("activity never carries secrets (review blocker)", () => {
+  it("a configured secret in progress text is redacted before the event is stored", async () => {
+    const { createRedactor } = await import("../src/log.ts");
+    const secret = "s3cr3t-value-that-is-long";
+    const store = new Store({ dbPath: ":memory:", redact: createRedactor([secret]) });
+    const emitter = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
+    emitter.line("task-1", "developer", `Reading config: token ${secret} found`);
+    const stored = JSON.stringify(store.eventsAfter(0));
+    expect(stored).not.toContain(secret);
+  });
+
+  it.each(["sk-abcdefghijklmnop", "ghp_abcdefghijklmnopqrstuvwxyz", "github_pat_11ABCDEF_xyz", "FAKE-AWS-KEY-FOR-TESTS", "Bearer abc.def.ghi"])(
+    "drops token-like text %s",
+    (token) => {
+      const { emitter, texts } = harness();
+      emitter.line("task-1", "qa", `saw ${token} in a file`);
+      expect(texts().join(" ")).not.toContain(token.replace(/^Bearer /, ""));
+    },
+  );
+});

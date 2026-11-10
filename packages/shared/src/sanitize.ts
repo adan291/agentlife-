@@ -12,6 +12,9 @@ export function sanitize(text: string, max = MAX_TEXT): string {
       .replace(/[A-Za-z]:[\\/]\S*/g, "") // drive-letter paths
       .replace(/(^|\s)[\\/]{1,2}[^\s]*/g, "$1") // rooted or UNC paths
       .replace(/ksk_\w*/gi, "")
+      // Common token formats (OpenAI-style, GitHub, AWS access keys, bearer headers).
+      .replace(/\b(sk-[A-Za-z0-9_-]{8,}|ghp_\w+|gho_\w+|github_pat_\w+|AKIA[0-9A-Z]{12,})/g, "")
+      .replace(/\bBearer\s+\S+/gi, "")
       .replace(/\$env:\S*/gi, "") // PowerShell env access, value included
       .replace(/\b[A-Za-z_][A-Za-z0-9_]*=\S*/g, ""); // NAME=value assignments
     if (out === before) break;
