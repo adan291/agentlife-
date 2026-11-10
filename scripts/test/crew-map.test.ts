@@ -45,6 +45,29 @@ describe("crewEventFromLine on the fixture", () => {
   });
 });
 
+describe("environment values never leak (review blocker)", () => {
+  it.each([
+    "ENGINE_TOKEN=s3cret-value pnpm check",
+    "$env:KIRO_API_KEY='abc123'; pnpm test",
+    'FOO="quoted value" node x.js',
+  ])("%s", (command) => {
+    const label = commandLabel(command);
+    expect(label).not.toMatch(/s3cret|abc123|quoted|=|\$env/i);
+    expect(sanitize(`running ${command}`)).not.toMatch(/s3cret|abc123|=|\$env/i);
+  });
+
+  it("sanitize removes NAME=value and $env: for any input (property)", () => {
+    const alphabet = fc.constantFrom("A", "B", "=", "$", "e", "n", "v", ":", " ", "x", "'", "1");
+    fc.assert(
+      fc.property(fc.array(alphabet, { maxLength: 120 }).map((a) => a.join("")), (s) => {
+        const out = sanitize(s);
+        return !/\b[A-Za-z_]\w*=/.test(out) && !/\$env:/i.test(out);
+      }),
+      { numRuns: 500 },
+    );
+  });
+});
+
 describe("helpers", () => {
   it("baseName handles both separators", () => {
     expect(baseName("D:\\a\\b\\c.ts")).toBe("c.ts");

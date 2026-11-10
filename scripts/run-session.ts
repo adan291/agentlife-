@@ -260,7 +260,7 @@ async function main(): Promise<void> {
   const logFile = join(RUNS, `${session.id}-${stamp}.jsonl`);
   const started = Date.now();
   const startRef = run("git", ["rev-parse", "HEAD"]).out.trim();
-  await crew({ kind: "started", session: session.id, spec: session.spec, model: session.model });
+  void crew({ kind: "started", session: session.id, spec: session.spec, model: session.model });
   const code = await runHeadless(session.id, args, logFile, crewLineReporter(session.id));
 
   const check = run("pnpm", ["check"]);
@@ -280,7 +280,7 @@ async function main(): Promise<void> {
 
   if (review) {
     const reviewLog = join(RUNS, `${session.id}-${stamp}-review.jsonl`);
-    await crew({ kind: "started", session: "R", spec: session.spec, model: REVIEWER_MODEL });
+    void crew({ kind: "started", session: "R", spec: session.spec, model: REVIEWER_MODEL });
     const reviewCode = await runHeadless("review", kiroArgs(REVIEWER, REVIEWER_MODEL, "low", "Review the current branch against main.", true), reviewLog, crewLineReporter("R"));
     await crew({ kind: "finished", session: "R", ok: reviewCode === 0 });
     console.log("[session] review written to docs/reviews/");

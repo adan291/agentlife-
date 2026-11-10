@@ -18,7 +18,9 @@ export function sanitize(text: string, max = MAX_TEXT): string {
     out = out
       .replace(/[A-Za-z]:[\\/]\S*/g, "") // drive-letter paths
       .replace(/(^|\s)[\\/]{1,2}[^\s]*/g, "$1") // rooted or UNC paths
-      .replace(/ksk_\w*/gi, "");
+      .replace(/ksk_\w*/gi, "")
+      .replace(/\$env:\S*/gi, "") // PowerShell env access, value included
+      .replace(/\b[A-Za-z_][A-Za-z0-9_]*=\S*/g, ""); // NAME=value assignments
     if (out === before) break;
   }
   return out.replace(/\s+/g, " ").trim().slice(0, max).trim();
@@ -49,10 +51,12 @@ function firstPath(update: Record<string, unknown>): string | undefined {
 export function commandLabel(command: string): string {
   const segments = command.split(/[;&|]+|\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0);
   const seg = segments.find((s) => !/^cd(\s|$)/i.test(s)) ?? "";
-  const words = seg.split(/\s+/).filter((w) => w.length > 0);
+  // Skip leading environment assignments (`NAME=value`, `$env:NAME=...`): their values may be secrets.
+  const words = seg.split(/\s+/).filter((w) => w.length > 0 && !/=/.test(w) && !/^\$env:/i.test(w));
   const first = words[0];
   if (!first) return "";
   const tool = baseName(first).replace(/\.(exe|cmd|ps1)$/i, "");
+  if (!/^[A-Za-z][\w.-]*$/.test(tool)) return "";
   const second = words[1];
   if (second && SUBCOMMAND_TOOLS.has(tool.toLowerCase()) && /^[a-z][\w:-]*$/i.test(second)) return `${tool} ${second}`;
   return tool;
