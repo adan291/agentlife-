@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck on save",
+      "trigger": "PostFileSave",
+      "description": "Runs the workspace typecheck when a TypeScript file under packages/ is saved.",
+      "matcher": "packages[\\\\/].*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "pnpm typecheck",
+        "timeout": 120
+      }
+    }
+  ]
+}
