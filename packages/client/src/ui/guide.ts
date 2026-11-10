@@ -34,12 +34,12 @@ export function markGuideSeen(storage: FlagStorage | undefined): void {
 }
 
 const CSS = `
-.al-guide { position: absolute; z-index: 25; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 12px 16px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
+.al-guide { position: absolute; z-index: 25; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - var(--al-s4))); max-height: calc(100% - var(--al-s4)); overflow: auto; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); padding: var(--al-s3) var(--al-s4); font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-guide[hidden] { display: none; }
-.al-guide h3 { margin: 0 0 8px; color: ${UI_COLOURS.accentText}; }
-.al-guide ol { margin: 0 0 8px; padding-left: 22px; }
-.al-guide li { margin: 4px 0; }
-.al-guide p { margin: 0 0 10px; color: ${UI_COLOURS.muted}; }
+.al-guide h3 { margin: 0 0 var(--al-s2); color: ${UI_COLOURS.accentText}; }
+.al-guide ol { margin: 0 0 var(--al-s2); padding-left: var(--al-s5); }
+.al-guide li { margin: var(--al-s1) 0; }
+.al-guide p { margin: 0 0 var(--al-s3); color: ${UI_COLOURS.muted}; }
 `;
 
 export interface Guide {

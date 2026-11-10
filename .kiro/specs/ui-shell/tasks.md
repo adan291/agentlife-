@@ -12,7 +12,7 @@
   - Collapsed side bar (52 px icons, tooltips), single chevron toggle with aria-label, ellipsis + title; dock drag-resize, collapse to header with latest line and unread count; persisted state
   - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2_
 
-- [ ] 4. Responsive rules and visual polish
+- [x] 4. Responsive rules and visual polish
   - Breakpoints (900 / 640 px width, 560 px height), compact stepper; theme tokens, button states, focus rings, panel header/body/footer
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
 

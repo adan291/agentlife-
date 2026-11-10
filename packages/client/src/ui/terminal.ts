@@ -75,19 +75,23 @@ export function shouldAutoScroll(scrollTop: number, clientHeight: number, scroll
   return scrollHeight - scrollTop - clientHeight <= BOTTOM_SLACK_PX;
 }
 
+/** Pixels per arrow key press on the resize handle. */
+const KEY_STEP_PX = 24;
+
 const CSS = `
 .al-term { height: 100%; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; display: flex; flex-direction: column; }
-.al-term-grip { position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; background: ${UI_COLOURS.border}; touch-action: none; }
+.al-term-grip { position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; background: var(--al-border); touch-action: none; }
+.al-term-grip:hover, .al-term-grip:focus-visible { background: var(--al-accent); }
 .al-term[data-collapsed="true"] .al-term-grip, .al-term[data-collapsed="true"] .al-term-body { display: none; }
-.al-term-head { display: flex; gap: 8px; align-items: center; height: ${DOCK_HEADER_PX}px; padding: 0 8px; box-sizing: border-box; flex: none; }
+.al-term-head { display: flex; gap: var(--al-s2); align-items: center; height: ${DOCK_HEADER_PX}px; padding: 0 var(--al-s2); box-sizing: border-box; flex: none; }
 .al-term-head b { color: ${UI_COLOURS.accentText}; flex: none; }
 .al-term-latest { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${UI_COLOURS.muted}; }
 .al-term[data-collapsed="false"] .al-term-latest { visibility: hidden; }
-.al-term-unread { flex: none; padding: 0 8px; border-radius: 10px; background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; font-weight: bold; white-space: nowrap; }
+.al-term-unread { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s3); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; white-space: nowrap; }
 .al-term-unread[hidden] { display: none; }
 .al-term[data-collapsed="true"] .al-term-head select { display: none; }
-.al-term-head select { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; font: inherit; padding: 0 4px; }
-.al-term-body { overflow-y: auto; overflow-x: hidden; padding: 2px 8px 4px; flex: 1; min-height: 0; }
+.al-term-head select { padding: 0 var(--al-s1); }
+.al-term-body { overflow-y: auto; overflow-x: hidden; padding: var(--al-s1) var(--al-s2); flex: 1; min-height: 0; }
 .al-term-row { white-space: pre-wrap; overflow-wrap: anywhere; }
 .al-term-time { color: ${UI_COLOURS.muted}; margin-right: 1.5ch; }
 .al-term-role { font-weight: bold; margin-right: 1.5ch; }
@@ -114,8 +118,10 @@ export function createTerminal(shell: Shell): Terminal {
 
   const grip = document.createElement("div");
   grip.className = "al-term-grip";
-  grip.title = "Drag to resize";
+  grip.title = "Drag to resize (or use the arrow keys)";
+  grip.tabIndex = 0;
   grip.setAttribute("role", "separator");
+  grip.setAttribute("aria-label", "Resize activity");
   grip.setAttribute("aria-orientation", "horizontal");
 
   const head = document.createElement("div");
@@ -169,10 +175,13 @@ export function createTerminal(shell: Shell): Terminal {
     paintSummary();
   };
   toggle.addEventListener("click", () => shell.toggleDock());
+  const paintHeight = (dockH: number) => grip.setAttribute("aria-valuenow", String(dockH - DOCK_HEADER_PX));
+  paintHeight(shell.template.dockH);
   setCollapsed(shell.template.dockCollapsed);
   shell.onChange((t) => {
     const was = collapsed();
     setCollapsed(t.dockCollapsed);
+    paintHeight(t.dockH);
     if (was && !t.dockCollapsed) body.scrollTop = body.scrollHeight;
   });
 
@@ -210,7 +219,13 @@ export function createTerminal(shell: Shell): Terminal {
     body.scrollTop = body.scrollHeight;
   });
 
-  // Resize by dragging the top edge upwards; the shell keeps the height between 3 lines and half the window.
+  // Resize with the arrow keys on the handle ...
+  grip.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    shell.setDockBody(body.offsetHeight + (e.key === "ArrowUp" ? KEY_STEP_PX : -KEY_STEP_PX));
+  });
+  // ... or by dragging its top edge upwards; the shell keeps the height between 3 lines and half the window.
   grip.addEventListener("pointerdown", (e) => {
     const startY = e.clientY;
     const startH = body.offsetHeight;

@@ -116,16 +116,16 @@ function stateLabel(state: AgentState): string {
 
 const CSS = `
 .al-team { height: 100%; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
-.al-team-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; }
+.al-team-head { display: flex; justify-content: space-between; align-items: center; padding: var(--al-s1) var(--al-s2); }
 .al-team-head b { color: ${UI_COLOURS.accentText}; }
 .al-team-toggle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; }
 .al-chevron { width: 8px; height: 8px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateX(2px) rotate(45deg); }
 .al-team[data-collapsed="true"] .al-chevron { transform: translateX(-2px) rotate(-135deg); }
 .al-team[data-collapsed="true"] .al-team-head { justify-content: center; }
 .al-team[data-collapsed="true"] .al-team-head b, .al-team[data-collapsed="true"] .al-team-text { display: none; }
-.al-team[data-collapsed="true"] .al-team-row { justify-content: center; padding: 8px 0; border-left-width: 0; }
+.al-team[data-collapsed="true"] .al-team-row { justify-content: center; padding: var(--al-s2) 0; border-left-width: 0; }
 .al-team[data-collapsed="true"] .al-team-ghost { margin-top: 0; box-shadow: 0 0 0 2px ${UI_COLOURS.panelBg}, 0 0 0 4px var(--al-row-colour); }
-.al-team-row { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-top: 1px solid ${UI_COLOURS.border}; border-left: 3px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; box-sizing: border-box; }
+.al-team-row { display: flex; gap: var(--al-s2); align-items: flex-start; width: 100%; text-align: left; padding: var(--al-s2); border: 0; border-top: 1px solid var(--al-border); border-left: 3px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; box-sizing: border-box; }
 .al-team-row:hover, .al-team-row:focus-visible { background: ${UI_COLOURS.inputBg}; }
 .al-team-row[data-highlight="true"] { background: ${UI_COLOURS.inputBg}; }
 .al-team-row:not([data-state="idle"]) { border-left-color: var(--al-row-colour); }
@@ -137,7 +137,7 @@ const CSS = `
 @keyframes al-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .al-team-row[data-animate="true"] .al-team-ghost { animation: none; } }
 .al-team-text { min-width: 0; flex: 1; }
-.al-team-line { display: flex; justify-content: space-between; gap: 6px; }
+.al-team-line { display: flex; justify-content: space-between; gap: var(--al-s2); }
 .al-team-name { font-weight: bold; color: var(--al-role-colour); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .al-team-elapsed { color: ${UI_COLOURS.muted}; flex: none; }
 .al-team-sub { display: block; color: ${UI_COLOURS.muted}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -3,15 +3,13 @@ import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
 .al-hud { font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; }
-.al-btn { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
-.al-btn:hover { border-color: ${UI_COLOURS.accent}; }
-.al-status { display: flex; align-items: center; min-width: 0; background: ${UI_COLOURS.inputBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 2px 10px; white-space: nowrap; }
+.al-status { display: flex; align-items: center; min-width: 0; background: ${UI_COLOURS.inputBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); white-space: nowrap; }
 .al-status[hidden] { display: none; }
 .al-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.al-status[data-status="reconnecting"] { border-color: ${UI_COLOURS.accent}; color: ${UI_COLOURS.accentText}; }
-.al-notice { background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 4px 12px; color: ${UI_COLOURS.accentText}; }
+.al-status[data-status="reconnecting"] { border-color: var(--al-accent); color: ${UI_COLOURS.accentText}; }
+.al-notice { background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); }
 .al-notice[hidden] { display: none; }
-.al-toast { position: absolute; z-index: 12; bottom: 16px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 16px); background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 6px 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
 `;
 
@@ -90,7 +88,7 @@ export function createHud(
   const statusText = document.createElement("span");
   const useHere = button("Use here");
   useHere.hidden = true;
-  useHere.style.marginLeft = "10px";
+  useHere.style.marginLeft = "var(--al-s3)";
   useHere.addEventListener("click", onUseHere);
   status.append(statusText, useHere);
   mounts.left.appendChild(status);

@@ -72,6 +72,40 @@ function saveFont(storage: FlagStorage | undefined, size: number): void {
   }
 }
 
+/** Spacing scale in px: the only paddings, margins and gaps the components use. */
+export const SPACING = { s1: 4, s2: 8, s3: 12, s4: 16, s5: 24 } as const;
+export const RADIUS_PX = 6;
+/** Shadow of raised elements (panels, toasts, tooltips, the guide). */
+export const SHADOW = "0 4px 16px rgba(0, 0, 0, 0.5)";
+/** Focus ring colour; contrast against `panelBg` and `inputBg` is checked in the tests. */
+export const FOCUS_COLOUR = "#8fd8ff";
+
+/**
+ * Design tokens as CSS custom properties, plus the base look of buttons and form controls (hover, focus-visible, pressed, disabled).
+ * Components use `var(--al-s2)`, `var(--al-radius)`, `var(--al-border)` and `var(--al-shadow)` instead of literals.
+ */
+export function themeCss(): string {
+  return `
+:root { --al-s1: ${SPACING.s1}px; --al-s2: ${SPACING.s2}px; --al-s3: ${SPACING.s3}px; --al-s4: ${SPACING.s4}px; --al-s5: ${SPACING.s5}px; --al-radius: ${RADIUS_PX}px; --al-border: ${UI_COLOURS.border}; --al-shadow: ${SHADOW}; --al-focus: ${FOCUS_COLOUR}; --al-accent: ${UI_COLOURS.accent}; }
+.al-shell :focus-visible { outline: 2px solid var(--al-focus); outline-offset: 2px; }
+.al-btn { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); font: inherit; cursor: pointer; transition: border-color 0.1s, background 0.1s; }
+.al-btn:hover:not(:disabled) { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
+.al-btn:active:not(:disabled) { background: ${UI_COLOURS.border}; transform: translateY(1px); }
+.al-btn:disabled { opacity: 0.5; cursor: default; }
+.al-input, .al-shell select { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font: inherit; }
+.al-input:hover, .al-shell select:hover { border-color: var(--al-accent); }
+@media (prefers-reduced-motion: reduce) { .al-btn { transition: none; } }
+`;
+}
+
+export function installThemeStyles(): void {
+  if (typeof document === "undefined" || document.getElementById("al-theme")) return;
+  const style = document.createElement("style");
+  style.id = "al-theme";
+  style.textContent = themeCss();
+  document.head.appendChild(style);
+}
+
 export interface Theme {
   readonly size: number;
   smaller(): void;
@@ -80,11 +114,12 @@ export interface Theme {
   onChange(listener: (size: number) => void): void;
 }
 
-/** Applies the saved font size to `--al-font` on the root element and persists changes (A−/A+). */
+/** Installs the design tokens, applies the saved font size to `--al-font` on the root element and persists changes (A−/A+). */
 export function createTheme(
   storage: FlagStorage | undefined = typeof localStorage === "undefined" ? undefined : localStorage,
   root: HTMLElement = document.documentElement,
 ): Theme {
+  installThemeStyles();
   let size = loadFont(storage);
   const listeners: ((size: number) => void)[] = [];
   const apply = () => root.style.setProperty(FONT_VAR, `${size}px`);

@@ -1,22 +1,26 @@
 import type { ClientMsg, PanelName, ServerMsg } from "@agentlife/shared";
 import { renderBoard } from "./board.ts";
 import { createComputerPanel } from "./computer.ts";
+import type { PanelContent } from "./computer.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { PanelState } from "./panel-state.ts";
 import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
-.al-panel { position: absolute; z-index: 20; top: 8px; left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 10px 14px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
+.al-panel { position: absolute; z-index: 20; top: var(--al-s2); left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - var(--al-s4))); max-height: calc(100% - var(--al-s4)); display: flex; flex-direction: column; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-panel[hidden] { display: none; }
-.al-panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.al-panel h3, .al-panel h4, .al-panel h5, .al-panel h6 { margin: 8px 0 4px; color: ${UI_COLOURS.accentText}; }
+.al-shell[data-compact="true"] .al-panel { top: 0; left: 0; transform: none; width: 100%; max-height: 100%; border-radius: 0; border-width: 1px 0; }
+.al-panel-head { flex: none; display: flex; justify-content: space-between; align-items: center; gap: var(--al-s3); padding: var(--al-s2) var(--al-s4); border-bottom: 1px solid var(--al-border); }
+.al-panel-body { flex: 1; min-height: 0; overflow: auto; padding: var(--al-s2) var(--al-s4) var(--al-s3); }
+.al-panel-foot { flex: none; display: flex; justify-content: flex-end; gap: var(--al-s2); padding: var(--al-s2) var(--al-s4); border-top: 1px solid var(--al-border); }
+.al-panel-foot[hidden] { display: none; }
+.al-panel h3, .al-panel h4, .al-panel h5, .al-panel h6 { margin: var(--al-s2) 0 var(--al-s1); color: ${UI_COLOURS.accentText}; }
 .al-panel h3 { margin: 0; }
-.al-panel label { display: block; margin: 8px 0; }
-.al-input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 4px; font: inherit; }
-.al-btn:disabled { opacity: 0.5; cursor: default; }
-.al-row { display: flex; gap: 8px; margin-top: 6px; }
-.al-card { border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 6px 8px; margin: 6px 0; }
-.al-card pre { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: 4px; margin: 6px 0; }
+.al-panel label { display: block; margin: var(--al-s2) 0; }
+.al-input { display: block; width: 100%; box-sizing: border-box; margin-top: var(--al-s1); padding: var(--al-s1); }
+.al-row { display: flex; gap: var(--al-s2); margin-top: var(--al-s2); }
+.al-card { border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s2); margin: var(--al-s2) 0; }
+.al-card pre { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: var(--al-s1); margin: var(--al-s2) 0; }
 .al-card code { font: inherit; }
 .al-diff-line { display: block; white-space: pre; }
 .al-diff-add { color: ${UI_COLOURS.add}; background: ${UI_COLOURS.addBg}; }
@@ -25,7 +29,7 @@ const CSS = `
 .al-diff-meta { color: ${UI_COLOURS.muted}; }
 .al-muted { color: ${UI_COLOURS.muted}; }
 .al-error { color: ${UI_COLOURS.error}; }
-.al-timeline { padding-left: 20px; white-space: pre-wrap; }
+.al-timeline { padding-left: var(--al-s5); white-space: pre-wrap; }
 `;
 
 const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job board" };
@@ -39,7 +43,11 @@ export interface Panels {
   readonly state: PanelState;
 }
 
-/** DOM panels for computer, mailbox and board. Hidden panels take no space and never block the canvas. `onChange` runs after every re-render (open, close, refresh). */
+/**
+ * DOM panels for computer, mailbox and board, mounted in `host` (the stage). A panel has a header (title, close button),
+ * a scrollable body and an optional footer for actions. Hidden panels take no space and never block the canvas.
+ * `onChange` runs after every re-render (open, close, refresh).
+ */
 export function createPanels(send: (msg: ClientMsg) => void, onChange: () => void = () => {}, host: HTMLElement = document.body): Panels {
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -60,9 +68,14 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
   closeBtn.textContent = "Close";
   closeBtn.setAttribute("aria-label", "Close panel");
   const header = document.createElement("header");
+  header.className = "al-panel-head";
   header.append(title, closeBtn);
   const body = document.createElement("div");
-  root.append(header, body);
+  body.className = "al-panel-body";
+  const footer = document.createElement("footer");
+  footer.className = "al-panel-foot";
+  footer.hidden = true;
+  root.append(header, body, footer);
   host.appendChild(root);
 
   const render = () => {
@@ -74,13 +87,16 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     const wasHidden = root.hidden;
     root.hidden = false;
     title.textContent = TITLES[state.open];
-    const content =
+    root.setAttribute("aria-label", TITLES[state.open]);
+    const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
         : state.open === "mailbox"
-          ? renderMailbox(document, state.data, { decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }) })
-          : renderBoard(document, state.data);
-    body.replaceChildren(content);
+          ? { body: renderMailbox(document, state.data, { decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }) }) }
+          : { body: renderBoard(document, state.data) };
+    body.replaceChildren(content.body);
+    footer.replaceChildren(...(content.footer ? [content.footer] : []));
+    footer.hidden = !content.footer;
     if (wasHidden) closeBtn.focus();
     onChange();
   };

@@ -1,5 +1,5 @@
 import type { FlagStorage } from "./guide.ts";
-import { UI_COLOURS } from "./theme.ts";
+import { UI_COLOURS, installThemeStyles } from "./theme.ts";
 
 /** Fixed sizes of the shell regions (px). */
 export const TOP_BAR_PX = 48;
@@ -114,17 +114,18 @@ export function saveShellPrefs(storage: FlagStorage | undefined, prefs: ShellPre
 const CSS = `
 .al-shell { display: grid; position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden; grid-template-columns: var(--side-w, ${SIDE_EXPANDED_PX}px) minmax(0, 1fr); grid-template-rows: ${TOP_BAR_PX}px minmax(0, 1fr) var(--dock-h, ${DOCK_HEADER_PX}px); grid-template-areas: "top top" "side stage" "dock dock"; }
 @supports (height: 100dvh) { .al-shell { height: 100dvh; } }
-.al-top { grid-area: top; min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 12px; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-bottom: 1px solid ${UI_COLOURS.border}; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
-.al-top-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.al-top { grid-area: top; min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--al-s3); padding: 0 var(--al-s3); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-bottom: 1px solid var(--al-border); color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
+.al-top-left { display: flex; align-items: center; gap: var(--al-s3); min-width: 0; }
 .al-top-mid { display: flex; justify-content: center; min-width: 0; overflow: hidden; }
-.al-top-right { display: flex; align-items: center; gap: 8px; }
+.al-top-right { display: flex; align-items: center; gap: var(--al-s2); }
 .al-title { margin: 0; font: inherit; font-weight: bold; letter-spacing: 0.08em; color: ${UI_COLOURS.accentText}; white-space: nowrap; }
-.al-side { grid-area: side; min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-right: 1px solid ${UI_COLOURS.border}; }
+.al-shell[data-compact="true"]:has(.al-status:not([hidden])) .al-title { display: none; }
+.al-side { grid-area: side; min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-right: 1px solid var(--al-border); }
 .al-stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 .al-stage > canvas { position: absolute; top: 0; left: 0; display: block; }
-.al-stage-banners { position: absolute; z-index: 12; top: 8px; left: 8px; right: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.al-stage-banners { position: absolute; z-index: 12; top: var(--al-s2); left: var(--al-s2); right: var(--al-s2); display: flex; flex-direction: column; align-items: center; gap: var(--al-s2); pointer-events: none; }
 .al-stage-banners > * { pointer-events: auto; max-width: min(560px, 100%); }
-.al-dock { grid-area: dock; min-width: 0; min-height: 0; overflow: hidden; position: relative; box-sizing: border-box; background: ${UI_COLOURS.inputBg}; box-shadow: inset 0 1px 0 ${UI_COLOURS.border}; }
+.al-dock { grid-area: dock; min-width: 0; min-height: 0; overflow: hidden; position: relative; box-sizing: border-box; background: ${UI_COLOURS.inputBg}; box-shadow: inset 0 1px 0 var(--al-border); }
 `;
 
 export interface Shell {
@@ -167,6 +168,7 @@ export function createShell(options: ShellOptions = {}): Shell {
   const storage = "storage" in options ? options.storage : typeof localStorage === "undefined" ? undefined : localStorage;
   const lineHeight = options.getLineHeight ?? (() => 21);
 
+  installThemeStyles();
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);

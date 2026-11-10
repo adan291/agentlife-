@@ -42,7 +42,7 @@ export function agentTooltip(id: AgentId, state: AgentState | undefined, text: s
 }
 
 const CSS = `
-.al-tooltip { position: absolute; z-index: 30; max-width: min(340px, 90vw); pointer-events: none; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 6px 10px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
+.al-tooltip { position: absolute; z-index: 30; max-width: min(340px, calc(100% - var(--al-s4))); pointer-events: none; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); padding: var(--al-s2) var(--al-s3); font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-tooltip[hidden] { display: none; }
 .al-tooltip b { display: block; color: ${UI_COLOURS.accentText}; margin-bottom: 2px; }
 .al-tooltip span { display: block; overflow-wrap: anywhere; }

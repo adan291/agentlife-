@@ -18,7 +18,7 @@ export function tabTitle(pending: number): string {
 }
 
 const CSS = `
-.al-turn { z-index: 12; max-width: min(560px, 100%); display: flex; gap: 12px; align-items: center; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 2px solid ${UI_COLOURS.accent}; border-radius: 6px; padding: 8px 12px; font: var(--al-font, 14px)/1.4 monospace; box-sizing: border-box; box-shadow: 0 0 12px rgba(255, 138, 31, 0.45); }
+.al-turn { z-index: 12; max-width: min(560px, 100%); display: flex; gap: var(--al-s3); align-items: center; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 2px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s3); font: var(--al-font, 14px)/1.4 monospace; box-sizing: border-box; box-shadow: var(--al-shadow), 0 0 12px rgba(255, 138, 31, 0.45); }
 .al-turn[hidden] { display: none; }
 .al-turn button { flex: none; }
 `;

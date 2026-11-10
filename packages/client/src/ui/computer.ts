@@ -5,12 +5,18 @@ export interface ComputerActions {
   startJob(repoId: string, goal: string): void;
 }
 
-/** Computer panel: pick an allowlisted repo, type a goal, start a job. Form values survive re-renders. */
+/** What a panel shows: the scrollable body and, when it has actions, a footer. */
+export interface PanelContent {
+  body: HTMLElement;
+  footer?: HTMLElement;
+}
+
+/** Computer panel: pick an allowlisted repo, type a goal, start a job (the button lives in the footer). Form values survive re-renders. */
 export function createComputerPanel(doc: Document, actions: ComputerActions) {
   let repoId = "";
   let goal = "";
 
-  return function render(data: PanelData, engineError: string | null): HTMLElement {
+  return function render(data: PanelData, engineError: string | null): PanelContent {
     const root = doc.createElement("div");
     if (engineError) {
       const err = doc.createElement("p");
@@ -18,7 +24,7 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
       err.setAttribute("role", "alert");
       err.textContent = `Engine unavailable: ${engineError}`;
       root.appendChild(err);
-      return root;
+      return { body: root };
     }
     const busy = data.job !== null && !["report_ready", "delivered", "failed", "cancelled"].includes(data.job.state);
 
@@ -26,7 +32,7 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
       const p = doc.createElement("p");
       p.textContent = "No repositories available.";
       root.appendChild(p);
-      return root;
+      return { body: root };
     }
     if (!data.repos.some((r) => r.id === repoId)) repoId = data.repos[0]!.id;
 
@@ -80,7 +86,7 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
       goal = "";
     });
 
-    root.append(repoLabel, goalLabel, btn);
-    return root;
+    root.append(repoLabel, goalLabel);
+    return { body: root, footer: btn };
   };
 }
