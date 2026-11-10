@@ -10,6 +10,7 @@
     { "id": "S7",  "spec": "agent-engine",   "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 6 to 10 of the agent-engine spec. Follow workflow.md." },
     { "id": "S8",  "spec": "agent-pipeline", "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 2 to 5 of the agent-pipeline spec, using the findings in docs/spikes/kiro-cli.md. Follow workflow.md." },
     { "id": "S9",  "spec": "agent-pipeline", "model": "claude-sonnet-5.5", "effort": "high",   "prompt": "Implement tasks 6 to 10 of the agent-pipeline spec. Follow workflow.md." },
+    { "id": "S9B", "spec": "build-crew",     "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 4 of the build-crew spec (.kiro/specs/build-crew). Follow workflow.md." },
     { "id": "S10", "spec": "agent-pipeline", "model": "auto",              "effort": "low",    "interactive": true, "prompt": "Implement tasks 11 to 13 of the agent-pipeline spec. Run the live runs with me." },
     { "id": "S11", "spec": "demo-replay",    "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 4 of the demo-replay spec. Follow workflow.md." },
     { "id": "S12", "spec": "demo-replay",    "model": "auto",              "effort": "low",    "prompt": "Implement tasks 5 and 6 of the demo-replay spec, then list visual polish items for the Kiroween look in docs/STATUS.md and do the top three." },

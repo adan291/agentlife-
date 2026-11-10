@@ -81,6 +81,8 @@ S7 usa Sonnet por la máquina de estados con cancelación y el SSE sin huecos: a
 
 ## Fase 3: Agentes reales (24–29 nov)
 
+S9B (build-crew 1–4, Auto): el fantasma Builder muestra en la habitación las sesiones que construyen el proyecto. Tarea 5 es una comprobación manual.
+
 | Sesión | Fecha | Modelo | Effort | Prompt |
 |---|---|---|---|---|
 | S8 | 24–25 nov | Sonnet 5.5 | medium | `Implement tasks 2 to 5 of the agent-pipeline spec, using the findings in docs/spikes/kiro-cli.md. Follow workflow.md.` |
