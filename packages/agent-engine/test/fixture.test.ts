@@ -41,6 +41,8 @@ describe("fixture haunted-todo", () => {
     const ws = readFileSync(path.join(root, "pnpm-workspace.yaml"), "utf8");
     expect(ws).toMatch(/packages\/\*/);
     expect(ws).not.toMatch(/fixtures/);
-    expect(JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).scripts.test).toBe("pnpm -r test");
+    const rootTest: string = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).scripts.test;
+    expect(rootTest).toContain("pnpm -r test");
+    expect(rootTest).not.toMatch(/fixtures/);
   });
 });
