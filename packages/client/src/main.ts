@@ -4,6 +4,7 @@ import { ProceduralSprites } from "./scene/textures.ts";
 import { WorldView } from "./scene/world-view.ts";
 import { LiveTransport } from "./transport.ts";
 import { createHud } from "./ui/hud.ts";
+import { createPanels } from "./ui/panels.ts";
 
 const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
 
@@ -28,9 +29,12 @@ const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
 });
 hud.setZoomLabel(world.zoom);
 
+const panels = createPanels((msg) => transport.send(msg));
+
 transport.onStatus((s) => hud.setStatus(s));
 transport.onMessage((msg) => {
   world.handle(msg);
+  panels.handle(msg);
   if (msg.type === "welcome") hud.setZoomLabel(world.zoom);
 });
 

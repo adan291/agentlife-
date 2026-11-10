@@ -1,4 +1,4 @@
-# Implementation Plan
+﻿# Implementation Plan
 
 - [x] 1. Isometric geometry in shared
   - Create `shared/src/geometry/projection.ts` (`tileToScreen`, `screenToTile`), `heightmap.ts` (`parseHeightmap`), `depth.ts` (`depthKey`)
@@ -52,7 +52,7 @@
   - Click to move, click furniture to use, name tags, role colours, status badges with 8 state icons, speech bubbles with duration by length
   - _Requirements: 3.1, 4.2, 5.1, 5.3, 5.4, 5.5_
 
-- [ ] 11. Client: panels
+- [x] 11. Client: panels
   - `ui/panels.ts` (open/close, Esc), computer, mailbox (approve/reject, reports), board (timeline), `ui/markdown.ts` safe renderer with a test that HTML in input is escaped
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
