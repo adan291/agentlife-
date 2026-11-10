@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Transport: no reconnect on "replaced" (code 4000)
+- [x] 1. Transport: no reconnect on "replaced" (code 4000)
   - Client stops reconnecting on close code 4000, HUD banner "AGENT LIFE is open in another tab" with "Use here"; other close codes keep the backoff
   - Unit tests with the fake socket: 4000 → no timer, banner; 1006 → reconnect; "Use here" → connect
   - _Bug 1_

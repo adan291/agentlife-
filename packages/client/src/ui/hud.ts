@@ -30,7 +30,7 @@ export interface Hud {
 }
 
 /** Small DOM overlay: zoom button, text size, connection banner and transient messages. */
-export function createHud(onZoom: () => void, onHelp: () => void = () => {}, font?: FontControls): Hud {
+export function createHud(onZoom: () => void, onHelp: () => void = () => {}, font?: FontControls, onUseHere: () => void = () => {}): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -70,7 +70,15 @@ export function createHud(onZoom: () => void, onHelp: () => void = () => {}, fon
   const status = document.createElement("div");
   status.className = "al-hud al-status";
   status.setAttribute("role", "status");
-
+  const statusText = document.createElement("span");
+  const useHere = document.createElement("button");
+  useHere.className = "al-btn";
+  useHere.type = "button";
+  useHere.textContent = "Use here";
+  useHere.hidden = true;
+  useHere.style.marginLeft = "10px";
+  useHere.addEventListener("click", onUseHere);
+  status.append(statusText, useHere);
   const notice = document.createElement("div");
   notice.className = "al-hud al-notice";
   notice.setAttribute("role", "status");
@@ -92,7 +100,9 @@ export function createHud(onZoom: () => void, onHelp: () => void = () => {}, fon
   return {
     setStatus(s) {
       status.dataset["status"] = s;
-      status.textContent = s === "reconnecting" ? "Reconnecting…" : s === "connecting" ? "Connecting…" : "";
+      statusText.textContent =
+        s === "reconnecting" ? "Reconnecting…" : s === "connecting" ? "Connecting…" : s === "replaced" ? "AGENT LIFE is open in another tab" : "";
+      useHere.hidden = s !== "replaced";
     },
     setZoomLabel(z) {
       zoom.textContent = `${z}×`;

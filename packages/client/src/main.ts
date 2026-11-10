@@ -36,6 +36,7 @@ const hud = createHud(
   },
   () => guide.open(),
   theme,
+  () => transport.reconnect(),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
