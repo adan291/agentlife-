@@ -6,7 +6,7 @@ import { FOCUS_MS, easeToward, rootPositionFor } from "../src/scene/camera.ts";
 import { STATE_COLOURS } from "../src/palette.ts";
 import { formatDuration } from "../src/ui/duration.ts";
 import { stepLabel, stepperFor } from "../src/ui/stepper.ts";
-import { TeamModel, elapsedText, rowTone } from "../src/ui/team-bar.ts";
+import { TeamModel, elapsedText, parseBuilderStarted, rowTone } from "../src/ui/team-bar.ts";
 import { TAB_TITLE, tabTitle, yourTurnVisible } from "../src/ui/toast.ts";
 
 // ---- stepper ----
@@ -222,7 +222,34 @@ describe("TeamModel", () => {
     );
     expect(m.row("developer")).toMatchObject({ state: "working", text: "Editing files", model: "claude-x", since: 5000 });
     expect(m.row("qa")).toMatchObject({ state: "idle", model: "claude-y", activity: "Running tests" });
-    expect(m.row("builder").model).toBeUndefined();
+    expect(m.row("builder").model).toBe("Kiro build sessions");
+  });
+
+  it("shows the session and model of the Builder while a build session runs", () => {
+    const m = new TeamModel(0);
+    expect(m.row("builder").model).toBe("Kiro build sessions");
+    const state = (s: "working" | "thinking" | "idle" | "done", text?: string): ServerMsg => ({
+      type: "agent_state",
+      agentId: "builder",
+      state: s,
+      ...(text ? { text } : {}),
+    });
+    expect(m.apply(state("working", "S9 agent-pipeline (claude-x)"), 1)).toBe(true);
+    expect(m.row("builder").model).toBe("S9 · claude-x");
+    // Activity lines keep the session shown.
+    m.apply(state("thinking", "Reading: src/a.ts"), 2);
+    expect(m.row("builder").model).toBe("S9 · claude-x");
+    m.apply(state("done"), 3);
+    expect(m.row("builder").model).toBe("S9 · claude-x");
+    expect(m.apply(state("idle"), 4)).toBe(true);
+    expect(m.row("builder").model).toBe("Kiro build sessions");
+  });
+
+  it("parses only started labels", () => {
+    expect(parseBuilderStarted("S9 agent-pipeline (auto)")).toBe("S9 · auto");
+    expect(parseBuilderStarted("R review (m)")).toBe("R · m");
+    expect(parseBuilderStarted("Editing foo.ts (2)")).toBeNull();
+    expect(parseBuilderStarted(undefined)).toBeNull();
   });
 
   it("updates on agent_state and activity messages and reports whether something changed", () => {

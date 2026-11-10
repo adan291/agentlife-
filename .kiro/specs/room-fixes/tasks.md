@@ -10,6 +10,6 @@
   - Unit tests for the free-viewport and zoom choice
   - _Bug 2_
 
-- [ ] 3. Builder row second line
+- [x] 3. Builder row second line
   - "Kiro build sessions" when idle, "<session> · <model>" while a session runs
   - _Bug 3_

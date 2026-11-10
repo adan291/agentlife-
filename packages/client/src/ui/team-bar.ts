@@ -3,6 +3,12 @@ import type { AgentId, AgentState, ServerMsg } from "@agentlife/shared";
 import { ROLE_COLOURS, STATE_COLOURS } from "../palette.ts";
 import { formatDuration } from "./duration.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
+import { setInsets } from "../scene/viewport.ts";
+
+/** Team bar geometry (px); the layout code reads the same numbers to find the free viewport. */
+const TEAM_LEFT_PX = 10;
+const TEAM_WIDTH_PX = 220;
+const TEAM_COLLAPSED_PX = 48;
 
 export interface TeamRow {
   agentId: AgentId;
@@ -31,12 +37,26 @@ export function rowTone(state: AgentState): RowTone {
   return { colour: STATE_COLOURS[state], highlight: busy, animate: busy };
 }
 
+/** Second line of the Builder row while no build session runs. */
+export const BUILDER_IDLE_LINE = "Kiro build sessions";
+
+/**
+ * "S9 · model" from the label of a Builder `started` event ("S9 agent-pipeline (model)"), or null when
+ * the text is not such a label (activity lines, "done", ...).
+ */
+export function parseBuilderStarted(text: string | undefined): string | null {
+  if (!text) return null;
+  const m = /^(S\d+[A-Za-z]?|R)\s.*\(([^()]+)\)$/.exec(text);
+  return m ? `${m[1]} · ${m[2]}` : null;
+}
+
 /** Rows of the team bar and what feeds them. Pure: the DOM layer renders `rows()`. */
 export class TeamModel {
   private readonly byId = new Map<AgentId, TeamRow>();
 
   constructor(now = Date.now()) {
     for (const id of AGENT_IDS) this.byId.set(id, { agentId: id, state: "idle", since: now });
+    this.byId.get("builder")!.model = BUILDER_IDLE_LINE;
   }
 
   /** Agents in display order: Architect, Developer, QA, Builder. */
@@ -57,6 +77,7 @@ export class TeamModel {
           this.byId.set(a.agentId, { agentId: a.agentId, state: a.state, since: now, ...(a.text === undefined ? {} : { text: a.text }) });
         }
         for (const [id, model] of Object.entries(msg.models ?? {}) as [AgentId, string][]) this.byId.get(id)!.model = model;
+        this.byId.get("builder")!.model ??= parseBuilderStarted(this.byId.get("builder")!.text) ?? BUILDER_IDLE_LINE;
         for (const l of msg.activity ?? []) this.byId.get(l.agentId)!.activity = l.text;
         return true;
       }
@@ -64,7 +85,13 @@ export class TeamModel {
         const row = this.byId.get(msg.agentId);
         if (!row) return false;
         const stateChanged = row.state !== msg.state;
-        if (!stateChanged && row.text === msg.text) return false;
+        let sessionChanged = false;
+        if (msg.agentId === "builder") {
+          const line = msg.state === "idle" ? BUILDER_IDLE_LINE : (parseBuilderStarted(msg.text) ?? row.model ?? BUILDER_IDLE_LINE);
+          sessionChanged = line !== row.model;
+          row.model = line;
+        }
+        if (!stateChanged && row.text === msg.text && !sessionChanged) return false;
         row.state = msg.state;
         if (stateChanged) row.since = now;
         if (msg.text === undefined) delete row.text;
@@ -93,8 +120,8 @@ function stateLabel(state: AgentState): string {
 }
 
 const CSS = `
-.al-team { position: fixed; z-index: 10; left: 10px; top: 52px; width: 220px; max-height: calc(100vh - 52px - var(--al-terminal-h, 0px) - 16px); overflow-y: auto; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 6px; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
-.al-team[data-collapsed="true"] { width: 48px; }
+.al-team { position: fixed; z-index: 10; left: ${TEAM_LEFT_PX}px; top: 52px; width: ${TEAM_WIDTH_PX}px; max-height: calc(100vh - 52px - var(--al-terminal-h, 0px) - 16px); overflow-y: auto; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 6px; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
+.al-team[data-collapsed="true"] { width: ${TEAM_COLLAPSED_PX}px; }
 .al-team-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; }
 .al-team-head b { color: ${UI_COLOURS.accentText}; }
 .al-team[data-collapsed="true"] .al-team-head b, .al-team[data-collapsed="true"] .al-team-text { display: none; }
@@ -154,6 +181,7 @@ export function createTeamBar(onFocus: (id: AgentId) => void): TeamBar {
     toggle.title = c ? "Show the team bar" : "Collapse the team bar";
     toggle.setAttribute("aria-label", toggle.title);
     toggle.setAttribute("aria-expanded", String(!c));
+    setInsets({ left: TEAM_LEFT_PX + (c ? TEAM_COLLAPSED_PX : TEAM_WIDTH_PX) });
   };
   toggle.addEventListener("click", () => setCollapsed(root.dataset["collapsed"] !== "true"));
   setCollapsed(false);
