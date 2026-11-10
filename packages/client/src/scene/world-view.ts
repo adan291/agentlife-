@@ -1,6 +1,6 @@
 import { Container } from "pixi.js";
 import type { Application, FederatedPointerEvent } from "pixi.js";
-import { FURNI_CATALOG, footprintTiles, screenToTile } from "@agentlife/shared";
+import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, screenToTile, tileToScreen } from "@agentlife/shared";
 import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
@@ -14,6 +14,8 @@ import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
+import { prefersReducedMotion } from "./glow.ts";
+import { MailboxBadge } from "./mailbox-badge.ts";
 import type { HoverSink } from "../ui/tooltip.ts";
 
 export interface WorldViewHooks {
@@ -43,6 +45,11 @@ export class WorldView {
   private zoomLevel: Zoom = 1;
   private zoomChosen = false;
   private models: Partial<Record<AgentId, string>> = {};
+  private hoveredItem: string | null = null;
+  private badge: MailboxBadge | null = null;
+  private badgeCount = 0;
+  private badgeDot = false;
+  private reducedMotion = prefersReducedMotion();
   private readonly agentStatus = new Map<AgentId, { state?: AgentState; text?: string | undefined }>();
 
   constructor(
@@ -66,6 +73,13 @@ export class WorldView {
 
   get zoom(): Zoom {
     return this.zoomLevel;
+  }
+
+  /** Pending approvals as a number and an unread report as a dot, above the mailbox. */
+  setMailboxBadge(count: number, dot: boolean): void {
+    this.badgeCount = count;
+    this.badgeDot = dot;
+    this.badge?.set(count, dot);
   }
 
   setZoom(z: Zoom): void {
@@ -117,6 +131,8 @@ export class WorldView {
 
   /** Advance animations; call once per frame. */
   tick(now: number): void {
+    for (const f of this.furni) f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion);
+    this.badge?.update(now, this.reducedMotion);
     for (const { view, overlay } of this.avatars.values()) {
       view.update(now);
       overlay.update(now, view.feetX, view.feetY);
@@ -135,6 +151,13 @@ export class WorldView {
       const fv = new FurniView(placed, this.sprites, z);
       this.furni.push(fv);
       this.objects.addChild(fv.sprite);
+      if (fv.glow) this.objects.addChild(fv.glow);
+      if (fv.def.interaction === "mailbox") {
+        const p = tileToScreen({ x: placed.x, y: placed.y, z });
+        this.badge = new MailboxBadge(p.sx, p.sy - fv.def.height * HEIGHT_UNIT - 16);
+        this.overlays.addChild(this.badge.container);
+        this.badge.set(this.badgeCount, this.badgeDot);
+      }
     }
 
     this.models = msg.models ?? {};
@@ -161,6 +184,9 @@ export class WorldView {
   }
 
   private clearScene(): void {
+    this.badge?.destroy();
+    this.badge = null;
+    this.hoveredItem = null;
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
     for (const c of this.objects.removeChildren()) c.destroy();
@@ -194,6 +220,7 @@ export class WorldView {
   private onPointerMove(e: FederatedPointerEvent): void {
     const h = this.hit(e);
     if (!h) return;
+    this.hoveredItem = null;
     const agent = this.agentAt(e.global.x, e.global.y);
     if (agent) {
       this.app.canvas.style.cursor = "default";
@@ -209,6 +236,7 @@ export class WorldView {
       if (def) {
         h.room.setHover(footprintTiles(h.item, def), def.interaction ? "use" : "floor");
         this.app.canvas.style.cursor = def.interaction ? "pointer" : "default";
+        if (def.interaction) this.hoveredItem = h.item.itemId;
         if (def.interaction && def.hint) {
           const hint = def.hint;
           this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.clientX, e.clientY, () => ({ title: def.name, lines: [hint] }));
@@ -239,6 +267,7 @@ export class WorldView {
   }
 
   private clearHover(): void {
+    this.hoveredItem = null;
     this.room?.setHover(null);
     this.hooks.tooltip?.hide();
     this.app.canvas.style.cursor = "default";

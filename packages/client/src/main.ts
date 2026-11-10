@@ -5,6 +5,7 @@ import { WorldView } from "./scene/world-view.ts";
 import { LiveTransport } from "./transport.ts";
 import { createHud } from "./ui/hud.ts";
 import { createPanels } from "./ui/panels.ts";
+import { MailboxState } from "./ui/mailbox-state.ts";
 import { createTooltip } from "./ui/tooltip.ts";
 
 const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
@@ -32,10 +33,15 @@ const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
 hud.setZoomLabel(world.zoom);
 
 const panels = createPanels((msg) => transport.send(msg));
+const mailbox = new MailboxState();
 
 transport.onStatus((s) => hud.setStatus(s));
 transport.onMessage((msg) => {
   world.handle(msg);
+  if (mailbox.apply(msg, panels.state.open)) {
+    world.setMailboxBadge(mailbox.pendingCount, mailbox.unseenReport);
+    hud.setNotice(mailbox.pendingCount > 0 ? "Plan waiting for your approval" : null);
+  }
   panels.handle(msg);
   if (msg.type === "welcome") hud.setZoomLabel(world.zoom);
 });

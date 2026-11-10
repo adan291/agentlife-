@@ -12,7 +12,7 @@
   - `ui/tooltip.ts`, hover resolution for items and avatars, hide rules
   - _Requirements: 1.1, 1.2, 1.3, 3.1_
 
-- [ ] 4. Client: glow, mailbox badge and HUD waiting line
+- [x] 4. Client: glow, mailbox badge and HUD waiting line
   - Pulsing outline with reduced-motion fallback, badge with count and new-report dot, HUD line
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 4.2, 4.3_
 

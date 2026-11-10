@@ -239,6 +239,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const { you, welcome } = sim.join();
     current = { ws, userId: you };
     send(ws, models ? { ...welcome, models } : welcome);
+    // A reload must still show the mailbox badge and the HUD line for a plan that waits.
+    for (const a of approvals.values()) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     refreshModels();
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);
