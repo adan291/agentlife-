@@ -1,0 +1,13 @@
+{
+  "name": "haunted-todo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tiny todo helpers with a few known problems. Fixture for AGENT LIFE.",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "5.1.0"
+  }
+}

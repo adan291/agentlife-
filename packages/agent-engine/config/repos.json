@@ -2,7 +2,7 @@
   {
     "id": "haunted-todo",
     "name": "haunted-todo",
-    "source": "fixtures/haunted-todo",
+    "source": "fixtures/repos/haunted-todo",
     "testCommand": "npm test"
   }
 ]

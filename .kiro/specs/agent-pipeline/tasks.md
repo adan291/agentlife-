@@ -6,7 +6,7 @@
   - If anything fails, stop and record the alternative in docs/risks-and-decisions.md
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 2. Fixture repository haunted-todo
+- [x] 2. Fixture repository haunted-todo
   - `fixtures/repos/haunted-todo/` with module, Vitest tests, 3 seeded issues, README, lockfile
   - Make sure the fixture is excluded from the monorepo workspace and from root `pnpm check`
   - _Requirements: 2.1_
