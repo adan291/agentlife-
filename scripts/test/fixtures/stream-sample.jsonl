@@ -1,0 +1,13 @@
+{"type":"runStarted","data":{"sessionId":"sess_fixture"}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"available_commands_update","availableCommands":[]}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"I"}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Read File","kind":"read","locations":[{"path":"D:\\project\\.kiro\\specs\\build-crew\\tasks.md"}],"rawInput":{"path":"D:\\project\\.kiro\\specs\\build-crew\\tasks.md"}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call","toolCallId":"t2","title":"Write File","kind":"edit","status":"in_progress","locations":[{"path":"/home/user/project/packages/shared/src/crew.ts"}],"rawInput":{"path":"/home/user/project/packages/shared/src/crew.ts","text":"export {}"}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call","toolCallId":"t3","title":"Run Command","kind":"execute","rawInput":{"command":"cd packages/client; pnpm --filter @agentlife/client test","run_in_background":false}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call","toolCallId":"t4","title":"Run Command","kind":"execute","rawInput":{"command":"pnpm check","run_in_background":false}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call","toolCallId":"t5","title":"Run Command","kind":"execute","rawInput":{"command":"git commit -m \"build-crew: 1 Shared builder agent, anchors and crew schema, plus a long tail that goes past the limit\"","run_in_background":false}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call","toolCallId":"t6","title":"List Directory","kind":"search","rawInput":{"path":"D:\\project\\packages","depth":2}}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"tool_call_update","toolCallId":"t6","status":"completed"}}}
+{"type":"sessionUpdate","data":{"sessionId":"sess_fixture","update":{"sessionUpdate":"session_info_update","contextUsagePercentage":12}}}
+not json at all
+{"type":"runFinished","data":{"sessionId":"sess_fixture","status":"success","stopReason":"end_turn","finalText":"done","finalTextTruncated":false}}

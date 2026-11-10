@@ -10,7 +10,7 @@
   - Tests: 400 on invalid body, mapping, throttle, no task.* events, job + build session at the same time
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.6, 4.2_
 
-- [ ] 3. Runner: stream-json mapping and reporting
+- [x] 3. Runner: stream-json mapping and reporting
   - `scripts/crew-map.ts` + fixture + unit and property tests; wire `started` / activity / `finished` into run-session.ts, best effort, `AGENTLIFE_CREW=0`
   - Make root `pnpm check` run `scripts/test/*.test.ts`
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.1_

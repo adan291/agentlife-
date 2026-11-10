@@ -13,6 +13,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { CrewEvent } from "../packages/shared/src/crew.ts";
+import { createSendGate, crewEventFromLine } from "./crew-map.ts";
 
 interface Session {
   id: string;
@@ -144,6 +146,42 @@ function notify(text: string): void {
   if (r.status !== 0) console.warn(`[session] Discord notification skipped: ${(r.stderr ?? "").trim()}`);
 }
 
+/** Build crew: mirrors the session in the room through the engine. Best effort, never delays or fails a session. */
+const CREW_ENABLED = process.env.AGENTLIFE_CREW !== "0";
+let crewWarned = false;
+
+async function crew(ev: CrewEvent): Promise<void> {
+  if (!CREW_ENABLED) return;
+  const base = (process.env.ENGINE_URL ?? "http://127.0.0.1:8788").replace(/\/+$/, "");
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (process.env.ENGINE_TOKEN) headers["x-agentlife-token"] = process.env.ENGINE_TOKEN;
+  try {
+    const res = await fetch(`${base}/crew/events`, { method: "POST", headers, body: JSON.stringify(ev), signal: AbortSignal.timeout(1000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    if (!crewWarned) {
+      crewWarned = true;
+      console.warn(`[session] crew reporting unavailable (${e instanceof Error ? e.message : String(e)}); continuing without it`);
+    }
+  }
+}
+
+/** Turns raw stdout chunks into stream-json lines and reports the progress they describe. */
+function crewLineReporter(session: string): (chunk: Buffer) => void {
+  const gate = createSendGate();
+  let pending = "";
+  return (chunk) => {
+    if (!CREW_ENABLED) return;
+    pending += chunk.toString("utf8");
+    const parts = pending.split("\n");
+    pending = parts.pop() ?? "";
+    for (const line of parts) {
+      const ev = crewEventFromLine(line, session);
+      if (ev && gate(ev, Date.now())) void crew(ev);
+    }
+  };
+}
+
 function quote(a: string): string {
   return /[\s"]/.test(a) ? `"${a.replaceAll('"', '\\"')}"` : a;
 }
@@ -161,7 +199,7 @@ function sessionEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-async function runHeadless(label: string, args: string[], logFile: string): Promise<number> {
+async function runHeadless(label: string, args: string[], logFile: string, onStdout?: (chunk: Buffer) => void): Promise<number> {
   mkdirSync(RUNS, { recursive: true });
   const out = createWriteStream(logFile);
   console.log(`[session] ${label}: running (raw log: ${logFile})`);
@@ -171,6 +209,7 @@ async function runHeadless(label: string, args: string[], logFile: string): Prom
   child.stdout.on("data", (chunk: Buffer) => {
     out.write(chunk);
     process.stdout.write(".");
+    onStdout?.(chunk);
   });
   child.stderr.on("data", (chunk: Buffer) => {
     out.write(chunk);
@@ -221,9 +260,11 @@ async function main(): Promise<void> {
   const logFile = join(RUNS, `${session.id}-${stamp}.jsonl`);
   const started = Date.now();
   const startRef = run("git", ["rev-parse", "HEAD"]).out.trim();
-  const code = await runHeadless(session.id, args, logFile);
+  await crew({ kind: "started", session: session.id, spec: session.spec, model: session.model });
+  const code = await runHeadless(session.id, args, logFile, crewLineReporter(session.id));
 
   const check = run("pnpm", ["check"]);
+  await crew({ kind: "finished", session: session.id, ok: code === 0 && check.code === 0 });
   const blocker = code === 0 && check.code === 0 ? blockerSince(startRef, started) : null;
   const ok = code === 0 && check.code === 0 && !blocker;
   recordRun(session, blocker ? "blocked" : ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
@@ -239,7 +280,9 @@ async function main(): Promise<void> {
 
   if (review) {
     const reviewLog = join(RUNS, `${session.id}-${stamp}-review.jsonl`);
-    await runHeadless("review", kiroArgs(REVIEWER, REVIEWER_MODEL, "low", "Review the current branch against main.", true), reviewLog);
+    await crew({ kind: "started", session: "R", spec: session.spec, model: REVIEWER_MODEL });
+    const reviewCode = await runHeadless("review", kiroArgs(REVIEWER, REVIEWER_MODEL, "low", "Review the current branch against main.", true), reviewLog, crewLineReporter("R"));
+    await crew({ kind: "finished", session: "R", ok: reviewCode === 0 });
     console.log("[session] review written to docs/reviews/");
   }
   console.log(`[session] ${session.id} done. Check the spend in your Kiro usage panel before the next one.`);
