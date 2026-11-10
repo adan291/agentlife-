@@ -1,7 +1,7 @@
 import { Container } from "pixi.js";
 import type { Application, FederatedPointerEvent } from "pixi.js";
-import { FURNI_CATALOG, footprintTiles, screenToTile } from "@agentlife/shared";
-import type { AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@agentlife/shared";
+import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, screenToTile, tileToScreen } from "@agentlife/shared";
+import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 import { AvatarView } from "./avatar-view.ts";
@@ -13,10 +13,16 @@ import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
+import { agentTooltip } from "../ui/tooltip.ts";
+import { prefersReducedMotion } from "./glow.ts";
+import { MailboxBadge } from "./mailbox-badge.ts";
+import type { HoverSink } from "../ui/tooltip.ts";
 
 export interface WorldViewHooks {
   /** Server `error` messages (no_path, rate_limited, ...). */
   onError?(code: ErrorCode, message: string): void;
+  /** Receives hover targets for tooltips. */
+  tooltip?: HoverSink;
 }
 
 interface AvatarEntry {
@@ -38,6 +44,13 @@ export class WorldView {
   private readonly avatars = new Map<AvatarId, AvatarEntry>();
   private zoomLevel: Zoom = 1;
   private zoomChosen = false;
+  private models: Partial<Record<AgentId, string>> = {};
+  private hoveredItem: string | null = null;
+  private badge: MailboxBadge | null = null;
+  private badgeCount = 0;
+  private badgeDot = false;
+  private reducedMotion = prefersReducedMotion();
+  private readonly agentStatus = new Map<AgentId, { state?: AgentState; text?: string | undefined }>();
 
   constructor(
     private readonly app: Application,
@@ -62,6 +75,13 @@ export class WorldView {
     return this.zoomLevel;
   }
 
+  /** Pending approvals as a number and an unread report as a dot, above the mailbox. */
+  setMailboxBadge(count: number, dot: boolean): void {
+    this.badgeCount = count;
+    this.badgeDot = dot;
+    this.badge?.set(count, dot);
+  }
+
   setZoom(z: Zoom): void {
     this.zoomLevel = z;
     this.zoomChosen = true;
@@ -76,7 +96,11 @@ export class WorldView {
   handle(msg: ServerMsg, now = Date.now()): void {
     switch (msg.type) {
       case "welcome":
+        this.hooks.tooltip?.hide();
         this.rebuild(msg);
+        break;
+      case "open_panel":
+        this.hooks.tooltip?.hide();
         break;
       case "walk":
         this.avatars.get(msg.id)?.view.setWalk(msg.path, msg.msPerTile, msg.startedAt, now);
@@ -85,6 +109,7 @@ export class WorldView {
         this.avatars.get(msg.id)?.view.setDir(msg.dir);
         break;
       case "agent_state":
+        this.agentStatus.set(msg.agentId, { state: msg.state, text: msg.text });
         this.avatars.get(msg.agentId)?.overlay.setState(msg.state, msg.text);
         if (msg.agentId === "builder" && msg.state === "idle") this.avatars.get("builder")?.overlay.setName(builderTagName("Builder", null));
         break;
@@ -106,6 +131,8 @@ export class WorldView {
 
   /** Advance animations; call once per frame. */
   tick(now: number): void {
+    for (const f of this.furni) f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion);
+    this.badge?.update(now, this.reducedMotion);
     for (const { view, overlay } of this.avatars.values()) {
       view.update(now);
       overlay.update(now, view.feetX, view.feetY);
@@ -124,8 +151,18 @@ export class WorldView {
       const fv = new FurniView(placed, this.sprites, z);
       this.furni.push(fv);
       this.objects.addChild(fv.sprite);
+      if (fv.glow) this.objects.addChild(fv.glow);
+      if (fv.def.interaction === "mailbox") {
+        const p = tileToScreen({ x: placed.x, y: placed.y, z });
+        this.badge = new MailboxBadge(p.sx, p.sy - fv.def.height * HEIGHT_UNIT - 16);
+        this.overlays.addChild(this.badge.container);
+        this.badge.set(this.badgeCount, this.badgeDot);
+      }
     }
 
+    this.models = msg.models ?? {};
+    this.agentStatus.clear();
+    for (const a of msg.agents) this.agentStatus.set(a.agentId, { state: a.state, text: a.text });
     const status = new Map(msg.agents.map((a) => [a.agentId, a]));
     for (const a of msg.avatars) {
       const role: RoleKey = typeof a.id === "string" ? a.id : "user";
@@ -147,6 +184,9 @@ export class WorldView {
   }
 
   private clearScene(): void {
+    this.badge?.destroy();
+    this.badge = null;
+    this.hoveredItem = null;
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
     for (const c of this.objects.removeChildren()) c.destroy();
@@ -180,24 +220,61 @@ export class WorldView {
   private onPointerMove(e: FederatedPointerEvent): void {
     const h = this.hit(e);
     if (!h) return;
+    this.hoveredItem = null;
+    const agent = this.agentAt(e.global.x, e.global.y);
+    if (agent) {
+      this.app.canvas.style.cursor = "default";
+      h.room.setHover(null);
+      this.hooks.tooltip?.hover(`agent:${agent}`, e.clientX, e.clientY, () => {
+        const s = this.agentStatus.get(agent);
+        return agentTooltip(agent, s?.state, s?.text, this.models[agent]);
+      });
+      return;
+    }
     if (h.item) {
       const def = FURNI_CATALOG[h.item.defId];
       if (def) {
         h.room.setHover(footprintTiles(h.item, def), def.interaction ? "use" : "floor");
         this.app.canvas.style.cursor = def.interaction ? "pointer" : "default";
+        if (def.interaction) this.hoveredItem = h.item.itemId;
+        if (def.interaction && def.hint) {
+          const hint = def.hint;
+          this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.clientX, e.clientY, () => ({ title: def.name, lines: [hint] }));
+        } else {
+          this.hooks.tooltip?.hide();
+        }
         return;
       }
     }
+    this.hooks.tooltip?.hide();
     this.app.canvas.style.cursor = "default";
     h.room.setHover(h.room.isFloor(h.tile) ? [h.tile] : null, "floor");
   }
 
+  /** Front-most agent (not the user) whose sprite is under the point, in canvas coordinates. */
+  private agentAt(gx: number, gy: number): AgentId | undefined {
+    let best: AgentId | undefined;
+    let bestY = -Infinity;
+    for (const [id, { view }] of this.avatars) {
+      if (typeof id !== "string" || !view.sprite.visible) continue;
+      if (!view.sprite.getBounds().containsPoint(gx, gy)) continue;
+      if (view.feetY > bestY) {
+        best = id;
+        bestY = view.feetY;
+      }
+    }
+    return best;
+  }
+
   private clearHover(): void {
+    this.hoveredItem = null;
     this.room?.setHover(null);
+    this.hooks.tooltip?.hide();
     this.app.canvas.style.cursor = "default";
   }
 
   private onPointerTap(e: FederatedPointerEvent): void {
+    this.hooks.tooltip?.hide();
     const h = this.hit(e);
     if (!h) return;
     if (h.item) {

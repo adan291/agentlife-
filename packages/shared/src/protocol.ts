@@ -107,6 +107,8 @@ export const WelcomeMsgSchema = z.object({
   you: z.number().int().positive(),
   avatars: z.array(AvatarSchema),
   agents: z.array(AgentStatusSchema),
+  /** Model label per role, filled by the world-server from the engine. Absent when unknown. */
+  models: z.partialRecord(AgentIdSchema, z.string().min(1).max(100)).optional(),
 });
 export type WelcomeMsg = z.infer<typeof WelcomeMsgSchema>;
 

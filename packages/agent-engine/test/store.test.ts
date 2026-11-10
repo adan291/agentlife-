@@ -139,7 +139,7 @@ describe("Store", () => {
     expect(j.verdict).toBe("pass");
     expect(j.approvals[0]?.status).toBe("approved");
     expect(j.steps).toEqual([
-      { step: "analyze", startedAt: 2, endedAt: 4, status: "ok" },
+      { step: "analyze", startedAt: 2, endedAt: 4, durationMs: 2, status: "ok" },
       { step: "report", startedAt: 6, status: "running" },
     ]);
     s.close();

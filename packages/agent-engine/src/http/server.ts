@@ -10,6 +10,7 @@ import {
   OkResponseSchema,
   PROTOCOL_VERSION,
   RepoSchema,
+  RolesConfigResponseSchema,
   StartJobBodySchema,
   StartJobResponseSchema,
 } from "@agentlife/shared";
@@ -128,6 +129,21 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
       pattern: /^\/repos$/,
       handle: ({ res }) =>
         sendJson(res, 200, z.array(RepoSchema), config.repos.map((r) => ({ id: r.id, name: r.name }))),
+    },
+    {
+      method: "GET",
+      pattern: /^\/config\/roles$/,
+      handle: ({ res }) => {
+        // RUNTIME=fake overrides the config for every role (see engine.ts), so say so.
+        const fake = process.env["RUNTIME"] === "fake";
+        const view = (r: { runtime: string; model?: string | undefined }) =>
+          fake ? { runtime: "fake", model: "fake" } : { runtime: r.runtime, ...(r.model ? { model: r.model } : {}) };
+        sendJson(res, 200, RolesConfigResponseSchema, {
+          architect: view(config.agents.architect),
+          developer: view(config.agents.developer),
+          qa: view(config.agents.qa),
+        });
+      },
     },
     {
       method: "POST",

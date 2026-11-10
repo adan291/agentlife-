@@ -23,3 +23,11 @@
 - Unit: tooltip clamping, guide flag, badge counts from approval/report state, `ROLE_INFO` covers every `AgentId`, catalog: every def with `interaction` has a `hint`.
 - Engine: durations test (requirement 6.2); `/config/roles` returns only `model` and `runtime`.
 - Manual: hover each item and ghost, see glow, badge appears on a pending plan, guide on first load.
+
+## Decisions made while implementing
+
+- Step durations: `StepRecord` gained `durationMs`, set by the fold when a step ends (`endedAt - startedAt`); `endedAt` already existed. Per-step facts for the report read it. The step that builds the report is still running while the report is built, so its own line has no duration.
+- Models: the gateway caches `GET /config/roles` (via `EngineLink.roleModels?`) and puts it in `welcome.models`; it refreshes at start and on each connection, so the first client after a late engine start sees models only after a reload. With `RUNTIME=fake` the engine reports `fake` for runtime and model.
+- Pending badge: the gateway now also sends the pending approvals right after `welcome`, so a reload keeps the badge and the HUD line. `MailboxState` (client) drops pending approvals when their job ends or another job starts.
+- Agent hover uses the avatar sprite bounds (not a pixel-exact hit test). Glow is four accent-tinted copies of the sprite offset by 2 px behind the item.
+- The guide flag is `agentlife-guide-seen`; the card also closes with the "Got it" button.

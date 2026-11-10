@@ -48,6 +48,16 @@ describe("engine HTTP routes", () => {
     expect(repos).toEqual([{ id: "haunted-todo", name: "haunted-todo" }]);
   });
 
+  it("GET /config/roles returns only runtime and model per role", async () => {
+    const { url } = await boot();
+    const roles = (await json(await fetch(`${url}/config/roles`))) as Record<string, Record<string, unknown>>;
+    expect(Object.keys(roles).sort()).toEqual(["architect", "developer", "qa"]);
+    for (const r of Object.values(roles)) {
+      expect(Object.keys(r).every((k) => k === "runtime" || k === "model")).toBe(true);
+      expect(typeof r["runtime"]).toBe("string");
+    }
+  });
+
   it("runs a job: start, approve, delivered; GET /tasks/:id matches the stored view", async () => {
     const { engine, url } = await boot();
     const start = await post(`${url}/tasks`, { repoId: "haunted-todo", goal: "fix the bug" });
