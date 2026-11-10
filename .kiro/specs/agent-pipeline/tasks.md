@@ -43,7 +43,7 @@
   - QA prompt with task, diff, test log; ReviewSchema with retry; force `fail` when tests failed
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 10. Report step
+- [x] 10. Report step
   - Template, artifact, `report.ready`, also on failure; snapshot test
   - _Requirements: 8.1, 8.2_
 

@@ -1,0 +1,113 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildReport > matches the snapshot for a failed job with the failure reason and no later steps 1`] = `
+"# AGENT LIFE report
+
+## Summary
+
+- **Goal:** \`Add a feature\`
+- **Task:** \`Reject empty titles\`
+- **Done when:** \`addTodo throws on an empty title\`
+- **Verdict:** FAIL
+
+## Failure
+
+\`\`\`
+diff rejected: protected file: package.json
+\`\`\`
+
+## Plan
+
+1. \`Reject empty titles\` (risk: low; implemented) - files: \`src/todo.ts, test/todo.test.ts\`
+2. \`Test isOverdue\` (risk: medium) - files: \`test/todo.test.ts\`
+
+## Change
+
+1 file changed, +2 -1.
+
+\`\`\`diff
+diff --git a/src/todo.ts b/src/todo.ts
+--- a/src/todo.ts
++++ b/src/todo.ts
+@@ -1,3 +1,6 @@
+ export function addTodo() {
+-  return 1;
++  if (!title.trim()) throw new Error('empty');
++  return 2;
+ }
+\`\`\`
+
+## Tests
+
+The tests did not run.
+
+## Review
+
+No review was done.
+
+## Run facts
+
+- **analyze:** ok, 5.0 s
+- **develop:** failed, 40.0 s
+- **report:** running
+"
+`;
+
+exports[`buildReport > matches the snapshot for a passing job 1`] = `
+"# AGENT LIFE report
+
+## Summary
+
+- **Goal:** \`Make the todo helpers safer\`
+- **Task:** \`Reject empty titles\`
+- **Done when:** \`addTodo throws on an empty title\`
+- **Verdict:** PASS
+
+## Plan
+
+1. \`Reject empty titles\` (risk: low; implemented) - files: \`src/todo.ts, test/todo.test.ts\`
+2. \`Test isOverdue\` (risk: medium) - files: \`test/todo.test.ts\`
+
+## Change
+
+1 file changed, +2 -1.
+
+\`\`\`diff
+diff --git a/src/todo.ts b/src/todo.ts
+--- a/src/todo.ts
++++ b/src/todo.ts
+@@ -1,3 +1,6 @@
+ export function addTodo() {
+-  return 1;
++  if (!title.trim()) throw new Error('empty');
++  return 2;
+ }
+\`\`\`
+
+## Tests
+
+Passed (exit code 0). Last lines of the log:
+
+\`\`\`
+RUN v5.1.0
+ Tests  8 passed | 1 skipped (9)
+\`\`\`
+
+## Review
+
+Verdict: PASS, risk: low.
+
+- \`Covers the empty and whitespace-only cases.\`
+- \`No unrelated changes.\`
+
+## Run facts
+
+- **analyze:** ok, 21.4 s, 0.42 credits
+- **develop:** ok, 1 min 35 s, 1.25 credits
+- **test:** ok, 8.2 s
+- **review:** ok, 12.0 s, 0.30 credits
+- **report:** running
+
+Total credits: 1.97.
+"
+`;
