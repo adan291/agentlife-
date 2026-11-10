@@ -34,7 +34,7 @@
   - Worktree + branch, run developer agent, validate diff (property test for path rules), commit, store diff.patch
   - _Requirements: 5.1, 5.3, 5.4, 5.5_
 
-- [ ] 8. Docker runner
+- [x] 8. Docker runner
   - `docker/runner.Dockerfile`, build script `pnpm --filter @agentlife/agent-engine runner:build`, run with limits, timeout + `docker kill`, store test_log.txt, `docker_unavailable` failure
   - Verify Windows path mounting
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
