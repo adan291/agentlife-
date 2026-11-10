@@ -368,3 +368,32 @@ describe("JobRunner properties (requirement 3.6)", () => {
     );
   });
 });
+
+describe("JobRunner plan approval and task choice", () => {
+  const TWO: Plan = {
+    tasks: [
+      { id: "t1", title: "First", why: "w", files: ["a.ts"], acceptance: "ok", risk: "low" },
+      { id: "t2", title: "Second", why: "w", files: ["b.ts"], acceptance: "ok", risk: "high" },
+    ],
+  };
+
+  it("offers one option per plan task and builds the first task", async () => {
+    const seen: string[] = [];
+    const { store, runner } = setup(
+      okSteps({
+        analyze: async () => TWO,
+        develop: async (_c, input) => (seen.push(`develop:${input.task.id}`), { diff: "diff" }),
+        review: async (_c, input) => (seen.push(`review:${input.task.id}`), pass),
+        report: async (_c, input) => (seen.push(`report:${input.task?.id}`), { title: "R", markdown: "# R" }),
+      }),
+    );
+    autoApprove(store, runner);
+    const id = runner.start("haunted-todo", "goal");
+    await runner.done(id);
+    const request = store.eventsFor(id).find((e) => e.type === "approval.requested");
+    if (request?.type !== "approval.requested") throw new Error("no approval");
+    expect(request.options).toEqual(["t1: First", "t2: Second"]);
+    expect(request.summary).toContain("Approving builds task 1: First");
+    expect(seen).toEqual(["develop:t1", "review:t1", "report:t1"]);
+  });
+});

@@ -26,7 +26,7 @@
   - Unit tests with a fake child process; live test behind `AGENTLIFE_LIVE=1`
   - _Requirements: 3.1, 3.3, 3.4, 3.5, 3.6_
 
-- [ ] 6. Analyze step
+- [x] 6. Analyze step
   - Prompt, `extractJsonBlock`, PlanSchema validation with one retry, store plan.json, request approval with one option per task
   - _Requirements: 4.2, 4.3, 4.4_
 

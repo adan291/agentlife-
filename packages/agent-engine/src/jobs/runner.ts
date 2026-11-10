@@ -289,6 +289,9 @@ export class JobRunner {
     this.chatter(a, "architect", "analysing the repository");
     const plan: Plan = PlanSchema.parse(await this.runStep(a, repoId, goal, "analyze", T.analyze, (c) => this.steps.analyze(c)));
     a.data.plan = plan;
+    const task = plan.tasks[0];
+    if (!task) throw new Error("plan has no tasks");
+    a.data.task = task;
     this.store.saveArtifact({
       taskId: id,
       agentId: "architect",
@@ -310,8 +313,14 @@ export class JobRunner {
       agentId: "architect",
       approvalId,
       kind: "plan",
-      summary: trunc(`Plan for: ${goal}\n` + plan.tasks.map((t, i) => `${i + 1}. ${t.title} (risk: ${t.risk})`).join("\n"), 4000),
-      options: ["approve", "reject"],
+      summary: trunc(
+        `Plan for: ${goal}\n` +
+          plan.tasks.map((t, i) => `${i + 1}. ${t.title} (risk: ${t.risk})`).join("\n") +
+          `\nApproving builds task 1: ${task.title}`,
+        4000,
+      ),
+      // One option per plan task. The decision itself stays approve/reject; the first task is built.
+      options: plan.tasks.map((t) => trunc(`${t.id}: ${t.title}`, 200)),
     });
     const decision = await new Promise<ApprovalDecision>((resolve, reject) => {
       if (signal.aborted) return reject(signal.reason);
@@ -336,7 +345,7 @@ export class JobRunner {
       this.agent(id, "developer", "working", attempt === 1 ? "Editing files" : "Fixing review notes");
       this.chatter(a, "developer", "editing the code");
       const { diff } = await this.runStep(a, repoId, goal, "develop", T.develop, (c) =>
-        this.steps.develop(c, { plan, attempt, feedback }),
+        this.steps.develop(c, { plan, task, attempt, feedback }),
       );
       a.data.diff = diff;
       this.store.saveArtifact({ taskId: id, agentId: "developer", kind: "diff", title: `Patch (attempt ${attempt})`, filename: `diff-${attempt}.patch`, content: diff });
@@ -354,7 +363,7 @@ export class JobRunner {
       this.agent(id, "qa", "thinking", "Reviewing the patch");
       this.chatter(a, "qa", "reviewing the patch");
       const review: Review = ReviewSchema.parse(
-        await this.runStep(a, repoId, goal, "review", T.review, (c) => this.steps.review(c, { plan, diff, test })),
+        await this.runStep(a, repoId, goal, "review", T.review, (c) => this.steps.review(c, { plan, task, diff, test })),
       );
       a.data.review = review;
       this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Review (attempt ${attempt})`, filename: `review-${attempt}.json`, content: JSON.stringify(review, null, 2) });

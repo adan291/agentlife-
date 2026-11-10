@@ -103,3 +103,10 @@ docker run --rm --name al-<taskId> --network none --cpus 1 --memory 512m --pids-
 - Unit: `extractJsonBlock`, diff validator (property test: any path outside the worktree or in the deny list is rejected), report template snapshot, minimal env builder.
 - Integration (skipped unless `AGENTLIFE_LIVE=1`): one real kiro-cli call per role on the fixture, and one Docker run.
 - The fake runtime remains the default in CI.
+
+## Decisions made while implementing (tasks 6 to 10)
+
+- **Task choice.** The approval decision stays `approve | reject` (shared protocol, world-server and client are unchanged). The `approval.requested` event carries one option per plan task (`<id>: <title>`) and the summary says which task approval builds: always the first, because the Architect prompt orders tasks by value. `Steps.develop` and `Steps.review` receive that `task`; `ReportInput.task` carries it to the report. Letting the user pick another task needs a protocol change (a `taskId` on the approval body, a picker in the mailbox panel) and is not part of this spec.
+- **Who stores what.** Steps only produce data. `JobRunner` still stores `plan.json`, the diff, the test log, the review and the report as artifacts, and still asks for the approval. Step modules live in `src/steps/*.ts` as plain functions taking `PipelineDeps` (`steps/deps.ts`); task 11 composes them into a `Steps` object.
+- **Output contract.** `extractJsonBlock` accepts fences of three or more backticks tagged `json` (any case), starting a line; the last one wins. The retry prompt appends the validation error inside a fence. There is no fallback for unfenced JSON.
+- **Raw logs.** `data/runs/<taskId>/<step>.raw.jsonl` holds the runtime's raw lines; `<step>.jsonl` (written through `Store.appendRunLog`) holds progress, output and usage, which the export reads.
