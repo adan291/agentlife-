@@ -6,6 +6,7 @@ import WebSocket from "ws";
 import { PROTOCOL_VERSION, RoomValidationError, ServerMsgSchema, WorldSim } from "@agentlife/shared";
 import type { ServerMsg } from "@agentlife/shared";
 import { startGateway } from "../src/gateway.ts";
+import { FakeEngineLink } from "../src/fake-engine.ts";
 import type { Gateway } from "../src/gateway.ts";
 import { loadRoomFile } from "../src/load-room.ts";
 
@@ -63,6 +64,19 @@ describe("gateway", () => {
     expect(welcome.room.id).toBe(room.id);
     expect(welcome.avatars).toHaveLength(5);
     expect(welcome.agents).toHaveLength(4);
+  });
+
+  it("includes the engine's role models in the welcome (from the second connection at the latest)", async () => {
+    const sim = new WorldSim(room, Date.now, { msPerTile: 5 });
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    const g = await startGateway({ sim, port: 0, tickMs: 5, engine });
+    opened.push(g);
+    await new Promise((r) => setTimeout(r, 30));
+    const c = connect(g.port);
+    const welcome = await c.next((m) => m.type === "welcome");
+    if (welcome.type !== "welcome") throw new Error("unreachable");
+    expect(welcome.models).toEqual({ architect: "fake", developer: "fake", qa: "fake" });
+    engine.close();
   });
 
   it("replies bad_message to invalid JSON and invalid messages, and keeps working", async () => {

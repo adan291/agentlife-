@@ -4,7 +4,7 @@
   - Record `endedAt` for every finished step; test that all finished steps have `durationMs > 0` in the job view, export and report
   - _Requirements: 6.1, 6.2_
 
-- [ ] 2. Shared and engine: hints, role info and models
+- [x] 2. Shared and engine: hints, role info and models
   - `FurniDef.hint` + catalog texts, `shared/src/roles.ts`, `welcome.models`, engine `GET /config/roles`, world-server fills `models` (fake engine: "fake")
   - _Requirements: 1.4, 3.1, 3.2_
 

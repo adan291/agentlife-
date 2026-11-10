@@ -3,9 +3,11 @@ import {
   ErrorResponseSchema,
   HealthResponseSchema,
   RepoSchema,
+  RolesConfigResponseSchema,
   RunExportSchema,
   StartJobResponseSchema,
   type AgentEvent,
+  type AgentId,
   type ApprovalDecision,
   type JobView,
   type Repo,
@@ -62,6 +64,17 @@ export class HttpEngineLink implements EngineLink {
 
   async startJob(repoId: string, goal: string): Promise<{ taskId: string }> {
     return StartJobResponseSchema.parse(await this.request("POST", "/tasks", { repoId, goal }));
+  }
+
+  /** Models per role from `GET /config/roles`; roles without a model are left out. */
+  async roleModels(): Promise<Partial<Record<AgentId, string>>> {
+    const cfg = RolesConfigResponseSchema.parse(await this.request("GET", "/config/roles"));
+    const out: Partial<Record<AgentId, string>> = {};
+    for (const role of ["architect", "developer", "qa"] as const) {
+      const m = cfg[role].model;
+      if (m) out[role] = m;
+    }
+    return out;
   }
 
   async resolveApproval(approvalId: string, decision: ApprovalDecision, note?: string): Promise<void> {

@@ -8,6 +8,7 @@ export * from "./geometry/dir.ts";
 export * from "./geometry/pathfind.ts";
 export * from "./furni.ts";
 export * from "./room.ts";
+export * from "./roles.ts";
 export * from "./events.ts";
 export * from "./protocol.ts";
 export * from "./engine-api.ts";

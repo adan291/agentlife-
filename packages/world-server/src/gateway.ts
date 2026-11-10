@@ -7,7 +7,7 @@ import {
   PROTOCOL_VERSION,
   ServerMsgSchema,
 } from "@agentlife/shared";
-import type { AgentEvent, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
+import type { AgentEvent, AgentId, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
 import type { EngineLink } from "./engine-link.ts";
 
 export interface GatewayOptions {
@@ -218,12 +218,28 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   const tick = setInterval(() => deliver(sim.dueMessages()), options.tickMs ?? 50);
 
+  // Model per role for the agent tooltips. Cached so the welcome stays synchronous; refreshed on every
+  // connection (a reload picks up a late engine). Failures leave the cache as it was.
+  let models: Partial<Record<AgentId, string>> | undefined;
+  const refreshModels = () => {
+    const link = engine;
+    if (!link?.roleModels) return;
+    link.roleModels().then(
+      (m) => {
+        if (Object.keys(m).length > 0) models = m;
+      },
+      () => undefined,
+    );
+  };
+  refreshModels();
+
   wss.on("connection", (ws) => {
     // One user session in the MVP: a second connection replaces the first.
     if (current) current.ws.close(4000, "replaced by a newer connection");
     const { you, welcome } = sim.join();
     current = { ws, userId: you };
-    send(ws, welcome);
+    send(ws, models ? { ...welcome, models } : welcome);
+    refreshModels();
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);
 

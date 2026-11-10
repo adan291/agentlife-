@@ -46,6 +46,14 @@ export type Review = z.infer<typeof ReviewSchema>;
 export const StepNameSchema = z.enum(["analyze", "develop", "test", "review", "report"]);
 export type StepName = z.infer<typeof StepNameSchema>;
 
+/** `GET /config/roles`: only the runtime and model of each role, nothing else from the config. */
+export const RolesConfigResponseSchema = z.object({
+  architect: z.object({ runtime: z.string().min(1), model: z.string().min(1).optional() }),
+  developer: z.object({ runtime: z.string().min(1), model: z.string().min(1).optional() }),
+  qa: z.object({ runtime: z.string().min(1), model: z.string().min(1).optional() }),
+});
+export type RolesConfigResponse = z.infer<typeof RolesConfigResponseSchema>;
+
 export const StepRecordSchema = z.object({
   step: StepNameSchema,
   startedAt: z.number().int().nonnegative(),

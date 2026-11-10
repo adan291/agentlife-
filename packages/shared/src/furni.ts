@@ -13,6 +13,8 @@ export const FurniDefSchema = z.object({
   height: z.number().min(0).max(9),
   walkable: z.boolean(),
   interaction: InteractionSchema.optional(),
+  /** One line shown in the hover tooltip; every interactive item has one. */
+  hint: z.string().min(1).max(80).optional(),
   /** Id of the procedural draw recipe used by the client. */
   draw: z.string().min(1),
 });
@@ -26,6 +28,7 @@ function def(
   height: number,
   walkable: boolean,
   interaction?: Interaction,
+  hint?: string,
 ): FurniDef {
   return FurniDefSchema.parse({
     id,
@@ -36,13 +39,14 @@ function def(
     walkable,
     draw: id,
     ...(interaction ? { interaction } : {}),
+    ...(hint ? { hint } : {}),
   });
 }
 
 const DEFS: FurniDef[] = [
-  def("computer_desk", "Computer desk", 2, 1, 2, false, "computer"),
-  def("mailbox", "Mailbox", 1, 1, 3, false, "mailbox"),
-  def("board", "Job board", 2, 1, 4, false, "board"),
+  def("computer_desk", "Computer desk", 2, 1, 2, false, "computer", "Give the agents a job"),
+  def("mailbox", "Mailbox", 1, 1, 3, false, "mailbox", "Approve plans and read reports"),
+  def("board", "Job board", 2, 1, 4, false, "board", "Timeline of the current job"),
   def("agent_desk", "Agent desk", 2, 1, 2, false),
   def("chair", "Chair", 1, 1, 2, true),
   def("plant", "Potted plant", 1, 1, 4, false),

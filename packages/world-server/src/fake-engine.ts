@@ -1,4 +1,4 @@
-import type { AgentEvent, ApprovalDecision, JobState, JobView, Repo } from "@agentlife/shared";
+import type { AgentEvent, AgentId, ApprovalDecision, JobState, JobView, Repo } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
 import type { EngineLink } from "./engine-link.ts";
 
@@ -45,6 +45,10 @@ export class FakeEngineLink implements EngineLink {
 
   listRepos(): Promise<Repo[]> {
     return Promise.resolve([FAKE_REPO]);
+  }
+
+  roleModels(): Promise<Partial<Record<AgentId, string>>> {
+    return Promise.resolve({ architect: "fake", developer: "fake", qa: "fake" });
   }
 
   startJob(repoId: string, goal: string): Promise<{ taskId: string }> {
