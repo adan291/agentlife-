@@ -16,6 +16,6 @@
   - Breakpoints (900 / 640 px width, 560 px height), compact stepper; theme tokens, button states, focus rings, panel header/body/footer
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 5. Playwright layout smoke test
+- [x] 5. Playwright layout smoke test
   - Three viewport sizes; no overlap between regions; canvas equals stage; collapsing the side bar grows the canvas
   - _Requirements: 7.2_

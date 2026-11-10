@@ -16,3 +16,7 @@ data/
 !.env.example
 
 # NOTE: .kiro/ must stay committed (Kiroween submission requirement).
+
+# Playwright output
+test-results/
+playwright-report/
