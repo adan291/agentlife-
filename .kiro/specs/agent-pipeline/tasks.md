@@ -11,7 +11,7 @@
   - Make sure the fixture is excluded from the monorepo workspace and from root `pnpm check`
   - _Requirements: 2.1_
 
-- [ ] 3. Materialise step
+- [x] 3. Materialise step
   - Copy fixture to `data/repos/<id>/`, `git init`, commit with fixed author; refuse repos containing `.kiro/agents/agentlife-*`
   - _Requirements: 2.2_
 
