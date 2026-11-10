@@ -63,7 +63,7 @@ function blockerSince(startRef: string, startedMs: number): string | null {
   void startRef;
   const added = run("git", ["log", "-p", "-U0", "--format=", `--since=@${Math.floor(startedMs / 1000) - 5}`, "HEAD", "--", "docs/STATUS.md"]).out
     .split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
-  const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b|\bFAILED\b|check failed|not marked done/.test(l));
+  const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCKED\b|\bBLOCKER\b|\bFAILED\b|check failed|not marked done/.test(l));
   return line ? line.trim().slice(0, 300) : null;
 }
 
