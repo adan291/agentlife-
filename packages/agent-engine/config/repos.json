@@ -1,0 +1,8 @@
+[
+  {
+    "id": "haunted-todo",
+    "name": "haunted-todo",
+    "source": "fixtures/haunted-todo",
+    "testCommand": "npm test"
+  }
+]

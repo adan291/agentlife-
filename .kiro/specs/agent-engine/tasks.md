@@ -5,7 +5,7 @@
   - Tests for valid and invalid samples
   - _Requirements: 1.2, 2.4_
 
-- [ ] 2. Config loading
+- [x] 2. Config loading
   - `agent-engine/config/{agents,repos,limits}.json` with zod validation and clear startup errors; paths resolved with `fileURLToPath`
   - Placeholder repo entry `haunted-todo` (source filled in agent-pipeline)
   - _Requirements: 4.2, 6.1_
