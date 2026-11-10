@@ -112,10 +112,21 @@ function kiroArgs(agent: string, model: string, effort: string, prompt: string, 
   return args;
 }
 
+// The session switches to a feature branch that may predate scripts/notify.ts, so a copy taken
+// before the session starts is used (data/ is git-ignored).
+const NOTIFY_COPY = join(RUNS, "notify.ts");
+function snapshotNotify(): void {
+  const src = join(ROOT, "scripts", "notify.ts");
+  if (existsSync(src)) {
+    mkdirSync(RUNS, { recursive: true });
+    writeFileSync(NOTIFY_COPY, readFileSync(src));
+  }
+}
+
 /** Best-effort Discord message via scripts/notify.ts (no Kiro credits). Never fails the session. */
 function notify(text: string): void {
-  if (process.env.AGENTLIFE_NOTIFY === "0") return;
-  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(ROOT, "scripts", "notify.ts"), text], { cwd: ROOT, encoding: "utf8", windowsHide: true });
+  if (process.env.AGENTLIFE_NOTIFY === "0" || !existsSync(NOTIFY_COPY)) return;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", NOTIFY_COPY, text], { cwd: ROOT, encoding: "utf8", windowsHide: true, env: { ...process.env, AGENTLIFE_ROOT: ROOT } });
   if (r.status !== 0) console.warn(`[session] Discord notification skipped: ${(r.stderr ?? "").trim()}`);
 }
 
@@ -183,6 +194,7 @@ async function main(): Promise<void> {
   }
 
   preflight(session, availableModels());
+  snapshotNotify();
 
   if (!headless) {
     console.log("[session] This session needs you at the keyboard. Starting an interactive chat with the planned model.");

@@ -16,7 +16,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// AGENTLIFE_ROOT lets the session runner run a copy of this script kept outside the work tree.
+const ROOT = process.env.AGENTLIFE_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), "..");
 const SPECS = ["world-room", "agent-engine", "agent-pipeline", "demo-replay"];
 const DEADLINE = Date.parse("2026-12-04T22:00:00Z"); // 14:00 PT
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434";
