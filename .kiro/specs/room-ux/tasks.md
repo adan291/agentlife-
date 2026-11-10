@@ -5,7 +5,7 @@
   - Tests: schemas, sanitize property test in shared
   - _Requirements: 4.1, 4.5, 6.1_
 
-- [ ] 2. Engine: activity from runtime progress, job milestones and crew
+- [x] 2. Engine: activity from runtime progress, job milestones and crew
   - `runRole` emits throttled `agent.activity`; JobRunner milestone lines (plan ready, approved, test result counts); crew relay emits activity for builder
   - Tests: mapping, throttle 1/s, test-count parsing, no secrets
   - _Requirements: 4.1, 4.2, 6.1_

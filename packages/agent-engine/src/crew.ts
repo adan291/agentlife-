@@ -1,5 +1,6 @@
 import { CrewEventSchema, OkResponseSchema } from "@agentlife/shared";
 import type { CrewEvent } from "@agentlife/shared";
+import { createActivityEmitter } from "./activity.ts";
 import { parseBody, sendJson, type Route } from "./http/server.ts";
 import type { NewEvent } from "./store.ts";
 
@@ -22,6 +23,8 @@ export interface CrewRelay {
 export function createCrewRelay(opts: CrewRelayOptions): CrewRelay {
   const now = opts.now ?? Date.now;
   let lastSayAt = Number.NEGATIVE_INFINITY;
+  // Builder lines for the activity terminal follow the same 1 per second rule as the roles.
+  const activity = createActivityEmitter({ append: opts.append, now });
 
   return {
     handle(ev) {
@@ -40,16 +43,19 @@ export function createCrewRelay(opts: CrewRelayOptions): CrewRelay {
           opts.append({ ...base, type: "agent.goto", anchor: "desk" });
           state("working", label);
           say(label);
+          activity.line(taskId, "builder", `Started ${label}`);
           return;
         }
         case "activity": {
           state(ev.activity === "think" ? "thinking" : "working", ev.text);
           if (ev.text && now() - lastSayAt >= SAY_THROTTLE_MS) say(ev.text);
+          if (ev.text) activity.progress(taskId, "builder", ev.text);
           return;
         }
         case "finished": {
           const ok = ev.ok !== false;
           say(ok ? "done" : "failed");
+          activity.line(taskId, "builder", ok ? `Finished ${ev.session}` : `Failed ${ev.session}`);
           state(ok ? "done" : "error");
           opts.append({ ...base, type: "agent.goto", anchor: "home" });
           state("idle");

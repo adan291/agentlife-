@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { ActivityEmitter } from "../activity.ts";
 import type { LimitsConfig, RepoConfig } from "../config.ts";
 import type { StepContext } from "../jobs/steps.ts";
 import type { Logger } from "../log.ts";
@@ -16,6 +17,8 @@ export interface PipelineDeps {
   /** Source paths of repos are resolved against this directory. Default: the project root. */
   projectRoot?: string;
   logger?: Logger;
+  /** Carries runtime progress to the activity terminal. Optional: tests run without it. */
+  activity?: ActivityEmitter;
 }
 
 const SAFE_TASK_ID = /^[A-Za-z0-9_-]+$/;
@@ -66,6 +69,7 @@ export async function runRole(
   for await (const ev of deps.runtimes[role].run(input)) {
     deps.store.appendRunLog(ctx.taskId, step, { n: ctx.stepIndex, ts: Date.now(), ...ev });
     if (ev.kind === "output") outputs.push(ev.text);
+    if (ev.kind === "progress") deps.activity?.progress(ctx.taskId, role, ev.text);
     if (ev.kind === "usage") {
       deps.logger?.info("step usage", {
         taskId: ctx.taskId,
