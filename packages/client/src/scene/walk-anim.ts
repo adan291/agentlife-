@@ -53,6 +53,11 @@ export function poseAt(w: WalkState, now: number): Pose {
   };
 }
 
+/** Float-bob phase (0 or 1) of a ghost; `offsetMs` keeps several ghosts out of sync. */
+export function ghostFrame(now: number, offsetMs = 0, periodMs = 450): 0 | 1 {
+  return Math.floor((now + offsetMs) / periodMs) % 2 === 0 ? 0 : 1;
+}
+
 /** Walk-cycle phase (0 or 1) that flips every `periodMs` while moving. */
 export function walkFrame(now: number, periodMs = 180): 0 | 1 {
   return Math.floor(now / periodMs) % 2 === 0 ? 0 : 1;

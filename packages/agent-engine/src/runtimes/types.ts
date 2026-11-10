@@ -1,6 +1,6 @@
 import type { AgentId } from "@agentlife/shared";
 
-export type Role = AgentId;
+export type Role = Exclude<AgentId, "builder">;
 
 export interface RuntimeInput {
   role: Role;

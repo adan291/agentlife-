@@ -3,6 +3,7 @@ import { loadConfig, type EngineConfig } from "./config.ts";
 import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, type Route } from "./http/server.ts";
 import { createEventsRoute } from "./http/sse.ts";
 import { createExportRoute } from "./http/export.ts";
+import { createCrewRelay, createCrewRoute } from "./crew.ts";
 import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
@@ -82,6 +83,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
       createExportRoute(store),
+      createCrewRoute(createCrewRelay({ append: (ev) => store.appendEvent(ev) })),
       ...(opts.extraRoutes ?? []),
     ],
   });

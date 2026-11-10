@@ -16,6 +16,7 @@ const AGENT_NAMES: Record<AgentId, string> = {
   architect: "Architect",
   developer: "Developer",
   qa: "QA",
+  builder: "Builder",
 };
 
 interface Walk {

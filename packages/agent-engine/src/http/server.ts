@@ -44,7 +44,7 @@ export interface RouteContext {
 }
 export type Route = { method: string; pattern: RegExp; handle: (ctx: RouteContext) => Promise<void> | void };
 
-class BadRequestError extends Error {
+export class BadRequestError extends Error {
   readonly code: string;
   readonly issues: { path: string; message: string }[] | undefined;
   constructor(code: string, message: string, issues?: { path: string; message: string }[]) {
@@ -93,7 +93,7 @@ async function readJson(req: http.IncomingMessage): Promise<unknown> {
   }
 }
 
-async function parseBody<S extends z.ZodType>(req: http.IncomingMessage, schema: S): Promise<z.output<S>> {
+export async function parseBody<S extends z.ZodType>(req: http.IncomingMessage, schema: S): Promise<z.output<S>> {
   const parsed = schema.safeParse(await readJson(req));
   if (!parsed.success) throw new BadRequestError("invalid_body", "invalid request body", issuesOf(parsed.error));
   return parsed.data;

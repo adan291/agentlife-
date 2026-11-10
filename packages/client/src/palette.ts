@@ -77,6 +77,7 @@ export const ROLE_COLOURS = {
   architect: 0x2fd4c2,
   developer: 0xff8a1f,
   qa: 0xb06bff,
+  builder: 0xc9b6ff,
   user: 0xe8e0ff,
 } as const;
 
@@ -86,6 +87,7 @@ export const HAIR_COLOURS: Record<RoleKey, number> = {
   architect: 0x1a5f5a,
   developer: 0x5a2a0a,
   qa: 0x3a2060,
+  builder: 0x5a4a8a,
   user: 0x6a6090,
 };
 

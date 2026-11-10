@@ -42,3 +42,8 @@ No new transport. The engine already streams agent events to the world-server, a
 ## Testing strategy
 
 See requirements 4. Manual check: run engine + world-server (`ENGINE=http`) + client, then `pnpm session <id> --dry-run` does nothing; a real session shows the ghost walking to its desk, bubbles every few seconds, and going home at the end.
+
+## Implementation notes
+
+- The 3 s say throttle applies to `activity` events only; `started` and `finished` always say (so "done" is never lost) and reset the window.
+- The `Role` type in agent-engine runtimes is `Exclude<AgentId, "builder">`: the Builder has no runtime.

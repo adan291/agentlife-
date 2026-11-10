@@ -29,12 +29,12 @@ let seq = 0;
 const base = () => ({ seq: seq++, ts: 0, taskId: "t1" });
 
 describe("WorldSim", () => {
-  it("joins at the door and snapshots user plus three agents at home", () => {
+  it("joins at the door and snapshots user plus four agents at home", () => {
     const { sim } = makeSim();
     const { you, welcome } = sim.join();
     expect(welcome.type).toBe("welcome");
     expect(welcome.you).toBe(you);
-    expect(welcome.avatars).toHaveLength(4);
+    expect(welcome.avatars).toHaveLength(5);
     const me = welcome.avatars.find((a) => a.id === you)!;
     expect({ x: me.x, y: me.y }).toEqual({ x: room.door.x, y: room.door.y });
     expect(welcome.agents.map((a) => a.agentId)).toEqual([...AGENT_IDS]);
@@ -122,6 +122,29 @@ describe("WorldSim", () => {
     const snap = sim.snapshot();
     expect(snap.agents.find((a) => a.agentId === "qa")).toMatchObject({ state: "thinking", text: "hm" });
     expect(sim.handleAgentEvent({ ...base(), type: "task.completed" })).toEqual([]);
+  });
+
+  it("builder crew events walk the Builder to its desk and back home", () => {
+    const { sim, advance } = makeSim();
+    sim.join();
+    const desk = resolveAnchor(room, "desk", "builder")!;
+    const home = resolveAnchor(room, "home", "builder")!;
+    expect(sim.tileOf("builder")).toEqual({ x: home.x, y: home.y });
+
+    const to = sim.handleAgentEvent({ ...base(), taskId: "build:S9", type: "agent.goto", agentId: "builder", anchor: "desk" });
+    expect(to[0]).toMatchObject({ type: "walk", id: "builder" });
+    advance(100 * 100);
+    sim.dueMessages();
+    expect(sim.tileOf("builder")).toEqual({ x: desk.x, y: desk.y });
+    expect(
+      sim.handleAgentEvent({ ...base(), taskId: "build:S9", type: "agent.state_changed", agentId: "builder", state: "working", text: "S9" }),
+    ).toEqual([{ type: "agent_state", agentId: "builder", state: "working", text: "S9" }]);
+
+    const back = sim.handleAgentEvent({ ...base(), taskId: "build:S9", type: "agent.goto", agentId: "builder", anchor: "home" });
+    expect(back[0]).toMatchObject({ type: "walk", id: "builder" });
+    advance(100 * 100);
+    sim.dueMessages();
+    expect(sim.tileOf("builder")).toEqual({ x: home.x, y: home.y });
   });
 
   it("property: every avatar always stands on a walkable tile", () => {
