@@ -1,3 +1,31 @@
-import { PROTOCOL_VERSION } from "@agentlife/shared";
+import { RoomValidationError, WorldSim } from "@agentlife/shared";
+import { FakeEngineLink } from "./fake-engine.ts";
+import { startGateway } from "./gateway.ts";
+import { DEFAULT_ROOM_PATH, loadRoomFile } from "./load-room.ts";
 
-console.log(`world-server placeholder (protocol v${PROTOCOL_VERSION})`);
+/** Load and validate the room; exit with the invalid field path(s) when it is bad. */
+function loadRoom() {
+  try {
+    return loadRoomFile();
+  } catch (e) {
+    if (e instanceof RoomValidationError) {
+      console.error(`${DEFAULT_ROOM_PATH}\n${e.message}`);
+    } else {
+      console.error(`Cannot load ${DEFAULT_ROOM_PATH}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    process.exit(1);
+  }
+}
+
+const room = loadRoom();
+const sim = new WorldSim(room, Date.now);
+const port = Number(process.env["PORT"] ?? 8787);
+const host = process.env["HOST"] ?? "127.0.0.1";
+
+const engineKind = process.env["ENGINE"] ?? "fake";
+if (engineKind !== "fake") {
+  console.error(`ENGINE=${engineKind} is not available yet; use ENGINE=fake`);
+  process.exit(1);
+}
+const gateway = await startGateway({ sim, host, port, engine: new FakeEngineLink() });
+console.log(`world-server listening on ws://${host}:${gateway.port}`);
