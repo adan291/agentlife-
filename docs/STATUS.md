@@ -3,14 +3,14 @@
 Updated: 2026-11-11
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine is complete on branch feat/agent-engine (S6 tasks 1–5, S7 tasks 6–10: JobRunner, HTTP API, SSE, export/observability, HttpEngineLink); `pnpm check` passes (61 engine tests, 29 world-server tests). Next: review and merge feat/agent-engine (user), then agent-pipeline. S2 (kiro-cli spike) is blocked on a security finding, see below.
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
 - `pnpm --filter @agentlife/world-server start`
 - `pnpm --filter @agentlife/client dev` then open http://localhost:5173/ (Z or the button toggles 1×/2×)
 
-With the real engine (RUNTIME=fake, branch feat/agent-engine): start the engine first, then the world-server with `ENGINE=http` (`ENGINE_URL` default http://127.0.0.1:8788, `ENGINE_TOKEN` optional on both):
+With the real engine (RUNTIME=fake): start the engine first, then the world-server with `ENGINE=http` (`ENGINE_URL` default http://127.0.0.1:8788, `ENGINE_TOKEN` optional on both):
 - `pnpm --filter @agentlife/agent-engine start` (`FAKE_DELAY_MS`, default 800, sets the pace of the fake agents)
 - PowerShell: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start`
 
@@ -18,7 +18,7 @@ With the real engine (RUNTIME=fake, branch feat/agent-engine): start the engine 
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
-| agent-engine | 10 / 10 | feat/agent-engine | Done, not merged. End-to-end check below |
+| agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
 | agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
