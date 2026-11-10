@@ -55,10 +55,13 @@ function completedIds(): Set<string> {
 
 /** The builder records blockers in docs/STATUS.md and commit messages instead of failing (it runs
  *  unattended). Exit code 0 therefore does not mean the tasks were done. */
-function blockerSince(startRef: string): string | null {
-  const msgs = run("git", ["log", "--format=%s", `${startRef}..HEAD`]).out;
+function blockerSince(startRef: string, startedMs: number): string | null {
+  // Commits made during this session only. startRef is main, and the feature branch the builder
+  // switches to can hold older commits (e.g. a resolved blocker) that are not in main.
+  const msgs = run("git", ["log", "--format=%s", `--since=@${Math.floor(startedMs / 1000) - 5}`, "HEAD"]).out;
   // Only lines this session added to STATUS.md, so an old, already-resolved blocker does not count.
-  const added = run("git", ["diff", "-U0", `${startRef}..HEAD`, "--", "docs/STATUS.md"]).out
+  void startRef;
+  const added = run("git", ["log", "-p", "-U0", "--format=", `--since=@${Math.floor(startedMs / 1000) - 5}`, "HEAD", "--", "docs/STATUS.md"]).out
     .split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
   const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b|\bFAILED\b|check failed|not marked done/.test(l));
   return line ? line.trim().slice(0, 300) : null;
@@ -111,10 +114,13 @@ function preflight(s: Session, models: Set<string>): void {
   }
 }
 
+// Models that accept --effort (kiro-cli warns and ignores it for the others, e.g. auto, sonnet-5.5).
+const EFFORT_MODELS = /^(claude-opus|gpt-5)/;
+
 function kiroArgs(agent: string, model: string, effort: string, prompt: string, headless: boolean): string[] {
   const args = ["chat", "--v3", "--agent", agent, "--model", model];
   // "auto" picks its own model per request and offers no effort levels (kiro-cli warns and ignores it).
-  if (model !== "auto") args.push("--effort", effort);
+  if (EFFORT_MODELS.test(model)) args.push("--effort", effort);
   if (headless) args.push("--no-interactive", "--output-format", "stream-json");
   args.push(prompt);
   return args;
@@ -193,7 +199,7 @@ async function main(): Promise<void> {
 
   const headless = !session.interactive;
   const args = kiroArgs(BUILDER, session.model, session.effort, session.prompt, headless);
-  const effort = session.model === "auto" ? "n/a (auto)" : session.effort;
+  const effort = EFFORT_MODELS.test(session.model) ? session.effort : `n/a (${session.model})`;
   console.log(`[session] ${session.id} | spec ${session.spec} | model ${session.model} | effort ${effort}${headless ? "" : " | interactive"}`);
 
   if (dryRun) {
@@ -218,7 +224,7 @@ async function main(): Promise<void> {
   const code = await runHeadless(session.id, args, logFile);
 
   const check = run("pnpm", ["check"]);
-  const blocker = code === 0 && check.code === 0 ? blockerSince(startRef) : null;
+  const blocker = code === 0 && check.code === 0 ? blockerSince(startRef, started) : null;
   const ok = code === 0 && check.code === 0 && !blocker;
   recordRun(session, blocker ? "blocked" : ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
   console.log(`[session] pnpm check: ${check.code === 0 ? "passed" : "FAILED"}`);
