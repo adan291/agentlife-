@@ -6,3 +6,5 @@ export * from "./geometry/heightmap.ts";
 export * from "./geometry/depth.ts";
 export * from "./geometry/dir.ts";
 export * from "./geometry/pathfind.ts";
+export * from "./furni.ts";
+export * from "./room.ts";

@@ -11,7 +11,7 @@
   - fast-check properties: adjacency and walkability of every step, ends at target, null when unreachable
   - _Requirements: 3.2, 3.5_
 
-- [ ] 3. Room, furniture and anchor schemas
+- [x] 3. Room, furniture and anchor schemas
   - `shared/src/furni.ts` (FurniDefSchema + catalog: computer desk, mailbox, board, agent desk ×1 def, chair, plant, lamp, sofa, jack-o'-lantern lamp, cobweb), `shared/src/room.ts` (RoomDefSchema, `validateRoom`, `useTile`, `resolveAnchor`)
   - Validation rejects anchors/footprints off the floor and unwalkable use tiles
   - Author `packages/world-server/rooms/office.json` (about 12×10 tiles) and a test that it validates
