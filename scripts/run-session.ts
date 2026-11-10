@@ -53,7 +53,16 @@ function completedIds(): Set<string> {
   return done;
 }
 
-function recordRun(s: Session, status: "ok" | "failed", minutes: number, logFile: string): void {
+/** The builder records blockers in docs/STATUS.md and commit messages instead of failing (it runs
+ *  unattended). Exit code 0 therefore does not mean the tasks were done. */
+function blockerSince(startRef: string): string | null {
+  const msgs = run("git", ["log", "--format=%s", `${startRef}..HEAD`]).out;
+  const status = existsSync(join(ROOT, "docs", "STATUS.md")) ? readFileSync(join(ROOT, "docs", "STATUS.md"), "utf8") : "";
+  const line = [...msgs.split("\n"), ...status.split("\n")].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b/.test(l));
+  return line ? line.trim().slice(0, 300) : null;
+}
+
+function recordRun(s: Session, status: "ok" | "failed" | "blocked", minutes: number, logFile: string): void {
   if (!existsSync(LOG)) {
     mkdirSync(dirname(LOG), { recursive: true });
     writeFileSync(LOG, "# Session log\n\nWritten by scripts/run-session.ts.\n\n| Session | Date | Model | Effort | Minutes | Status | Raw log |\n|---|---|---|---|---|---|---|\n");
@@ -168,16 +177,21 @@ async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const logFile = join(RUNS, `${session.id}-${stamp}.jsonl`);
   const started = Date.now();
+  const startRef = run("git", ["rev-parse", "HEAD"]).out.trim();
   const code = await runHeadless(session.id, args, logFile);
 
   const check = run("pnpm", ["check"]);
-  const ok = code === 0 && check.code === 0;
-  recordRun(session, ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
+  const blocker = code === 0 && check.code === 0 ? blockerSince(startRef) : null;
+  const ok = code === 0 && check.code === 0 && !blocker;
+  recordRun(session, blocker ? "blocked" : ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
   console.log(`[session] pnpm check: ${check.code === 0 ? "passed" : "FAILED"}`);
   const mins = ((Date.now() - started) / 60000).toFixed(0);
-  notify(ok
-    ? `AGENT LIFE: ${session.id} (${session.spec}) terminada en ${mins} min con ${session.model}. pnpm check OK. Revisa los créditos gastados.`
-    : `AGENT LIFE: ${session.id} (${session.spec}) FALLÓ tras ${mins} min (kiro-cli ${code}, pnpm check ${check.code}). No lances la siguiente; mira docs/STATUS.md.`);
+  notify(blocker
+    ? `AGENT LIFE: ${session.id} (${session.spec}) BLOQUEADA tras ${mins} min. Motivo: ${blocker}`
+    : ok
+      ? `AGENT LIFE: ${session.id} (${session.spec}) terminada en ${mins} min con ${session.model}. pnpm check OK. Revisa los créditos gastados.`
+      : `AGENT LIFE: ${session.id} (${session.spec}) FALLÓ tras ${mins} min (kiro-cli ${code}, pnpm check ${check.code}). No lances la siguiente; mira docs/STATUS.md.`);
+  if (blocker) fail(`${session.id} is blocked: ${blocker}\nResolve it, then run: pnpm session ${session.id}`);
   if (!ok) fail(`${session.id} did not finish cleanly. Read docs/STATUS.md and ${logFile}. Do not run the next session until this is fixed.`);
 
   if (review) {
