@@ -1,0 +1,10 @@
+{
+  "timeoutsMs": {
+    "analyze": 300000,
+    "develop": 600000,
+    "test": 300000,
+    "review": 300000
+  },
+  "maxDiffLines": 400,
+  "maxFilesChanged": 10
+}

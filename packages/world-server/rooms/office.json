@@ -1,0 +1,43 @@
+{
+  "id": "office",
+  "name": "Haunted Office",
+  "heightmap": [
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000"
+  ],
+  "door": { "name": "door", "x": 0, "y": 8, "dir": 2 },
+  "anchors": [
+    { "name": "computer", "x": 4, "y": 1, "dir": 0 },
+    { "name": "mailbox", "x": 7, "y": 1, "dir": 0 },
+    { "name": "board", "x": 9, "y": 1, "dir": 0 },
+    { "name": "desk", "x": 1, "y": 2, "dir": 6, "agent": "architect" },
+    { "name": "desk", "x": 1, "y": 5, "dir": 6, "agent": "developer" },
+    { "name": "desk", "x": 10, "y": 3, "dir": 2, "agent": "qa" },
+    { "name": "home_architect", "x": 3, "y": 4, "dir": 4 },
+    { "name": "home_developer", "x": 3, "y": 7, "dir": 4 },
+    { "name": "home_qa", "x": 9, "y": 6, "dir": 4 }
+  ],
+  "furni": [
+    { "itemId": "cobweb_1", "defId": "cobweb", "x": 0, "y": 0, "dir": 4 },
+    { "itemId": "lamp_1", "defId": "lamp", "x": 3, "y": 0, "dir": 4 },
+    { "itemId": "computer_desk_1", "defId": "computer_desk", "x": 4, "y": 0, "dir": 4 },
+    { "itemId": "chair_1", "defId": "chair", "x": 5, "y": 1, "dir": 0 },
+    { "itemId": "mailbox_1", "defId": "mailbox", "x": 7, "y": 0, "dir": 4 },
+    { "itemId": "board_1", "defId": "board", "x": 9, "y": 0, "dir": 4 },
+    { "itemId": "plant_1", "defId": "plant", "x": 11, "y": 0, "dir": 4 },
+    { "itemId": "desk_architect", "defId": "agent_desk", "x": 0, "y": 2, "dir": 2 },
+    { "itemId": "desk_developer", "defId": "agent_desk", "x": 0, "y": 5, "dir": 2 },
+    { "itemId": "desk_qa", "defId": "agent_desk", "x": 11, "y": 3, "dir": 6 },
+    { "itemId": "sofa_1", "defId": "sofa", "x": 6, "y": 9, "dir": 0 },
+    { "itemId": "plant_2", "defId": "plant", "x": 0, "y": 9, "dir": 4 },
+    { "itemId": "jack_lamp_1", "defId": "jack_o_lantern_lamp", "x": 11, "y": 8, "dir": 6 }
+  ]
+}

@@ -53,7 +53,18 @@ function completedIds(): Set<string> {
   return done;
 }
 
-function recordRun(s: Session, status: "ok" | "failed", minutes: number, logFile: string): void {
+/** The builder records blockers in docs/STATUS.md and commit messages instead of failing (it runs
+ *  unattended). Exit code 0 therefore does not mean the tasks were done. */
+function blockerSince(startRef: string): string | null {
+  const msgs = run("git", ["log", "--format=%s", `${startRef}..HEAD`]).out;
+  // Only lines this session added to STATUS.md, so an old, already-resolved blocker does not count.
+  const added = run("git", ["diff", "-U0", `${startRef}..HEAD`, "--", "docs/STATUS.md"]).out
+    .split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
+  const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b|\bFAILED\b|check failed|not marked done/.test(l));
+  return line ? line.trim().slice(0, 300) : null;
+}
+
+function recordRun(s: Session, status: "ok" | "failed" | "blocked", minutes: number, logFile: string): void {
   if (!existsSync(LOG)) {
     mkdirSync(dirname(LOG), { recursive: true });
     writeFileSync(LOG, "# Session log\n\nWritten by scripts/run-session.ts.\n\n| Session | Date | Model | Effort | Minutes | Status | Raw log |\n|---|---|---|---|---|---|---|\n");
@@ -90,6 +101,14 @@ function preflight(s: Session, models: Set<string>): void {
   }
   const status = run("git", ["status", "--porcelain"]);
   if (status.out.trim() !== "") fail("working tree has uncommitted changes; commit or stash them first.");
+  // Start every session from main: the builder creates or switches to feat/<spec> itself, and a
+  // feature branch may carry an older copy of this runner and of the agent configs.
+  const branch = run("git", ["branch", "--show-current"]).out.trim();
+  if (branch !== "main") {
+    if (run("git", ["switch", "main"]).code !== 0) fail(`could not switch from ${branch} to main`);
+    console.log(`[session] switched from ${branch} to main; restart with the same command so the main copy of this script runs.`);
+    process.exit(2);
+  }
 }
 
 function kiroArgs(agent: string, model: string, effort: string, prompt: string, headless: boolean): string[] {
@@ -101,10 +120,21 @@ function kiroArgs(agent: string, model: string, effort: string, prompt: string, 
   return args;
 }
 
+// The session switches to a feature branch that may predate scripts/notify.ts, so a copy taken
+// before the session starts is used (data/ is git-ignored).
+const NOTIFY_COPY = join(RUNS, "notify.ts");
+function snapshotNotify(): void {
+  const src = join(ROOT, "scripts", "notify.ts");
+  if (existsSync(src)) {
+    mkdirSync(RUNS, { recursive: true });
+    writeFileSync(NOTIFY_COPY, readFileSync(src));
+  }
+}
+
 /** Best-effort Discord message via scripts/notify.ts (no Kiro credits). Never fails the session. */
 function notify(text: string): void {
-  if (process.env.AGENTLIFE_NOTIFY === "0") return;
-  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(ROOT, "scripts", "notify.ts"), text], { cwd: ROOT, encoding: "utf8", windowsHide: true });
+  if (process.env.AGENTLIFE_NOTIFY === "0" || !existsSync(NOTIFY_COPY)) return;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", NOTIFY_COPY, "--auto", text], { cwd: ROOT, encoding: "utf8", windowsHide: true, env: { ...process.env, AGENTLIFE_ROOT: ROOT } });
   if (r.status !== 0) console.warn(`[session] Discord notification skipped: ${(r.stderr ?? "").trim()}`);
 }
 
@@ -112,11 +142,26 @@ function quote(a: string): string {
   return /[\s"]/.test(a) ? `"${a.replaceAll('"', '\\"')}"` : a;
 }
 
+/** KIRO_API_KEY from the git-ignored .env, passed only through the child environment. The agents
+ *  are denied reading .env, so the key never enters a prompt, a log or a commit. */
+function sessionEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  const file = join(ROOT, ".env");
+  if (!env.KIRO_API_KEY && existsSync(file)) {
+    const line = readFileSync(file, "utf8").replace(/^\uFEFF/, "").split(/\r?\n/).find((l) => l.startsWith("KIRO_API_KEY="));
+    const key = line?.slice("KIRO_API_KEY=".length).trim().replace(/^["']|["']$/g, "");
+    if (key) env.KIRO_API_KEY = key;
+  }
+  return env;
+}
+
 async function runHeadless(label: string, args: string[], logFile: string): Promise<number> {
   mkdirSync(RUNS, { recursive: true });
   const out = createWriteStream(logFile);
   console.log(`[session] ${label}: running (raw log: ${logFile})`);
-  const child = spawn("kiro-cli", args, { cwd: ROOT, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  const env = sessionEnv();
+  console.log(`[session] KIRO_API_KEY ${env.KIRO_API_KEY ? "available to the session" : "not set"}`);
+  const child = spawn("kiro-cli", args, { cwd: ROOT, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   child.stdout.on("data", (chunk: Buffer) => {
     out.write(chunk);
     process.stdout.write(".");
@@ -157,6 +202,7 @@ async function main(): Promise<void> {
   }
 
   preflight(session, availableModels());
+  snapshotNotify();
 
   if (!headless) {
     console.log("[session] This session needs you at the keyboard. Starting an interactive chat with the planned model.");
@@ -168,16 +214,21 @@ async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const logFile = join(RUNS, `${session.id}-${stamp}.jsonl`);
   const started = Date.now();
+  const startRef = run("git", ["rev-parse", "HEAD"]).out.trim();
   const code = await runHeadless(session.id, args, logFile);
 
   const check = run("pnpm", ["check"]);
-  const ok = code === 0 && check.code === 0;
-  recordRun(session, ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
+  const blocker = code === 0 && check.code === 0 ? blockerSince(startRef) : null;
+  const ok = code === 0 && check.code === 0 && !blocker;
+  recordRun(session, blocker ? "blocked" : ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
   console.log(`[session] pnpm check: ${check.code === 0 ? "passed" : "FAILED"}`);
   const mins = ((Date.now() - started) / 60000).toFixed(0);
-  notify(ok
-    ? `AGENT LIFE: ${session.id} (${session.spec}) terminada en ${mins} min con ${session.model}. pnpm check OK. Revisa los créditos gastados.`
-    : `AGENT LIFE: ${session.id} (${session.spec}) FALLÓ tras ${mins} min (kiro-cli ${code}, pnpm check ${check.code}). No lances la siguiente; mira docs/STATUS.md.`);
+  notify(blocker
+    ? `AGENT LIFE: ${session.id} (${session.spec}) BLOQUEADA tras ${mins} min. Motivo: ${blocker}`
+    : ok
+      ? `AGENT LIFE: ${session.id} (${session.spec}) terminada en ${mins} min con ${session.model}. pnpm check OK. Revisa los créditos gastados.`
+      : `AGENT LIFE: ${session.id} (${session.spec}) FALLÓ tras ${mins} min (kiro-cli ${code}, pnpm check ${check.code}). No lances la siguiente; mira docs/STATUS.md.`);
+  if (blocker) fail(`${session.id} is blocked: ${blocker}\nResolve it, then run: pnpm session ${session.id}`);
   if (!ok) fail(`${session.id} did not finish cleanly. Read docs/STATUS.md and ${logFile}. Do not run the next session until this is fixed.`);
 
   if (review) {

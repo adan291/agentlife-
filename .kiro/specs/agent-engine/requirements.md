@@ -16,7 +16,7 @@ Context: docs/agent-system-design.md, docs/architecture-proposal.md. The engine 
 1. THE engine SHALL expose `GET /health`, `GET /repos`, `POST /tasks`, `GET /tasks/:id`, `POST /approvals/:id`, `POST /tasks/:id/cancel`, `GET /events`, `GET /tasks/:id/export`.
 2. ALL request bodies and responses SHALL be validated with zod schemas from `@agentlife/shared`.
 3. IF a body is invalid, THEN THE engine SHALL respond 400 with the zod issue paths; unknown ids SHALL respond 404.
-4. THE engine SHALL bind to 127.0.0.1 by default (`HOST`, `PORT` env; default port 8788) and require a shared secret header `x-agentlife-token` when `ENGINE_TOKEN` is set.
+4. THE engine SHALL bind to 127.0.0.1 by default (`ENGINE_HOST`, `PORT` env; default port 8788; refuses a non-loopback host without `ENGINE_TOKEN`) and require a shared secret header `x-agentlife-token` when `ENGINE_TOKEN` is set.
 
 ### Requirement 2: Event log
 

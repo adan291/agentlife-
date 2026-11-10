@@ -1,13 +1,41 @@
-import { Application, Text } from "pixi.js";
-import { PROTOCOL_VERSION } from "@agentlife/shared";
+import { Application } from "pixi.js";
+import { PALETTE } from "./palette.ts";
+import { ProceduralSprites } from "./scene/textures.ts";
+import { WorldView } from "./scene/world-view.ts";
+import { LiveTransport } from "./transport.ts";
+import { createHud } from "./ui/hud.ts";
+import { createPanels } from "./ui/panels.ts";
+
+const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
 
 const app = new Application();
-await app.init({ resizeTo: window, background: 0x0b0a12, antialias: false });
+await app.init({
+  resizeTo: window,
+  background: PALETTE.background,
+  antialias: false,
+  resolution: window.devicePixelRatio || 1,
+  autoDensity: true,
+});
 document.body.appendChild(app.canvas);
 
-const label = new Text({
-  text: `AGENT LIFE — protocol v${PROTOCOL_VERSION}`,
-  style: { fill: 0xb8a8ff, fontFamily: "monospace", fontSize: 16 },
+const transport = new LiveTransport(WORLD_URL);
+const sprites = new ProceduralSprites(app.renderer);
+
+const hud = createHud(() => {
+  hud.setZoomLabel(world.toggleZoom());
 });
-label.position.set(16, 16);
-app.stage.addChild(label);
+const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
+  onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
+});
+hud.setZoomLabel(world.zoom);
+
+const panels = createPanels((msg) => transport.send(msg));
+
+transport.onStatus((s) => hud.setStatus(s));
+transport.onMessage((msg) => {
+  world.handle(msg);
+  panels.handle(msg);
+  if (msg.type === "welcome") hud.setZoomLabel(world.zoom);
+});
+
+app.ticker.add(() => world.tick(Date.now()));
