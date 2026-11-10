@@ -139,6 +139,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           break;
         case "task.state_changed":
           if (ev.state === "cancelled" || ev.state === "delivered" || ev.state === "failed") dropPendingApprovals(ev.taskId);
+          // The engine ends a rejected or cancelled job with `cancelled` only (no task.failed/completed).
+          if ((ev.state === "cancelled" || ev.state === "delivered") && ev.taskId === currentTaskId) jobActive = false;
           if (ws && ev.taskId === currentTaskId) await jobUpdate(ws);
           break;
         case "task.failed":

@@ -43,7 +43,7 @@
   - `GET /tasks/:id/export`, JSON-lines logger, per-step metrics, secret redaction test
   - _Requirements: 2.4, 7.1, 7.3, 7.4_
 
-- [ ] 10. HttpEngineLink in world-server
+- [x] 10. HttpEngineLink in world-server
   - `world-server/src/http-engine.ts` implementing EngineLink over the API + SSE (with reconnect using last seq); `ENGINE=http` selects it
   - Manual check: client + world-server + engine with RUNTIME=fake complete a job end to end
   - _Requirements: 1.1, 2.2_
