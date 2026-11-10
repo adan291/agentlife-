@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Engine API schemas in shared
+- [x] 1. Engine API schemas in shared
   - `shared/src/engine-api.ts`: Repo, StartJobBody, ApprovalBody, JobView, Plan, Review, RunExport
   - Tests for valid and invalid samples
   - _Requirements: 1.2, 2.4_

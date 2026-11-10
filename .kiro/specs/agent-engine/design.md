@@ -17,7 +17,8 @@ No web framework: about eight routes do not justify one. `better-sqlite3` is use
 ## Schemas (in `@agentlife/shared`)
 
 `events.ts` already exists from world-room (AgentEvent). This spec adds `engine-api.ts`:
-- `Repo { id, name }` (public view; never expose `source` paths)
+- `Repo { id, name }` (public view; never expose `source` paths): reuses `RepoSchema` from protocol.ts
+- The engine-side job view is exported as `EngineJobViewSchema` (the name `JobView` is already the client-facing view in protocol.ts)
 - `StartJobBody { repoId, goal (1..300) }`, `ApprovalBody { decision, note? (..500) }`
 - `JobView { taskId, repoId, goal, state, steps[], approvals[], artifacts[], verdict? }`
 - `Plan { tasks: { id, title, why, files[], acceptance, risk: "low"|"medium"|"high" }[] (1..5) }`
