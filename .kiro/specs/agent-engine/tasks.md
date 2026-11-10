@@ -19,7 +19,7 @@
   - `jobs/transitions.ts` with `assertTransition`; unit tests for every allowed and a sample of forbidden transitions
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 5. Runtime interface, FakeRuntime and LlmRuntime
+- [x] 5. Runtime interface, FakeRuntime and LlmRuntime
   - `runtimes/types.ts`, `fake.ts`, `llm.ts` (timeout, screening, canned fallback), `kill-tree.ts`
   - Tests: LlmRuntime falls back when endpoint is down (use an unused local port)
   - _Requirements: 4.1, 4.3, 4.4_
