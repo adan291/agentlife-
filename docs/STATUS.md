@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (room-ux tasks 1–5 done)
+Updated: 2026-11-11 (room-fixes tasks 1–3 done)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -23,7 +23,7 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
-| room-fixes | 0 / 3 | — | Bugfix spec: reconnect loop with two clients (code 4000), room not fitted to the free viewport, Builder row. S10D |
+| room-fixes | 3 / 3 | feat/room-fixes | Done, not merged; `pnpm check` passes. Browser look pending (user) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
@@ -40,6 +40,7 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- room-fixes (branch `feat/room-fixes`, tasks 1–3 done, nothing looked at in a browser). User to check: open a second tab (first shows "AGENT LIFE is open in another tab" + Use here, no reconnect loop; stopping the world-server still shows Reconnecting…); room is centred in the area right of the team bar and above the terminal and picks 2× when it fits (collapse the team bar, hide/resize the terminal, resize the window; the 1×/2× button or Z overrides; the HUD zoom label follows the automatic change); Builder row shows "Kiro build sessions" idle and "S9 · model" during `pnpm session`. Design notes: `scene/viewport.ts` holds the insets (team bar publishes left = 10 + width, terminal publishes its height) and `freeViewport`; `LiveTransport.reconnect()` and status `replaced`; Builder session/model is parsed from the `started` label text ("S9 spec (model)") in `TeamModel`. Task 2 and 3 share `team-bar.ts`, so its insets change is in the task 3 commit. Pending: merge to main.
 - room-ux (branch `feat/room-ux`, tasks 1–5 done, `pnpm check` and `vite build` pass; decisions in the spec's design.md under "Decisions made while implementing"). Nothing was looked at in a browser. User to check with `RUNTIME=fake` engine or the world-server's fake engine (the fake engine now emits activity lines too):
   - Team bar (left): four rows with model, state, last activity, elapsed time; working/thinking rows highlighted with a bobbing icon; click a row: camera pans to the agent, tooltip for 2 s, camera returns after 3 s; collapse button.
   - Stepper (top centre): appears with the first job, steps Plan / Approve / Build / Test / Review / Report with durations; "Your turn" on Approve is a button that opens the mailbox without walking; failed or rejected jobs show a red step. Reload during a job: the stepper comes back (the world-server now sends `job_update` after `welcome`).

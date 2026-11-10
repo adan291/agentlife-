@@ -1,7 +1,10 @@
 import { PROTOCOL_VERSION, ServerMsgSchema } from "@agentlife/shared";
 import type { ClientMsg, ServerMsg } from "@agentlife/shared";
 
-export type ConnectionStatus = "connecting" | "open" | "reconnecting";
+export type ConnectionStatus = "connecting" | "open" | "reconnecting" | "replaced";
+
+/** Close code the world-server uses when a newer connection takes over the session. */
+export const REPLACED_CODE = 4000;
 
 /** What the scene and panels talk to. Live (WebSocket) now; replay comes with the demo-replay spec. */
 export interface Transport {
@@ -74,6 +77,14 @@ export class LiveTransport implements Transport {
     return () => this.statusListeners.delete(cb);
   }
 
+  /** "Use here": connect again after another client replaced this one. */
+  reconnect(): void {
+    if (this.closed || this.status !== "replaced") return;
+    this.attempt = 0;
+    this.setStatus("connecting");
+    this.connect();
+  }
+
   close(): void {
     this.closed = true;
     if (this.timer !== null) this.clearTimer(this.timer);
@@ -105,9 +116,13 @@ export class LiveTransport implements Transport {
     socket.onerror = () => {
       // The close event follows and schedules the reconnect.
     };
-    socket.onclose = () => {
+    socket.onclose = (ev) => {
       if (this.socket !== socket) return;
       this.socket = null;
+      if ((ev as { code?: number } | null)?.code === REPLACED_CODE) {
+        this.setStatus("replaced");
+        return;
+      }
       this.scheduleReconnect();
     };
   }

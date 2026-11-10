@@ -7,8 +7,8 @@ export interface Point {
 export const FOCUS_MS = 3000;
 
 /** Position of the scaled scene root that puts `point` (scene coordinates) at the centre of the screen. */
-export function rootPositionFor(point: Point, scale: number, screenW: number, screenH: number): Point {
-  return { x: Math.round(screenW / 2 - point.x * scale), y: Math.round(screenH / 2 - point.y * scale) };
+export function rootPositionFor(point: Point, scale: number, screenW: number, screenH: number, originX = 0, originY = 0): Point {
+  return { x: Math.round(originX + screenW / 2 - point.x * scale), y: Math.round(originY + screenH / 2 - point.y * scale) };
 }
 
 /** One animation step from `current` towards `target`; lands exactly on it once within half a pixel. */

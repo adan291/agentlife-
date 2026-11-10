@@ -25,9 +25,9 @@ class FakeSocket implements SocketLike {
   receive(data: unknown) {
     this.onmessage?.({ data });
   }
-  drop() {
+  drop(code = 1006) {
     this.readyState = 3;
-    this.onclose?.({});
+    this.onclose?.({ code });
   }
 }
 
@@ -114,6 +114,36 @@ describe("LiveTransport", () => {
     expect(statuses.at(-1)).toBe("open");
     sockets[2]!.drop();
     expect(timers.map((t) => t.ms)).toEqual([1000]);
+  });
+
+  it("does not reconnect on code 4000 and reports replaced", () => {
+    const { transport, sockets, timers } = setup();
+    const statuses: ConnectionStatus[] = [];
+    transport.onStatus((s) => statuses.push(s));
+    sockets[0]!.open();
+    sockets[0]!.drop(4000);
+    expect(statuses.at(-1)).toBe("replaced");
+    expect(timers.length).toBe(0);
+    expect(sockets.length).toBe(1);
+  });
+
+  it("reconnects after code 1006", () => {
+    const { sockets, timers } = setup();
+    sockets[0]!.open();
+    sockets[0]!.drop(1006);
+    expect(timers.map((t) => t.ms)).toEqual([1000]);
+  });
+
+  it("connects again on reconnect() only when replaced", () => {
+    const { transport, sockets } = setup();
+    sockets[0]!.open();
+    transport.reconnect();
+    expect(sockets.length).toBe(1);
+    sockets[0]!.drop(4000);
+    transport.reconnect();
+    expect(sockets.length).toBe(2);
+    sockets[1]!.open();
+    expect(JSON.parse(sockets[1]!.sent[0]!)).toEqual({ type: "hello", protocol: PROTOCOL_VERSION });
   });
 
   it("does not reconnect after close()", () => {
