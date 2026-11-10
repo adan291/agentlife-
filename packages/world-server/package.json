@@ -1,0 +1,10 @@
+{
+  "name": "@agentlife/world-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": { "@agentlife/shared": "workspace:*" }
+}
