@@ -15,7 +15,7 @@ Phase 0 done: scaffold, steering, CI, discovery docs, the four specs, reviewer a
 
 ## Open problems / pending decisions
 - GitHub public repo not created yet (needs user).
-- KIRO_API_KEY not configured yet (needed for S2).
+- BLOCKER agent-pipeline task 1 (kiro-cli spike): KIRO_API_KEY is not set (env var unset, no KIRO_API_KEY line in any .env*). The spike must verify API-key auth with an empty KIRO_HOME, so it cannot run. kiro-cli 3.1.0 is logged in via Google (interactive login), which does not prove key auth. Model claude-haiku-5.5 is listed and available. No kiro-cli chat call was made. Findings so far in docs/spikes/kiro-cli.md. Branch feat/agent-pipeline created from main.
 - Codex CLI not on PATH; reviews can use the Codex app or extension.
 - Discord: `pnpm notify` (free, Ollama summary, DM via the Crew bot) and Kiro Crew for remote work; see docs/sessions.md. The Crew bot cannot post in its configured channel (403), so notifications go by DM.
 - kiro-cli is logged in with a Google account that only lists Free-tier models. Confirm which account holds the hackathon credits before S2.
