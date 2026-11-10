@@ -107,6 +107,7 @@ describe("contrast (requirement 5.1: at least 4.5:1)", () => {
   it("role colours are readable as terminal text", () => {
     for (const key of ["architect", "developer", "qa", "builder"] as const) {
       expect(contrastRatio(cssHex(ROLE_COLOURS[key]), UI_COLOURS.inputBg), key).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(cssHex(ROLE_COLOURS[key]), UI_COLOURS.panelBg), key).toBeGreaterThanOrEqual(4.5);
     }
   });
 

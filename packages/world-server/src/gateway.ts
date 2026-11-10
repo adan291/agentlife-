@@ -251,6 +251,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     send(ws, { ...welcome, ...(models ? { models } : {}), ...(activity.length > 0 ? { activity: [...activity] } : {}) });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of approvals.values()) if (a.status === "pending") send(ws, { type: "approval", approval: a });
+    // The progress stepper of a reloaded client needs the running job.
+    if (currentTaskId) enqueue(() => jobUpdate(ws));
     refreshModels();
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);

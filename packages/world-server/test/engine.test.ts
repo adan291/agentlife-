@@ -112,8 +112,24 @@ describe("gateway with the fake engine", () => {
     };
     await new Promise<void>((r) => ws.once("open", () => r()));
     const send = (m: unknown) => ws.send(JSON.stringify(m));
-    return { ws, received, next, send };
+    return { ws, received, next, send, port: gateway.port };
   }
+
+  it("sends the running job to a client that connects later (stepper after a reload)", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
+    await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+
+    const late = new WebSocket(`ws://127.0.0.1:${c.port}`);
+    sockets.push(late);
+    const seen: ServerMsg[] = [];
+    late.on("message", (d) => seen.push(ServerMsgSchema.parse(JSON.parse(d.toString()))));
+    const deadline = Date.now() + 2000;
+    while (!seen.some((m) => m.type === "job_update") && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+    const types = seen.map((m) => m.type);
+    expect(types[0]).toBe("welcome");
+    expect(seen.find((m) => m.type === "job_update")).toMatchObject({ job: { goal: "fix it", state: "awaiting_plan_approval" } });
+  });
 
   it("sends repos before open_panel for the computer", async () => {
     const c = await setup();

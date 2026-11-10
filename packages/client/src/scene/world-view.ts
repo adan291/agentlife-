@@ -14,6 +14,8 @@ import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
+import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
+import type { Point } from "./camera.ts";
 import { prefersReducedMotion } from "./glow.ts";
 import { MailboxBadge } from "./mailbox-badge.ts";
 import type { HoverSink } from "../ui/tooltip.ts";
@@ -50,6 +52,10 @@ export class WorldView {
   private badgeCount = 0;
   private badgeDot = false;
   private reducedMotion = prefersReducedMotion();
+  /** Scene point the camera is held on after a team bar click; null: room centre. */
+  private focus: Point | null = null;
+  private focusUntil = 0;
+  private rootTarget: Point = { x: 0, y: 0 };
   private readonly agentStatus = new Map<AgentId, { state?: AgentState; text?: string | undefined }>();
 
   constructor(
@@ -82,9 +88,29 @@ export class WorldView {
     this.badge?.set(count, dot);
   }
 
+  /**
+   * Pans the camera to an agent and pins its tooltip for 2 s (team bar click). The camera returns to
+   * the room centre after `FOCUS_MS`. Returns false when the agent is not in the room.
+   */
+  focusAgent(id: AgentId, now = Date.now()): boolean {
+    const entry = this.avatars.get(id);
+    if (!entry) return false;
+    this.focus = { x: entry.view.feetX, y: entry.view.feetY - 40 };
+    this.focusUntil = now + FOCUS_MS;
+    this.layout(false);
+    this.hooks.tooltip?.pin(`agent:${id}`, this.app.screen.width / 2 + 24, this.app.screen.height / 2 - 30, () => this.agentTip(id), 2000);
+    return true;
+  }
+
+  private agentTip(agent: AgentId) {
+    const s = this.agentStatus.get(agent);
+    return agentTooltip(agent, s?.state, s?.text, this.models[agent]);
+  }
+
   setZoom(z: Zoom): void {
     this.zoomLevel = z;
     this.zoomChosen = true;
+    this.focus = null;
     this.layout();
   }
 
@@ -131,6 +157,14 @@ export class WorldView {
 
   /** Advance animations; call once per frame. */
   tick(now: number): void {
+    if (this.focus && now >= this.focusUntil) {
+      this.focus = null;
+      this.layout(false);
+    }
+    if (this.root.x !== this.rootTarget.x || this.root.y !== this.rootTarget.y) {
+      const p = easeToward({ x: this.root.x, y: this.root.y }, this.rootTarget);
+      this.root.position.set(p.x, p.y);
+    }
     for (const f of this.furni) f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion);
     this.badge?.update(now, this.reducedMotion);
     for (const { view, overlay } of this.avatars.values()) {
@@ -142,6 +176,7 @@ export class WorldView {
 
   private rebuild(msg: WelcomeMsg): void {
     this.clearScene();
+    this.focus = null;
     const room = new RoomView(msg.room);
     this.room = room;
     this.root.addChildAt(room.container, 0);
@@ -195,17 +230,14 @@ export class WorldView {
     this.room = null;
   }
 
-  /** Centre the room in the window at the current zoom. */
-  private layout(): void {
+  /** Centre the room (or the focused agent) in the window at the current zoom. `instant` skips the pan animation. */
+  private layout(instant = true): void {
     this.root.scale.set(this.zoomLevel);
     if (!this.room) return;
     const b = this.room.bounds;
-    const cx = (b.minX + b.maxX) / 2;
-    const cy = (b.minY + b.maxY) / 2;
-    this.root.position.set(
-      Math.round(this.app.screen.width / 2 - cx * this.zoomLevel),
-      Math.round(this.app.screen.height / 2 - cy * this.zoomLevel),
-    );
+    const centre = this.focus ?? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+    this.rootTarget = rootPositionFor(centre, this.zoomLevel, this.app.screen.width, this.app.screen.height);
+    if (instant || this.reducedMotion) this.root.position.set(this.rootTarget.x, this.rootTarget.y);
   }
 
   // ---- input ----
@@ -225,10 +257,7 @@ export class WorldView {
     if (agent) {
       this.app.canvas.style.cursor = "default";
       h.room.setHover(null);
-      this.hooks.tooltip?.hover(`agent:${agent}`, e.clientX, e.clientY, () => {
-        const s = this.agentStatus.get(agent);
-        return agentTooltip(agent, s?.state, s?.text, this.models[agent]);
-      });
+      this.hooks.tooltip?.hover(`agent:${agent}`, e.clientX, e.clientY, () => this.agentTip(agent));
       return;
     }
     if (h.item) {

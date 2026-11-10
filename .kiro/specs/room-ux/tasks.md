@@ -18,6 +18,6 @@
   - `ui/terminal.ts` (ring 300, filter, auto-scroll, collapse/resize), `ui/theme.ts` (14 px base, A−/A+), wider panels, diff colouring in reports, legible room labels
   - _Requirements: 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.2_
 
-- [ ] 5. Client: team bar, stepper and your-turn toast
+- [x] 5. Client: team bar, stepper and your-turn toast
   - `ui/team-bar.ts` with focus on click, `ui/stepper.ts` (pure mapping + render), `ui/toast.ts` with tab title
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.4, 6.2_
