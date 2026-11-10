@@ -24,7 +24,7 @@
   - Tests: LlmRuntime falls back when endpoint is down (use an unused local port)
   - _Requirements: 4.1, 4.3, 4.4_
 
-- [ ] 6. JobRunner
+- [x] 6. JobRunner
   - Injected `Steps`, visual script (anchors and states), approval wait, QA retry once, timeouts, cancellation, one active job, restart recovery
   - fast-check property test of requirement 3.6
   - _Requirements: 3.4, 3.5, 3.6, 5.1, 5.2, 5.3_

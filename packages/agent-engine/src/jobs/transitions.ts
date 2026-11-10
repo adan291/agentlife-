@@ -2,12 +2,12 @@ import type { JobState } from "@agentlife/shared";
 
 /** The single transition table (design.md). Anything not listed here is forbidden. */
 export const TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
-  created: ["analyzing", "cancelled"],
+  created: ["analyzing", "failed", "cancelled"], // failed: engine restart recovery
   analyzing: ["awaiting_plan_approval", "failed", "cancelled"],
-  awaiting_plan_approval: ["developing", "cancelled"], // reject => cancelled
+  awaiting_plan_approval: ["developing", "failed", "cancelled"], // reject => cancelled; failed: engine restart recovery
   developing: ["testing", "failed", "cancelled"],
   testing: ["reviewing", "failed", "cancelled"],
-  reviewing: ["report_ready", "developing", "cancelled"],
+  reviewing: ["report_ready", "developing", "failed", "cancelled"], // failed: review timeout or error
   report_ready: ["delivered"],
   failed: ["report_ready"], // a failure still produces a report
   delivered: [],

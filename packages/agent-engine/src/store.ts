@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentEventSchema, type AgentEvent, type AgentId, type EngineJobView } from "@agentlife/shared";
@@ -188,6 +188,41 @@ export class Store {
       | undefined;
     if (!r) return undefined;
     return { id: r.id, taskId: r.task_id, kind: r.kind, title: r.title, content: readFileSync(r.path, "utf8") };
+  }
+
+  /** All artifacts of a task with their contents, in creation order. */
+  artifactsFor(taskId: string): StoredArtifact[] {
+    const rows = this.db.prepare("SELECT id FROM artifacts WHERE task_id = ? ORDER BY created_at, rowid").all(taskId) as { id: string }[];
+    return rows.map((r) => this.readArtifact(r.id)).filter((a): a is StoredArtifact => a !== undefined);
+  }
+
+  /** Appends one JSON line to data/runs/<taskId>/<step>.jsonl (raw runtime output). */
+  appendRunLog(taskId: string, step: string, record: Record<string, unknown>): void {
+    if (!SAFE_ID.test(step)) throw new Error("invalid step name");
+    const dir = this.taskDir(taskId);
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(path.join(dir, `${step}.jsonl`), JSON.stringify(record) + "\n", "utf8");
+  }
+
+  /** Parsed lines of a step run log; missing file gives []. */
+  readRunLog(taskId: string, step: string): Record<string, unknown>[] {
+    if (!SAFE_ID.test(step)) throw new Error("invalid step name");
+    let raw: string;
+    try {
+      raw = readFileSync(path.join(this.taskDir(taskId), `${step}.jsonl`), "utf8");
+    } catch {
+      return [];
+    }
+    const out: Record<string, unknown>[] = [];
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        out.push(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        // skip a torn line
+      }
+    }
+    return out;
   }
 
   close(): void {

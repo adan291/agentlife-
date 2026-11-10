@@ -48,12 +48,12 @@ CREATE TABLE approvals(id TEXT PRIMARY KEY, task_id TEXT, kind TEXT, status TEXT
 
 ```ts
 const TRANSITIONS = {
-  created:                 ["analyzing", "cancelled"],
+  created:                 ["analyzing", "failed", "cancelled"],  // failed: restart recovery
   analyzing:               ["awaiting_plan_approval", "failed", "cancelled"],
-  awaiting_plan_approval:  ["developing", "cancelled"],          // reject => cancelled
+  awaiting_plan_approval:  ["developing", "failed", "cancelled"], // reject => cancelled; failed: restart recovery
   developing:              ["testing", "failed", "cancelled"],
   testing:                 ["reviewing", "failed", "cancelled"],
-  reviewing:               ["report_ready", "developing", "cancelled"],
+  reviewing:               ["report_ready", "developing", "failed", "cancelled"], // failed: review timeout/error
   report_ready:            ["delivered"],
   failed:                  ["report_ready"],                     // failure still produces a report
   delivered: [], cancelled: [],
@@ -69,6 +69,14 @@ Visual script per step (anchors only):
 - test: qa → `computer`, state `working`
 - review: qa → `desk` (developer's), state `thinking`
 - report: architect → `mailbox`, state `done`
+
+Runner conventions (jobs/runner.ts, accepted in S7):
+- `Steps` (jobs/steps.ts) return data; the runner persists artifacts (plan.json, diff.patch, test_log.txt, review.json, report.md) and emits all events. Test failure is a result, not an error: the review still runs, and the effective verdict is `fail` if tests failed or QA said fail.
+- A step error or timeout records `task.state_changed → failed` (reason `timeout:<step>` or the error message), `task.failed`, then `failed → report_ready` (reason `verdict:fail`), `report.ready`, `delivered`, `task.completed`. A cancel records `cancelled` only (no report). `report_ready` and `failed` are not cancellable (409).
+- Plan rejection goes to `cancelled` (reason `Plan rejected`) after `approval.resolved`. Cancelling while an approval is pending first emits `approval.resolved reject`.
+- Restart recovery: every non-terminal job gets `failed` (`engine_restarted`) unless already `failed`/`report_ready`, then the failure report and `delivered`; if `report.ready` was already emitted, the job is just delivered.
+- Per-step usage (credits/tokens) is not an event: runtime events are written to `data/runs/<taskId>/<step>.jsonl` with the step ordinal `n`, and the export sums them per step record.
+- Secret redaction is applied centrally in the Store (events, artifacts, run logs) and in the logger.
 
 ## Runtimes
 
