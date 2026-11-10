@@ -29,12 +29,12 @@ let seq = 0;
 const base = () => ({ seq: seq++, ts: 0, taskId: "t1" });
 
 describe("WorldSim", () => {
-  it("joins at the door and snapshots user plus three agents at home", () => {
+  it("joins at the door and snapshots user plus four agents at home", () => {
     const { sim } = makeSim();
     const { you, welcome } = sim.join();
     expect(welcome.type).toBe("welcome");
     expect(welcome.you).toBe(you);
-    expect(welcome.avatars).toHaveLength(4);
+    expect(welcome.avatars).toHaveLength(5);
     const me = welcome.avatars.find((a) => a.id === you)!;
     expect({ x: me.x, y: me.y }).toEqual({ x: room.door.x, y: room.door.y });
     expect(welcome.agents.map((a) => a.agentId)).toEqual([...AGENT_IDS]);

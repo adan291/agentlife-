@@ -61,8 +61,8 @@ describe("gateway", () => {
     if (welcome.type !== "welcome") throw new Error("unreachable");
     expect(welcome.protocol).toBe(PROTOCOL_VERSION);
     expect(welcome.room.id).toBe(room.id);
-    expect(welcome.avatars).toHaveLength(4);
-    expect(welcome.agents).toHaveLength(3);
+    expect(welcome.avatars).toHaveLength(5);
+    expect(welcome.agents).toHaveLength(4);
   });
 
   it("replies bad_message to invalid JSON and invalid messages, and keeps working", async () => {

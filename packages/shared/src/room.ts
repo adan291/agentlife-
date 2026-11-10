@@ -5,7 +5,7 @@ import { parseHeightmap } from "./geometry/heightmap.ts";
 import type { Heightmap } from "./geometry/heightmap.ts";
 import type { PathGrid, Tile } from "./geometry/pathfind.ts";
 
-export const AGENT_IDS = ["architect", "developer", "qa"] as const;
+export const AGENT_IDS = ["architect", "developer", "qa", "builder"] as const;
 export const AgentIdSchema = z.enum(AGENT_IDS);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 
@@ -19,6 +19,7 @@ export const AnchorNameSchema = z.enum([
   "home_architect",
   "home_developer",
   "home_qa",
+  "home_builder",
 ]);
 export type AnchorName = z.infer<typeof AnchorNameSchema>;
 
@@ -181,7 +182,7 @@ export function checkRoom(room: RoomDef, catalog: Catalog = FURNI_CATALOG): Room
   room.anchors.forEach((a, i) => checkAnchor(a, `anchors.${i}`));
 
   // Required anchors.
-  for (const n of ["computer", "mailbox", "board", "home_architect", "home_developer", "home_qa"] as const) {
+  for (const n of ["computer", "mailbox", "board", "home_architect", "home_developer", "home_qa", "home_builder"] as const) {
     if (!room.anchors.some((a) => a.name === n)) add("anchors", `missing anchor '${n}'`);
   }
   for (const agent of AGENT_IDS) {

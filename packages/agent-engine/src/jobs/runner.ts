@@ -14,7 +14,7 @@ import {
 import type { LimitsConfig } from "../config.ts";
 import { ConflictError, JobCancelledError, NotFoundError, StepTimeoutError } from "../errors.ts";
 import { noopLogger, type Logger } from "../log.ts";
-import type { AgentRuntime } from "../runtimes/types.ts";
+import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
 import type { ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
 import { assertTransition, canTransition, isTerminal } from "./transitions.ts";
@@ -226,7 +226,7 @@ export class JobRunner {
     for (const ag of AGENTS) if (!except.includes(ag)) this.agent(id, ag, state);
   }
 
-  private chatter(a: Active, role: AgentId, prompt: string): void {
+  private chatter(a: Active, role: Role, prompt: string): void {
     const rt = this.ambient;
     if (!rt) return;
     void (async () => {

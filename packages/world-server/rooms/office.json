@@ -23,7 +23,9 @@
     { "name": "desk", "x": 10, "y": 3, "dir": 2, "agent": "qa" },
     { "name": "home_architect", "x": 3, "y": 4, "dir": 4 },
     { "name": "home_developer", "x": 3, "y": 7, "dir": 4 },
-    { "name": "home_qa", "x": 9, "y": 6, "dir": 4 }
+    { "name": "desk", "x": 10, "y": 6, "dir": 2, "agent": "builder" },
+    { "name": "home_qa", "x": 9, "y": 6, "dir": 4 },
+    { "name": "home_builder", "x": 8, "y": 8, "dir": 4 }
   ],
   "furni": [
     { "itemId": "cobweb_1", "defId": "cobweb", "x": 0, "y": 0, "dir": 4 },
@@ -36,6 +38,8 @@
     { "itemId": "desk_architect", "defId": "agent_desk", "x": 0, "y": 2, "dir": 2 },
     { "itemId": "desk_developer", "defId": "agent_desk", "x": 0, "y": 5, "dir": 2 },
     { "itemId": "desk_qa", "defId": "agent_desk", "x": 11, "y": 3, "dir": 6 },
+    { "itemId": "desk_builder", "defId": "agent_desk", "x": 11, "y": 6, "dir": 6 },
+    { "itemId": "chair_builder", "defId": "chair", "x": 10, "y": 6, "dir": 6 },
     { "itemId": "sofa_1", "defId": "sofa", "x": 6, "y": 9, "dir": 0 },
     { "itemId": "plant_2", "defId": "plant", "x": 0, "y": 9, "dir": 4 },
     { "itemId": "jack_lamp_1", "defId": "jack_o_lantern_lamp", "x": 11, "y": 8, "dir": 6 }

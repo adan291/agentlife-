@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Shared: builder agent, anchors and crew schema
+- [x] 1. Shared: builder agent, anchors and crew schema
   - `builder` in AgentIdSchema, `home_builder` anchor, builder desk resolution, `crew.ts` (ActivitySchema, CrewEventSchema)
   - office.json: builder desk + chair + `home_builder`; room still validates; existing tests updated where they enumerate agents
   - _Requirements: 1.1, 1.2, 2.1_

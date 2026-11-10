@@ -15,7 +15,7 @@ describe("rooms/office.json", () => {
     expect(defs.filter((d) => d === "computer_desk")).toHaveLength(1);
     expect(defs.filter((d) => d === "mailbox")).toHaveLength(1);
     expect(defs.filter((d) => d === "board")).toHaveLength(1);
-    expect(defs.filter((d) => d === "agent_desk")).toHaveLength(3);
+    expect(defs.filter((d) => d === "agent_desk")).toHaveLength(4);
     for (const d of ["plant", "lamp", "sofa", "jack_o_lantern_lamp", "cobweb"]) {
       expect(defs).toContain(d);
     }

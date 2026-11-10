@@ -21,9 +21,11 @@ function baseRoom() {
       { name: "desk", x: 1, y: 3, dir: 6, agent: "architect" },
       { name: "desk", x: 2, y: 3, dir: 6, agent: "developer" },
       { name: "desk", x: 3, y: 3, dir: 6, agent: "qa" },
+      { name: "desk", x: 4, y: 3, dir: 6, agent: "builder" },
       { name: "home_architect", x: 1, y: 4, dir: 4 },
       { name: "home_developer", x: 2, y: 4, dir: 4 },
       { name: "home_qa", x: 3, y: 4, dir: 4 },
+      { name: "home_builder", x: 4, y: 4, dir: 4 },
     ],
     furni: [{ itemId: "pc", defId: "computer_desk", x: 1, y: 0, dir: 4 }],
   };
