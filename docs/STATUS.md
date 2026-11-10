@@ -3,7 +3,7 @@
 Updated: 2026-11-11
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: S8 (agent-pipeline tasks 2–5). S2 (kiro-cli spike) is blocked on a security finding, see below.
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (272 tests, 2 live-only skipped). agent-pipeline tasks 1–5 (S2, S8) are done on feat/agent-pipeline, not merged. Next: S9 (tasks 6–9: analyze, develop + diff validation, Docker runner, review).
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
@@ -19,7 +19,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 |---|---|---|---|
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 1 / 13 | feat/agent-pipeline | Spike done (docs/spikes/kiro-cli.md). Next: S8 (tasks 2–5) |
+| agent-pipeline | 5 / 13 | feat/agent-pipeline | Tasks 1–5 done: spike, fixture, materialise, role agents + prompts, KiroCliRuntime (not wired into the engine yet, task 11). Next: tasks 6–9 |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
@@ -43,6 +43,12 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 - Engine restarts: the HttpEngineLink starts from the engine's head (`/health.lastSeq`), so a world-server restart does not replay old jobs; it reconnects with the last seq and resets if the engine DB has a lower seq.
 - agent-engine naming: the engine-side job view is `EngineJobViewSchema` (`JobView` already exists as the client-facing view in protocol.ts); recorded in design.md. Fold conventions (steps from state changes, verdict via reason `verdict:pass|fail` on the transition into `report_ready`) are in design.md. Token/credit per step is not in events yet (task 9).
 - `pnpm-workspace.yaml` now has `allowBuilds: better-sqlite3: true` (needed for the prebuilt binary).
+- agent-pipeline tasks 2–5 (S8), what exists and what to know for tasks 6–9:
+  - Fixture `fixtures/repos/haunted-todo` (outside the pnpm workspace; own `package-lock.json`, Vitest 5.1.0, 7 passing + 1 skipped test). `config/repos.json` source is now `fixtures/repos/haunted-todo`. `steps/materialise.ts` creates `data/repos/<id>` (single commit, author `AGENT LIFE Engine`, fixed date, so the commit id is stable). `git.ts` has the `git()` helper (no shell, no user/system git config, `NUL` as global config on Windows) and the `DEVELOPER_IDENTITY` for task 7. `paths.ts` has `dataPaths()` and `isInside()`.
+  - Role agents in `packages/agent-engine/agents/*.json` (system prompt inline), task templates in `prompts/*.md` (placeholders goal, task, feedback, diff, testLog, testStatus; no retry placeholder, the retry appends the zod error). `prompts.ts` has `renderPrompt` (one pass) and `fence` (untrusted text in a fence the text cannot close). `installAgents()` runs from `startEngine` when a role uses `kiro-cli`.
+  - `KiroCliRuntime` (`runtimes/kiro-cli.ts`): `--v3`, no trust flags, prompt on stdin, minimal env (live-checked on Windows), `RuntimeInput.rawLogPath` for raw JSONL. Steps in tasks 6, 7 and 9 must pass `rawLogPath` (`data/runs/<taskId>/<step>.raw.jsonl`) and `cwd`. `buildRuntimes` in `engine.ts` still rejects `kiro-cli`; task 11 wires it.
+  - `kiro-cli agent validate` accepts unknown capabilities and invalid effects, so it is only a load check. The permission rules are tested by shape in `test/agents.test.ts`; behaviour is covered by the spike and the live runs. The agent-validate and live runtime tests run with `AGENTLIFE_LIVE=1` (key in the environment); the live architect test passed (22 s).
+  - Sessions here cannot write under `data/` with the edit tools (permission rule); use scripts for anything that must land there.
 - S2 spike resolved: with `--v3` and no trust flags, writes outside cwd are denied (the earlier failure came from V2 + `--trust-all-tools`). Product agents must always use `--v3` and never trust flags; engine-side containment check stays. Credits are not in stream-json: measure from the usage panel in the live runs.
 - Review suggestions not done yet (non-blocking): gateway sends some messages twice (`job_update`, `approval`); no in-flight state on approve (double click); engine error text is forwarded to the client (max 200 chars). `jobActive` timeout is partly covered (cleared on cancelled/delivered). Revisit with the next review.
 - Server packages must avoid constructor parameter properties and enums (`--experimental-strip-types`). Mirrored avatar directions are 0↔6, 1↔5, 2↔4 (design.md).
