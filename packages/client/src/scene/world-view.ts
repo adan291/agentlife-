@@ -12,6 +12,8 @@ import { pickFurni } from "./pick.ts";
 import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
+import { freeViewport, getInsets, onInsetsChange } from "./viewport.ts";
+import type { FreeViewport } from "./viewport.ts";
 import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
 import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
@@ -25,6 +27,8 @@ export interface WorldViewHooks {
   onError?(code: ErrorCode, message: string): void;
   /** Receives hover targets for tooltips. */
   tooltip?: HoverSink;
+  /** The automatic zoom changed (free viewport resized). */
+  onZoomChange?(zoom: Zoom): void;
 }
 
 interface AvatarEntry {
@@ -74,7 +78,8 @@ export class WorldView {
     app.stage.on("pointermove", (e) => this.onPointerMove(e));
     app.stage.on("pointertap", (e) => this.onPointerTap(e));
     app.stage.on("pointerleave", () => this.clearHover());
-    app.renderer.on("resize", () => this.layout());
+    app.renderer.on("resize", () => this.relayout());
+    onInsetsChange(() => this.relayout());
   }
 
   get zoom(): Zoom {
@@ -98,7 +103,8 @@ export class WorldView {
     this.focus = { x: entry.view.feetX, y: entry.view.feetY - 40 };
     this.focusUntil = now + FOCUS_MS;
     this.layout(false);
-    this.hooks.tooltip?.pin(`agent:${id}`, this.app.screen.width / 2 + 24, this.app.screen.height / 2 - 30, () => this.agentTip(id), 2000);
+    const v = this.freeArea();
+    this.hooks.tooltip?.pin(`agent:${id}`, v.x + v.w / 2 + 24, v.y + v.h / 2 - 30, () => this.agentTip(id), 2000);
     return true;
   }
 
@@ -210,12 +216,29 @@ export class WorldView {
       this.avatars.set(a.id, { view, overlay });
     }
 
-    if (!this.zoomChosen) {
-      const b = room.bounds;
-      this.zoomLevel = chooseZoom(b.maxX - b.minX, b.maxY - b.minY, this.app.screen.width, this.app.screen.height);
-    }
+    if (!this.zoomChosen) this.chooseAutoZoom();
     this.layout();
     this.tick(Date.now());
+  }
+
+  private freeArea(): FreeViewport {
+    return freeViewport(this.app.screen.width, this.app.screen.height, getInsets());
+  }
+
+  /** Picks 1x or 2x from the free viewport (only used while the user has not chosen a zoom). */
+  private chooseAutoZoom(): void {
+    if (!this.room) return;
+    const b = this.room.bounds;
+    const v = this.freeArea();
+    this.zoomLevel = chooseZoom(b.maxX - b.minX, b.maxY - b.minY, v.w, v.h, 0);
+  }
+
+  /** The free viewport changed (team bar, terminal or window): recompute zoom if automatic, then centre. */
+  private relayout(): void {
+    const before = this.zoomLevel;
+    if (!this.zoomChosen) this.chooseAutoZoom();
+    this.layout();
+    if (this.zoomLevel !== before) this.hooks.onZoomChange?.(this.zoomLevel);
   }
 
   private clearScene(): void {
@@ -235,8 +258,9 @@ export class WorldView {
     this.root.scale.set(this.zoomLevel);
     if (!this.room) return;
     const b = this.room.bounds;
+    const v = this.freeArea();
     const centre = this.focus ?? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
-    this.rootTarget = rootPositionFor(centre, this.zoomLevel, this.app.screen.width, this.app.screen.height);
+    this.rootTarget = rootPositionFor(centre, this.zoomLevel, v.w, v.h, v.x, v.y);
     if (instant || this.reducedMotion) this.root.position.set(this.rootTarget.x, this.rootTarget.y);
   }
 
