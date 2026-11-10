@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Isometric geometry in shared
+- [x] 1. Isometric geometry in shared
   - Create `shared/src/geometry/projection.ts` (`tileToScreen`, `screenToTile`), `heightmap.ts` (`parseHeightmap`), `depth.ts` (`depthKey`)
   - Export from `shared/src/index.ts`
   - Unit tests plus fast-check properties: projection round-trip, depth ordering for non-overlapping footprints
