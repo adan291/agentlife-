@@ -22,7 +22,7 @@
   - Tests: valid samples parse, malformed samples are rejected
   - _Requirements: 6.1, 5.5_
 
-- [ ] 5. WorldSim
+- [x] 5. WorldSim
   - `shared/src/world/sim.ts`: join/snapshot, `move`, `use` (walk to use tile + deferred open_panel), agent events → walk/agent_state/say, clock-derived positions
   - Property test: after any random sequence of valid intents and agent events, every avatar is on a walkable tile
   - _Requirements: 3.1, 3.3, 4.2, 4.4, 5.2, 5.3, 5.4_

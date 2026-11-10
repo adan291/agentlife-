@@ -1,5 +1,5 @@
-/** Bumped on any breaking change to the client/world-server or engine event protocol. */
-export const PROTOCOL_VERSION = 1;
+export * from "./version.ts";
+export * from "./world/sim.ts";
 
 export * from "./geometry/projection.ts";
 export * from "./geometry/heightmap.ts";
