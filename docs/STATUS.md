@@ -22,7 +22,7 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 | agent-pipeline | 11 / 13 | main | Live run 1 OK (~70 s per job: analyze 29 s, develop 17 s, tests 1.5 s, review 19 s). Run 2 waiting for approval. Next: run 3, then task 13 (export demo run) |
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
-| room-ux | 5 / 5 | feat/room-ux | Done on the branch, not merged. Browser look pending (user). S10C |
+| room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
