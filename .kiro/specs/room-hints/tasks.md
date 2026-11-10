@@ -16,6 +16,6 @@
   - Pulsing outline with reduced-motion fallback, badge with count and new-report dot, HUD line
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 4.2, 4.3_
 
-- [ ] 5. Client: how-it-works guide
+- [x] 5. Client: how-it-works guide
   - First-visit card, "?" button, Esc
   - _Requirements: 5.1, 5.2, 5.3_

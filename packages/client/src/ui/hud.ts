@@ -23,7 +23,7 @@ export interface Hud {
 }
 
 /** Small DOM overlay: zoom button, connection banner and transient messages. */
-export function createHud(onZoom: () => void): Hud {
+export function createHud(onZoom: () => void, onHelp: () => void = () => {}): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -36,6 +36,14 @@ export function createHud(onZoom: () => void): Hud {
   zoom.title = "Toggle zoom (Z)";
   zoom.addEventListener("click", onZoom);
   top.appendChild(zoom);
+  const help = document.createElement("button");
+  help.className = "al-btn";
+  help.type = "button";
+  help.textContent = "?";
+  help.title = "How it works";
+  help.setAttribute("aria-label", "How it works");
+  help.addEventListener("click", onHelp);
+  top.appendChild(help);
 
   const status = document.createElement("div");
   status.className = "al-hud al-status";
