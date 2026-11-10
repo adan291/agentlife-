@@ -1,23 +1,31 @@
 # Spike: kiro-cli (agent-pipeline task 1)
 
-Status: BLOCKED. Not completed.
+Status: FAILED on one check (write outside cwd is not denied). Task 1 not marked done.
 
-## Verified
-- `kiro-cli --version` -> 3.1.0 (design.md assumed 2.34).
-- `kiro-cli chat --list-models` lists `claude-haiku-5.5` (0.06x credits). All spike calls must use `--model claude-haiku-5.5`.
-- `kiro-cli chat` supports `--agent`, `--model`, `--output-format stream-json` (implies `--no-interactive`), `--trust-tools`, `--trust-workspace`, `--agent-engine v1|v2|v3` (default v2), `--require-mcp-startup`.
-- `kiro-cli whoami` -> logged in with Google (interactive login).
+Script: `packages/agent-engine/spikes/kiro-cli-spike.mjs` (run with `node --env-file=.env ...`). Agent used: `data/kiro-home/agents/spike-ro.json` (git-ignored). All calls used `--model claude-haiku-5.5`, `--no-interactive --output-format stream-json --trust-all-tools`, `KIRO_HOME=data/kiro-home`, cwd = temp repo, minimal env.
 
-## Blocker
-`KIRO_API_KEY` is not set (environment variable unset; no entry in any `.env*` file). The spike must verify API-key auth with `KIRO_HOME=data/kiro-home` (empty), so no `kiro-cli chat` call was made.
+## Results
+| Check | Result |
+|---|---|
+| kiro-cli version | 3.1.0 (design assumed 2.34) |
+| Auth with KIRO_API_KEY and empty KIRO_HOME | OK. Runs complete, exit 0 |
+| `--agent` lookup from `KIRO_HOME/agents` with cwd in another repo | OK |
+| Missing agent | exit 4, `runError` record: `agent "<name>" not found, stopping (exit 4)` (stage `init`) |
+| `kiro-cli agent validate --path` | OK (silent, exit 0) with the reviewer-style syntax (`permissions.rules` with `capability`, `match`, `effect`) |
+| Write inside cwd | OK, file created |
+| Shell denied (`shell` rule `**` deny) | OK, `shell.txt` not created |
+| Write outside cwd denied | FAIL. `outside.txt` was created in the temp dir despite rules `fs_write allow ./**` and no other fs_write allow |
 
-## Pending checks (after the key is configured)
-1. Auth with `KIRO_API_KEY` and empty `KIRO_HOME`.
-2. `--agent` lookup from `KIRO_HOME/agents` when cwd is another repo.
-3. stream-json record shapes, exit codes.
-4. Write outside cwd denied; shell denied.
-5. Credits per run.
-6. Whether `--agent-engine` default (v2) vs v3 changes stream-json or agent JSON syntax.
+## stream-json shape
+One JSON object per line, `{"type": ..., "data": {...}}`. Types seen: `runStarted`, `sessionUpdate`, `runFinished`, `runError`. `sessionUpdate.data.update.sessionUpdate` carries sub-kinds: `available_commands_update`, `config_option_update`, `session_info_update` (context usage), `agent_thought_chunk`, `tool_call` (`title`, `kind`, `status`, `locations`, `rawInput`), `tool_call_update` (`status`: pending, ...). Exit code 0 on success, 4 on missing agent. Stdout per run is 25-60 KB, mostly session updates. Stderr is 69 bytes on success runs (content not inspected).
 
-## Needed from the user
-Set `KIRO_API_KEY` (env or git-ignored `.env`) and re-run task 1.
+## Run timings (haiku-5.5)
+read 13.4 s, write-cwd 17.8 s, write-outside 17.8 s, shell 14.0 s, missing agent 9.8 s.
+
+## Not yet verified
+- Credits per run (no credit field found yet in the records examined; check `runFinished`).
+- Whether the outside write is blocked without `--trust-all-tools` (non-interactive denies unapproved tools?) or with an explicit `fs_write deny` for paths outside cwd.
+- `--agent-engine v2|v3` differences.
+
+## Impact
+The security rule "Developer may write only inside its task worktree" cannot rely on the agent's fs_write allow rule under `--trust-all-tools`. Candidate mitigations to test next (not applied, needs user decision): drop `--trust-all-tools` and use `--trust-tools` with an explicit list; add an explicit deny for absolute/outside paths; or enforce containment in the engine (diff validation plus checking that nothing outside the worktree changed).
