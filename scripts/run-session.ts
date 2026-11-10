@@ -29,7 +29,7 @@ const LOG = join(ROOT, "docs", "session-log.md");
 const RUNS = join(ROOT, "data", "sessions");
 const BUILDER = "agentlife-builder";
 const REVIEWER = "agentlife-reviewer";
-const REVIEWER_MODEL = "claude-haiku-4.5";
+const REVIEWER_MODEL = "claude-haiku-5.5";
 
 function fail(msg: string): never {
   console.error(`\n[session] ${msg}`);

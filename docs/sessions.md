@@ -29,10 +29,10 @@ Datos de [kiro.dev/docs/models](https://kiro.dev/docs/models/available-models.md
 | Modelo | Coste | Para qué lo usamos |
 |---|---|---|
 | **Auto** | 1x | Implementación normal. Es el modelo por defecto en casi todas las sesiones. |
-| **Claude Sonnet 4.5 / 5** | 1.3x | Solo en código delicado: seguridad, procesos hijo y concurrencia |
+| **Claude Sonnet 5.5 / 5** | 1.3x | Solo en código delicado: seguridad, procesos hijo y concurrencia |
 | **Claude Opus 5.5** | 2x | Solo como **rescate**: un bug que Auto no resuelve en 2 intentos o un cambio de diseño. Nunca para escribir código rutinario. |
-| **Claude Haiku 4.5** | 0.4x | Revisiones, documentación, README y preguntas sobre el proyecto |
-| **Haiku 5.5** (si te aparece) | 0.06x | Lo mismo que Haiku 4.5, más barato |
+| **Claude Haiku 5.5** | 0.4x | Revisiones, documentación, README y preguntas sobre el proyecto |
+| **Haiku 5.5** (si te aparece) | 0.06x | Lo mismo que Haiku 5.5, más barato |
 | **Qwen3 Coder Next** | 0.05x | Preguntas rápidas ("¿qué toca hoy?", "¿cuántas tareas quedan?") y cambios triviales |
 
 Reglas:
@@ -73,9 +73,9 @@ Lo que haces tú: en S4 y S5, abrir el cliente y decir qué se ve mal. Describe 
 
 | Sesión | Fecha | Modelo | Effort | Prompt |
 |---|---|---|---|---|
-| S2 | 12–13 nov | Auto | low | `Do task 1 of the agent-pipeline spec: the kiro-cli spike. Use claude-haiku-4.5 as --model for every kiro-cli call in the spike. Document findings in docs/spikes/kiro-cli.md. Stop and report if any check fails.` |
+| S2 | 12–13 nov | Auto | low | `Do task 1 of the agent-pipeline spec: the kiro-cli spike. Use claude-haiku-5.5 as --model for every kiro-cli call in the spike. Document findings in docs/spikes/kiro-cli.md. Stop and report if any check fails.` |
 | S6 | 18–20 nov | Auto | medium | `Implement tasks 1 to 5 of the agent-engine spec. Follow workflow.md.` |
-| S7 | 20–23 nov | Sonnet 4.5 | medium | `Implement tasks 6 to 10 of the agent-engine spec. Follow workflow.md.` |
+| S7 | 20–23 nov | Sonnet 5.5 | medium | `Implement tasks 6 to 10 of the agent-engine spec. Follow workflow.md.` |
 
 S7 usa Sonnet por la máquina de estados con cancelación y el SSE sin huecos: ahí los errores sutiles salen caros de depurar.
 
@@ -83,8 +83,8 @@ S7 usa Sonnet por la máquina de estados con cancelación y el SSE sin huecos: a
 
 | Sesión | Fecha | Modelo | Effort | Prompt |
 |---|---|---|---|---|
-| S8 | 24–25 nov | Sonnet 4.5 | medium | `Implement tasks 2 to 5 of the agent-pipeline spec, using the findings in docs/spikes/kiro-cli.md. Follow workflow.md.` |
-| S9 | 26–27 nov | Sonnet 4.5 | high | `Implement tasks 6 to 10 of the agent-pipeline spec. Follow workflow.md.` |
+| S8 | 24–25 nov | Sonnet 5.5 | medium | `Implement tasks 2 to 5 of the agent-pipeline spec, using the findings in docs/spikes/kiro-cli.md. Follow workflow.md.` |
+| S9 | 26–27 nov | Sonnet 5.5 | high | `Implement tasks 6 to 10 of the agent-pipeline spec. Follow workflow.md.` |
 | S10 | 28–29 nov | Auto | low | `Implement tasks 11 to 13 of the agent-pipeline spec. Run the live runs with me.` |
 
 S9 lleva effort high porque contiene la validación del diff y Docker, que son las reglas de seguridad del producto.
@@ -95,9 +95,9 @@ Los agentes del producto también gastan créditos en cada ejecución. Se config
 
 | Rol | Modelo inicial | Si la calidad no basta |
 |---|---|---|
-| Architect | `claude-haiku-4.5` | `auto` |
-| Developer | `auto` | `claude-sonnet-4.5` |
-| QA | `claude-haiku-4.5` | `auto` |
+| Architect | `claude-haiku-5.5` | `auto` |
+| Developer | `auto` | `claude-sonnet-5.5` |
+| QA | `claude-haiku-5.5` | `auto` |
 | Frases de ambiente | Ollama local (`qwen3.5:4b`), sin coste | Frases predefinidas |
 
 Durante el desarrollo, usa `RUNTIME=fake` (sin coste). Ejecuta agentes reales solo en S2, S10 y para grabar la demo. Con 3 o 4 ejecuciones completas basta.
@@ -108,14 +108,14 @@ Durante el desarrollo, usa `RUNTIME=fake` (sin coste). Ejecuta agentes reales so
 |---|---|---|---|---|
 | S11 | 30 nov | Auto | medium | `Implement tasks 1 to 4 of the demo-replay spec. Follow workflow.md.` |
 | S12 | 1 dic (congelación) | Auto | low | `Implement tasks 5 and 6 of the demo-replay spec, then list visual polish items for the Kiroween look and do the top three.` |
-| S13 | 2–3 dic | Haiku 4.5 | low | `Do task 7 of the demo-replay spec: README, docs/kiro-usage.md and docs/video-script.md, in English.` |
+| S13 | 2–3 dic | Haiku 5.5 | low | `Do task 7 of the demo-replay spec: README, docs/kiro-usage.md and docs/video-script.md, in English.` |
 
 ## Sesiones de apoyo
 
 | Sesión | Cuándo | Modelo | Prompt |
 |---|---|---|---|
 | **R** (revisión) | Al terminar cada sesión S | Codex (sin coste de Kiro) | `Review the diff of this branch against main. Read .kiro/steering/*.md and the matching spec in .kiro/specs first. Report blocking issues with file:line. Do not edit files.` |
-| **R2** (revisión barata) | En S6–S9, como segunda opinión | Agente `agentlife-reviewer` (fijado a Haiku 4.5) | `Review the current branch against main.` |
+| **R2** (revisión barata) | En S6–S9, como segunda opinión | Agente `agentlife-reviewer` (fijado a Haiku 5.5) | `Review the current branch against main.` |
 | **F** (arreglos) | Tras R/R2 si hay bloqueantes | Auto, effort low | `Fix the blocking issues listed in docs/reviews/<branch>.md. Follow workflow.md.` (si la revisión fue de Codex, pega su lista) |
 | **X** (rescate) | Algo falla 2 veces seguidas | Opus 5.5, effort high | `Problem: <qué falla, comando y error exacto>. Already tried: <qué se intentó>. Read docs/STATUS.md and the relevant spec design. Find the root cause and fix it with the smallest change.` |
 | **Q** (pregunta) | Cuando quieras | Qwen3 Coder Next | `Read docs/STATUS.md. What is the next session and what do I need to do before it?` |

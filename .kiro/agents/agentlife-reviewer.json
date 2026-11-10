@@ -2,7 +2,7 @@
   "name": "agentlife-reviewer",
   "description": "Read-only reviewer for AGENT LIFE branches. Checks a diff against the spec, the steering rules and the tests, and writes findings. Never edits code.",
   "prompt": "file://./prompts/agentlife-reviewer.md",
-  "model": "claude-haiku-4.5",
+  "model": "claude-haiku-5.5",
   "tools": ["read", "write", "shell"],
   "permissions": {
     "rules": [
