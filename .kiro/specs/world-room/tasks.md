@@ -56,7 +56,7 @@
   - `ui/panels.ts` (open/close, Esc), computer, mailbox (approve/reject, reports), board (timeline), `ui/markdown.ts` safe renderer with a test that HTML in input is escaped
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 12. End-to-end check with the fake engine
+- [x] 12. End-to-end check with the fake engine
   - Run world-server (ENGINE=fake) and client; walk to computer, start job, approve in mailbox, read report
   - Record the manual check result in docs/STATUS.md; fix any defects found
   - _Requirements: 7.2, 8.1, 8.2, 8.3_
