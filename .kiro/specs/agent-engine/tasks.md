@@ -15,7 +15,7 @@
   - Property test: fold of random event sequences equals incremental view
   - _Requirements: 2.1, 2.3, 7.2_
 
-- [ ] 4. Transition table
+- [x] 4. Transition table
   - `jobs/transitions.ts` with `assertTransition`; unit tests for every allowed and a sample of forbidden transitions
   - _Requirements: 3.1, 3.2, 3.3_
 
