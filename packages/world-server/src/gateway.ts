@@ -32,10 +32,12 @@ export interface Gateway {
 export class TokenBucket {
   private tokens: number;
   private last: number;
-  constructor(
-    private readonly rate: number,
-    private readonly clock: () => number,
-  ) {
+  private readonly rate: number;
+  private readonly clock: () => number;
+  // No parameter properties: node's type stripping does not support them.
+  constructor(rate: number, clock: () => number) {
+    this.rate = rate;
+    this.clock = clock;
     this.tokens = rate;
     this.last = clock();
   }

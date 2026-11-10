@@ -39,16 +39,16 @@
   - Test: scenario reaches `report.ready` only after an approve
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 8. Client: transport, palette and room rendering
+- [x] 8. Client: transport, palette and room rendering
   - `transport.ts` (LiveTransport with reconnect), `palette.ts`, `scene/room-view.ts` (floor, walls, hover highlight), zoom 1×/2×
   - _Requirements: 2.1, 2.3, 2.5, 9.1_
 
-- [ ] 9. Client: procedural textures, furniture and avatars
+- [x] 9. Client: procedural textures, furniture and avatars
   - `scene/textures.ts` with `SpriteProvider`, draw recipes for every catalog item, avatar figure with 8 logical directions and walk animation
   - `furni-view.ts`, `avatar-view.ts`, depth sorting each frame for moving avatars
   - _Requirements: 2.2, 3.4, 4.3, 9.2_
 
-- [ ] 10. Client: input and agent overlays
+- [x] 10. Client: input and agent overlays
   - Click to move, click furniture to use, name tags, role colours, status badges with 8 state icons, speech bubbles with duration by length
   - _Requirements: 3.1, 4.2, 5.1, 5.3, 5.4, 5.5_
 
