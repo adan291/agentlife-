@@ -19,7 +19,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 |---|---|---|---|
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
+| agent-pipeline | 10 / 13 | feat/agent-pipeline | S8 + S9 done (fixture, agents, runtime, analyze, develop, Docker runner, review, report). Next: S10 live runs (user present) |
 | build-crew | 0 / 5 | — | New: Builder ghost mirrors build sessions in the room. S9B (tasks 1–4) after S9 |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
