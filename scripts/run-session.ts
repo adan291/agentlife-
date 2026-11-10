@@ -101,6 +101,13 @@ function kiroArgs(agent: string, model: string, effort: string, prompt: string, 
   return args;
 }
 
+/** Best-effort Discord message via scripts/notify.ts (no Kiro credits). Never fails the session. */
+function notify(text: string): void {
+  if (process.env.AGENTLIFE_NOTIFY === "0") return;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(ROOT, "scripts", "notify.ts"), text], { cwd: ROOT, encoding: "utf8", windowsHide: true });
+  if (r.status !== 0) console.warn(`[session] Discord notification skipped: ${(r.stderr ?? "").trim()}`);
+}
+
 function quote(a: string): string {
   return /[\s"]/.test(a) ? `"${a.replaceAll('"', '\\"')}"` : a;
 }
@@ -167,6 +174,10 @@ async function main(): Promise<void> {
   const ok = code === 0 && check.code === 0;
   recordRun(session, ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
   console.log(`[session] pnpm check: ${check.code === 0 ? "passed" : "FAILED"}`);
+  const mins = ((Date.now() - started) / 60000).toFixed(0);
+  notify(ok
+    ? `AGENT LIFE: ${session.id} (${session.spec}) terminada en ${mins} min con ${session.model}. pnpm check OK. Revisa los créditos gastados.`
+    : `AGENT LIFE: ${session.id} (${session.spec}) FALLÓ tras ${mins} min (kiro-cli ${code}, pnpm check ${check.code}). No lances la siguiente; mira docs/STATUS.md.`);
   if (!ok) fail(`${session.id} did not finish cleanly. Read docs/STATUS.md and ${logFile}. Do not run the next session until this is fixed.`);
 
   if (review) {

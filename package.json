@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r --parallel exec tsc --noEmit",
     "test": "pnpm -r test",
     "check": "pnpm typecheck && pnpm test",
-    "session": "node --experimental-strip-types scripts/run-session.ts"
+    "session": "node --experimental-strip-types --no-warnings scripts/run-session.ts",
+    "notify": "node --experimental-strip-types --no-warnings scripts/notify.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

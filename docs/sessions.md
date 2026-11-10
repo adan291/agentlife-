@@ -132,7 +132,35 @@ Durante el desarrollo, usa `RUNTIME=fake` (sin coste). Ejecuta agentes reales so
 
 **Nota sobre cuentas:** `kiro-cli` debe tener la sesión iniciada con la misma cuenta que el IDE, que es la que tiene los créditos del hackathon. Compruébalo con `kiro-cli whoami`. Si `kiro-cli chat --list-models` solo muestra los modelos del plan Free (sin Opus), está en otra cuenta.
 
-## Kiro Crew + Discord (opcional)
+## Discord: avisos gratis y control desde el móvil
 
-Se configura una vez siguiendo https://kiro.dev/docs/crew/interfaces/discord.md. Para el resumen diario, usa un cron con un modelo barato (Qwen3 Coder Next o Haiku):
-`Read d:\Kiroween\docs\STATUS.md and the unchecked tasks in .kiro/specs/*/tasks.md. Send me a 5-line summary: done today, next session, risks, days left to Dec 4.`
+Hay dos piezas distintas. Usa la gratuita siempre que puedas.
+
+### 1. Avisos y estado: `pnpm notify` (0 créditos)
+
+Usa el bot de Kiro Crew y te escribe por **mensaje directo**. No pasa por ningún modelo de Kiro.
+
+```powershell
+pnpm notify "texto"              # manda el texto tal cual
+pnpm notify --status             # estado: tareas por spec, siguiente sesión y días restantes,
+                                 # más un resumen corto escrito por Ollama (qwen3.5:4b, local)
+pnpm notify --status --dry-run   # ver el mensaje sin enviarlo
+```
+
+- Los números (tareas, sesión, días) se calculan en el script y no los inventa el modelo. Ollama solo redacta el resumen. Si Ollama está parado, el mensaje sale sin resumen.
+- `pnpm session` avisa solo al terminar cada sesión, tanto si sale bien como si falla. Para desactivarlo: `$env:AGENTLIFE_NOTIFY="0"`.
+- Para el resumen hay que tener Ollama arrancado (`ollama serve`).
+- Si quieres un resumen diario, crea una tarea programada de Windows que ejecute `pnpm notify --status` en `D:\Kiroween`. No uses un cron de Crew para esto, porque gasta créditos.
+
+### 2. Trabajar desde el móvil: Kiro Crew (gasta créditos)
+
+Escribes al bot por DM y Crew abre una sesión de Kiro con herramientas. Úsalo solo cuando estés fuera.
+
+- Crew tiene un steering propio (`~/.kiro/crew/workspace/.kiro/steering/kiroween-project.md`) que le indica trabajar en `D:\Kiroween`, leer `STATUS.md` y el steering del proyecto, y lanzar las sesiones con `pnpm session`.
+- Requisitos: PC encendido, app KiroCrew abierta y Ollama arrancado si quieres resúmenes.
+- Mensajes útiles:
+  - `pnpm notify --status`: Crew solo ejecuta el comando y el resumen lo hace Ollama, lo más barato.
+  - `Lanza la siguiente sesión del proyecto` → ejecuta `pnpm session next` (gasta según el plan de esa sesión).
+  - `!stop` → cancela el turno en curso.
+- Crew no hace push, merge ni reescribe el historial desde el chat.
+- Las aprobaciones de Crew están en modo `auto` (`agent.approval_mode`), así que las herramientas se ejecutan sin pedirte confirmación. Si prefieres botones de aprobar o rechazar en el móvil, cámbialo a `interactive` en Settings → Security de Crew.
