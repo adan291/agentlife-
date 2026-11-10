@@ -3,7 +3,7 @@
 Updated: 2026-11-10
 
 ## Phase
-Phase 0 done: scaffold, steering, CI, discovery docs, the four specs, reviewer agent, hooks and session plan. Next: session S1 (docs/sessions.md).
+Phase 0 done. Session S1 done: world-room tasks 1-4 (geometry, pathfinding, room/furniture schemas + office.json, protocol and event schemas). Next: world-room task 5 (WorldSim), then S2 per docs/sessions.md.
 
 ## Specs
 | Spec | Tasks done | Branch | Notes |
