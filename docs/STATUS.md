@@ -10,7 +10,7 @@ Two terminals from the repo root (the client needs the world-server on 127.0.0.1
 - `pnpm --filter @agentlife/world-server start`
 - `pnpm --filter @agentlife/client dev` then open http://localhost:5173/ (Z or the button toggles 1×/2×)
 
-With the real engine (RUNTIME=fake): start the engine first, then the world-server with `ENGINE=http` (`ENGINE_URL` default http://127.0.0.1:8788, `ENGINE_TOKEN` optional on both):
+With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fake` for the engine (PowerShell `$env:RUNTIME='fake'`); tests and CI get it from `packages/agent-engine/vitest.config.ts`. Without it the engine installs the role agents into `data/kiro-home` and runs the real pipeline (needs `KIRO_API_KEY` and the Docker image). Start the engine first, then the world-server with `ENGINE=http` (`ENGINE_URL` default http://127.0.0.1:8788, `ENGINE_TOKEN` optional on both):
 - `pnpm --filter @agentlife/agent-engine start` (`FAKE_DELAY_MS`, default 800, sets the pace of the fake agents)
 - PowerShell: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start`
 
@@ -19,7 +19,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 |---|---|---|---|
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 10 / 13 | main | Tasks 1–10 done, merged. Steps not wired into the engine yet. Next: S10 (tasks 11–13, live runs with the user) |
+| agent-pipeline | 11 / 13 | feat/agent-pipeline-wire | Tasks 1–11 done. Task 11 on branch `feat/agent-pipeline-wire` (not merged; `feat/agent-pipeline` is stale, behind main, and could not be merged or reset from the unattended session). Next: S10 live runs (tasks 12–13, with the user) |
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
@@ -37,6 +37,7 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- agent-pipeline task 11 (done, not live-tested): `engine.ts` exports `buildRuntimes(config, fakeDelayMs, kiroHome)` (one `KiroCliRuntime` shared by kiro-cli roles, `models` from config) and uses `createPipelineSteps` (`steps/index.ts`) when any role is kiro-cli and `RUNTIME` is not `fake`; otherwise `createRuntimeSteps` (fake). With a custom `dataDir` the store's `runsDir` follows `data/runs`. No live kiro-cli job was run; tasks 12–13 remain. Unattended session note: branch `feat/agent-pipeline` already existed and is behind main, so a new branch `feat/agent-pipeline-wire` was cut from main.
 - agent-pipeline tasks 6–10 (S9, S10), what exists and what to know for tasks 11–13 (all in `packages/agent-engine/src/steps/`, design details in the spec's design.md under "Decisions made while implementing"):
   - Steps are plain functions over `PipelineDeps` (`steps/deps.ts`: runtimes, store, `dataPaths`, repos, limits): `analyzeStep`, `developStep`, `testStep`, `reviewStep`, `reportStep`. Task 11 must compose them into a `Steps` object in `engine.ts` (pass `ctx` and the step inputs through) and give `buildRuntimes` a `KiroCliRuntime` per role (`kiroHome` = `dataPaths().kiroHome`, `models` from config). `createRuntimeSteps` (fake) stays the CI default; the real steps need fenced `json` replies, which `FakeRuntime` does not produce.
   - `Steps.develop` and `Steps.review` now take `task`, and `ReportInput` has `task`; `TestResult` has `exitCode`. JobRunner builds the first plan task (approval stays approve/reject; the `approval.requested` options list one entry per task and the summary says task 1 is built). Choosing another task needs a protocol and mailbox change; not done.
