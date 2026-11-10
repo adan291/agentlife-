@@ -15,7 +15,7 @@
   - Make root `pnpm check` run `scripts/test/*.test.ts`
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.1_
 
-- [ ] 4. Client: ghost staff (all agents) and the Builder
+- [x] 4. Client: ghost staff (all agents) and the Builder
   - One original ghost figure (float bob, wavy hem, eyes) used for Architect, Developer, QA and Builder, coloured per role; user avatar unchanged
   - Builder name tag with session label, idle at home when no session
   - Sim or world-server test: builder goto desk and back home

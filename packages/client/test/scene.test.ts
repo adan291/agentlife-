@@ -5,11 +5,12 @@ import type { RoomDef } from "@agentlife/shared";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { viewFor } from "../src/scene/figure.ts";
+import { GHOST_BOB_PX, drawAvatar, viewFor } from "../src/scene/figure.ts";
+import { builderTagName, sessionLabel } from "../src/scene/crew-label.ts";
 import { pickFurni } from "../src/scene/pick.ts";
 import { RECIPES } from "../src/scene/recipes.ts";
 import { BUBBLE_MAX_MS, BUBBLE_MIN_MS, bubbleDurationMs, shortStatus } from "../src/scene/timing.ts";
-import { poseAt } from "../src/scene/walk-anim.ts";
+import { ghostFrame, poseAt } from "../src/scene/walk-anim.ts";
 import { chooseZoom } from "../src/scene/zoom.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -164,5 +165,70 @@ describe("draw recipes", () => {
   it("covers the spooky decoration required by the spec", () => {
     expect(RECIPES["jack_o_lantern_lamp"]).toBeDefined();
     expect(RECIPES["cobweb"]).toBeDefined();
+  });
+});
+
+describe("builder tag and ghost float", () => {
+  it("extracts the session label from Builder speech", () => {
+    expect(sessionLabel("S9 agent-pipeline (auto)")).toBe("S9");
+    expect(sessionLabel("S9B build-crew (auto)")).toBe("S9B");
+    expect(sessionLabel("R agent-pipeline (model)")).toBe("R");
+    expect(sessionLabel("editing a.ts")).toBeNull();
+    expect(sessionLabel("done")).toBeNull();
+    expect(sessionLabel("S")).toBeNull();
+  });
+
+  it("builds the tag name", () => {
+    expect(builderTagName("Builder", "S9")).toBe("Builder S9");
+    expect(builderTagName("Builder", null)).toBe("Builder");
+  });
+
+  it("ghostFrame alternates and honours the offset", () => {
+    expect(ghostFrame(0)).toBe(0);
+    expect(ghostFrame(450)).toBe(1);
+    expect(ghostFrame(900)).toBe(0);
+    expect(ghostFrame(0, 450)).toBe(1);
+  });
+});
+
+describe("ghost staff figure", () => {
+  // Records which drawing calls happen; enough to check the shape is drawn for every view and role.
+  function recorder() {
+    const calls: string[] = [];
+    const chain: Record<string, unknown> = {};
+    for (const m of ["circle", "rect", "ellipse", "poly", "fill", "stroke", "moveTo", "lineTo"]) {
+      chain[m] = (...args: unknown[]) => {
+        calls.push(m + ":" + args.filter((a) => typeof a === "number").join(","));
+        return chain;
+      };
+    }
+    return { g: chain as unknown as import("pixi.js").Graphics, calls };
+  }
+
+  it("draws agents as ghosts (scallops, eyes on front views) and the user as a guest", () => {
+    for (const role of ["architect", "developer", "qa", "builder"] as const) {
+      for (const view of [3, 4, 5, 6, 7] as const) {
+        const { g, calls } = recorder();
+        drawAvatar(g, role, view, 0);
+        expect(calls.filter((c) => c.startsWith("circle")).length).toBeGreaterThanOrEqual(4); // dome + 3 scallops
+        const eyes = calls.filter((c) => c.startsWith("ellipse")).length - 2; // minus shadow and sheen
+        expect(eyes).toBe(view === 3 ? 2 : view === 4 ? 2 : view === 5 ? 1 : 0);
+      }
+    }
+    const { g, calls } = recorder();
+    drawAvatar(g, "user", 3, 0);
+    expect(calls.some((c) => c.startsWith("rect"))).toBe(true);
+    expect(calls.filter((c) => c.startsWith("circle")).length).toBe(1); // hair only: no scallops
+  });
+
+  it("raises the ghost by the bob height on frame 1", () => {
+    const a = recorder();
+    const b = recorder();
+    drawAvatar(a.g, "qa", 3, 0);
+    drawAvatar(b.g, "qa", 3, 1);
+    const topOf = (calls: string[]) => Number(calls.find((c) => c.startsWith("circle"))!.split(":")[1]!.split(",")[1]);
+    expect(topOf(a.calls) - topOf(b.calls)).toBe(GHOST_BOB_PX);
+    expect(GHOST_BOB_PX).toBeGreaterThanOrEqual(2);
+    expect(GHOST_BOB_PX).toBeLessThanOrEqual(3);
   });
 });

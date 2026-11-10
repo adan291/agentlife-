@@ -53,8 +53,52 @@ const VIEWS: Record<DrawnView, ViewSpec> = {
   7: { shift: 0, torsoW: 16, face: false, eyes: [], side: false },
 };
 
-/** Draw one avatar frame with the feet at (0, 0). `frame` 0/1 is the walk animation phase. */
+/** Draw one avatar frame with the feet at (0, 0). `frame` 0/1 is the walk animation phase (ghosts: float phase). */
 export function drawAvatar(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1): void {
+  if (role !== "user") {
+    drawGhost(g, role, view, frame);
+    return;
+  }
+  drawGuest(g, role, view, frame);
+}
+
+/** Pixels a ghost rises on its "up" float frame. */
+export const GHOST_BOB_PX = 3;
+
+/**
+ * The hotel staff: an original floating ghost (rounded head, wavy hem, two eyes), tinted per role.
+ * `frame` 1 is the raised half of the float bob. Directions are the same 5 drawn views as guests;
+ * back views have no eyes.
+ */
+function drawGhost(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1): void {
+  const spec = VIEWS[view];
+  const body = ROLE_COLOURS[role];
+  const lift = frame === 1 ? GHOST_BOB_PX : 0;
+  const hx = spec.shift;
+  const top = -36 - lift; // centre of the head dome
+  const hem = -17 - lift; // where the wavy hem starts
+
+  // Shadow stays on the floor and shrinks slightly while the ghost is raised.
+  g.ellipse(0, -1, 11 - lift / 2, 5 - lift / 4).fill({ color: PALETTE.shadow, alpha: 0.35 - lift * 0.03 });
+
+  const half = 7 + spec.torsoW / 4; // 10.5..11
+  // Body: dome + column + three scallops.
+  g.circle(hx, top, half).fill(body);
+  g.rect(hx - half, top, half * 2, hem - top).fill(body);
+  const r = half / 3;
+  for (const i of [-1, 0, 1]) g.circle(hx + i * 2 * r, hem, r).fill(body);
+  // Shaded side and a light sheen so it reads as rounded.
+  g.rect(hx + half - 4, top, 4, hem - top).fill(shade(body, 0.78));
+  g.circle(hx + 2 * r, hem, r).fill(shade(body, 0.78));
+  g.ellipse(hx - half / 2, top - half / 2, 3, 2).fill({ color: 0xffffff, alpha: 0.35 });
+
+  // Eyes (front and side views only).
+  if (spec.face) {
+    for (const ex of spec.eyes) g.ellipse(hx + ex, top + 1, 1.8, 2.8).fill(PALETTE.eye);
+  }
+}
+
+function drawGuest(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1): void {
   const spec = VIEWS[view];
   const body = ROLE_COLOURS[role];
   const hair = HAIR_COLOURS[role];

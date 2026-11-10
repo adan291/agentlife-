@@ -4,7 +4,7 @@ import type { Dir, Tile } from "@agentlife/shared";
 import type { RoleKey } from "../palette.ts";
 import { viewFor } from "./figure.ts";
 import type { SpriteProvider } from "./textures.ts";
-import { poseAt, walkFrame } from "./walk-anim.ts";
+import { ghostFrame, poseAt, walkFrame } from "./walk-anim.ts";
 import type { WalkState } from "./walk-anim.ts";
 
 /** One avatar: a sprite whose tile position, facing and walk cycle follow the server's walk messages. */
@@ -16,6 +16,8 @@ export class AvatarView {
   private tile: Tile;
   private dir: Dir;
   private walk: WalkState | null = null;
+  /** Keeps ghosts from bobbing in unison. */
+  private readonly bobOffset: number;
 
   constructor(
     readonly id: number | string,
@@ -25,6 +27,7 @@ export class AvatarView {
     dir: number,
   ) {
     this.tile = tile;
+    this.bobOffset = typeof id === "string" ? [...id].reduce((n, c) => n + c.charCodeAt(0), 0) * 37 : 0;
     this.dir = (((dir % 8) + 8) % 8) as Dir;
     this.update(Date.now());
   }
@@ -64,7 +67,7 @@ export class AvatarView {
       }
     }
     const { view, mirror } = viewFor(this.dir);
-    const frame = this.sprites.avatar(this.role, view, moving ? walkFrame(now) : 0);
+    const frame = this.sprites.avatar(this.role, view, this.role === "user" ? (moving ? walkFrame(now) : 0) : ghostFrame(now, this.bobOffset));
     this.sprite.texture = frame.texture;
     this.sprite.anchor.set(frame.anchor.x, frame.anchor.y);
     this.sprite.scale.x = mirror ? -1 : 1;

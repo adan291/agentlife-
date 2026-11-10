@@ -18,27 +18,18 @@ export class AvatarOverlay {
   private readonly badgeText = label("", 10, PALETTE.text);
   private readonly badgeBg = new Graphics();
   private readonly bubble = new Container();
+  private readonly tag = new Container();
   private bubbleUntil = 0;
   private state: AgentState | null = null;
 
   constructor(
-    name: string,
-    colour: number,
+    private name: string,
+    private readonly colour: number,
     private readonly sprites: SpriteProvider,
     hasStatus: boolean,
   ) {
-    const tag = new Container();
-    const text = label(name, 11, colour);
-    const padX = 6;
-    const padY = 2;
-    const bg = new Graphics()
-      .roundRect(0, 0, text.width + padX * 2, text.height + padY * 2, 4)
-      .fill({ color: PALETTE.tagBg, alpha: 0.9 })
-      .stroke({ color: colour, width: 1, alpha: 0.8 });
-    text.position.set(padX, padY);
-    tag.addChild(bg, text);
-    tag.position.set(-bg.width / 2, -66 - bg.height / 2);
-    this.container.addChild(tag);
+    this.container.addChild(this.tag);
+    this.drawTag();
 
     if (hasStatus) {
       this.badgeRow.position.set(0, -84);
@@ -49,6 +40,27 @@ export class AvatarOverlay {
     }
     this.bubble.visible = false;
     this.container.addChild(this.bubble);
+  }
+
+  private drawTag(): void {
+    for (const c of this.tag.removeChildren()) c.destroy({ children: true });
+    const text = label(this.name, 11, this.colour);
+    const padX = 6;
+    const padY = 2;
+    const bg = new Graphics()
+      .roundRect(0, 0, text.width + padX * 2, text.height + padY * 2, 4)
+      .fill({ color: PALETTE.tagBg, alpha: 0.9 })
+      .stroke({ color: this.colour, width: 1, alpha: 0.8 });
+    text.position.set(padX, padY);
+    this.tag.addChild(bg, text);
+    this.tag.position.set(-bg.width / 2, -66 - bg.height / 2);
+  }
+
+  /** Change the name tag text (the Builder shows its session label). */
+  setName(name: string): void {
+    if (name === this.name) return;
+    this.name = name;
+    this.drawTag();
   }
 
   /** Update the badge icon and short text. Takes effect on the next frame at the latest. */

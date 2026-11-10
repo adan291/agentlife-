@@ -124,6 +124,29 @@ describe("WorldSim", () => {
     expect(sim.handleAgentEvent({ ...base(), type: "task.completed" })).toEqual([]);
   });
 
+  it("builder crew events walk the Builder to its desk and back home", () => {
+    const { sim, advance } = makeSim();
+    sim.join();
+    const desk = resolveAnchor(room, "desk", "builder")!;
+    const home = resolveAnchor(room, "home", "builder")!;
+    expect(sim.tileOf("builder")).toEqual({ x: home.x, y: home.y });
+
+    const to = sim.handleAgentEvent({ ...base(), taskId: "build:S9", type: "agent.goto", agentId: "builder", anchor: "desk" });
+    expect(to[0]).toMatchObject({ type: "walk", id: "builder" });
+    advance(100 * 100);
+    sim.dueMessages();
+    expect(sim.tileOf("builder")).toEqual({ x: desk.x, y: desk.y });
+    expect(
+      sim.handleAgentEvent({ ...base(), taskId: "build:S9", type: "agent.state_changed", agentId: "builder", state: "working", text: "S9" }),
+    ).toEqual([{ type: "agent_state", agentId: "builder", state: "working", text: "S9" }]);
+
+    const back = sim.handleAgentEvent({ ...base(), taskId: "build:S9", type: "agent.goto", agentId: "builder", anchor: "home" });
+    expect(back[0]).toMatchObject({ type: "walk", id: "builder" });
+    advance(100 * 100);
+    sim.dueMessages();
+    expect(sim.tileOf("builder")).toEqual({ x: home.x, y: home.y });
+  });
+
   it("property: every avatar always stands on a walkable tile", () => {
     const itemIds = [...room.furni.map((f) => f.itemId), "missing"];
     const anchors = ["desk", "board", "computer", "mailbox", "door", "home"] as const;

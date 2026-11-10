@@ -5,6 +5,7 @@ import type { AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@age
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 import { AvatarView } from "./avatar-view.ts";
+import { builderTagName, sessionLabel } from "./crew-label.ts";
 import { FurniView } from "./furni-view.ts";
 import { AvatarOverlay } from "./overlay.ts";
 import { pickFurni } from "./pick.ts";
@@ -85,10 +86,15 @@ export class WorldView {
         break;
       case "agent_state":
         this.avatars.get(msg.agentId)?.overlay.setState(msg.state, msg.text);
+        if (msg.agentId === "builder" && msg.state === "idle") this.avatars.get("builder")?.overlay.setName(builderTagName("Builder", null));
         break;
-      case "say":
-        this.avatars.get(msg.id)?.overlay.say(msg.text, now);
+      case "say": {
+        const entry = this.avatars.get(msg.id);
+        entry?.overlay.say(msg.text, now);
+        const label = msg.id === "builder" ? sessionLabel(msg.text) : null;
+        if (label) entry?.overlay.setName(builderTagName("Builder", label));
         break;
+      }
       case "error":
         this.hooks.onError?.(msg.code, msg.message);
         break;
