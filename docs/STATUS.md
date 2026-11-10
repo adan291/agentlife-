@@ -23,6 +23,7 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
+| room-fixes | 0 / 3 | — | Bugfix spec: reconnect loop with two clients (code 4000), room not fitted to the free viewport, Builder row. S10D |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
