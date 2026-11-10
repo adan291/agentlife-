@@ -13,3 +13,4 @@ export * from "./events.ts";
 export * from "./protocol.ts";
 export * from "./engine-api.ts";
 export * from "./crew.ts";
+export * from "./sanitize.ts";

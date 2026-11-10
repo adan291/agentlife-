@@ -1,5 +1,6 @@
 import { ROLE_INFO } from "@agentlife/shared";
 import type { AgentId, AgentState } from "@agentlife/shared";
+import { UI_COLOURS } from "./theme.ts";
 
 export const DWELL_MS = 300;
 const MARGIN = 8;
@@ -15,6 +16,8 @@ export interface TooltipContent {
 export interface HoverSink {
   /** Pointer rests on `key` at viewport position (x, y). The tooltip shows after the dwell time. */
   hover(key: string, x: number, y: number, content: () => TooltipContent): void;
+  /** Shows the tooltip at once and hides it after `ms` (team bar click). Any `hide()` or `hover()` of another target cancels it. */
+  pin(key: string, x: number, y: number, content: () => TooltipContent, ms: number): void;
   hide(): void;
 }
 
@@ -39,9 +42,9 @@ export function agentTooltip(id: AgentId, state: AgentState | undefined, text: s
 }
 
 const CSS = `
-.al-tooltip { position: fixed; z-index: 30; max-width: 260px; pointer-events: none; background: #14101f; color: #e8e0ff; border: 1px solid #ff8a1f; border-radius: 4px; padding: 6px 10px; font: 12px/1.4 monospace; box-sizing: border-box; }
+.al-tooltip { position: fixed; z-index: 30; max-width: min(340px, 90vw); pointer-events: none; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 6px 10px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-tooltip[hidden] { display: none; }
-.al-tooltip b { display: block; color: #ffb347; margin-bottom: 2px; }
+.al-tooltip b { display: block; color: ${UI_COLOURS.accentText}; margin-bottom: 2px; }
 .al-tooltip span { display: block; overflow-wrap: anywhere; }
 `;
 
@@ -59,6 +62,7 @@ export function createTooltip(): HoverSink {
   let key: string | null = null;
   let shown = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let pinTimer: ReturnType<typeof setTimeout> | undefined;
   let pos = { x: 0, y: 0 };
   let content: (() => TooltipContent) | null = null;
 
@@ -85,7 +89,9 @@ export function createTooltip(): HoverSink {
 
   const hide = () => {
     clearTimeout(timer);
+    clearTimeout(pinTimer);
     timer = undefined;
+    pinTimer = undefined;
     key = null;
     content = null;
     shown = false;
@@ -94,11 +100,15 @@ export function createTooltip(): HoverSink {
 
   return {
     hover(k, x, y, c) {
+      // A pinned tooltip (team bar click) stays until its time is up, unless the pointer goes to another target.
+      if (pinTimer !== undefined && k === key) return;
       pos = { x, y };
       content = c;
       if (k !== key) {
         // Pointer moved to another target: restart the dwell.
         clearTimeout(timer);
+        clearTimeout(pinTimer);
+        pinTimer = undefined;
         key = k;
         shown = false;
         el.hidden = true;
@@ -108,6 +118,14 @@ export function createTooltip(): HoverSink {
       if (shown) {
         render(); // refresh live text (agent state) and follow the pointer
       }
+    },
+    pin(k, x, y, c, ms) {
+      hide();
+      key = k;
+      pos = { x, y };
+      content = c;
+      render();
+      pinTimer = setTimeout(hide, ms);
     },
     hide,
   };

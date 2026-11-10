@@ -1,4 +1,5 @@
 import type http from "node:http";
+import { createActivityEmitter } from "./activity.ts";
 import { loadConfig, type EngineConfig } from "./config.ts";
 import { installAgents, ROLES } from "./agents.ts";
 import { dataPaths } from "./paths.ts";
@@ -82,6 +83,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const store =
     opts.store ?? new Store({ ...(opts.dataDir ? { runsDir: paths.runs } : {}), ...opts.storeOptions });
   let steps = opts.steps;
+  const activity = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
   if (!steps) {
     const real = usesRealPipeline(config);
     if (real) {
@@ -90,8 +92,8 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     }
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger })
-      : createRuntimeSteps({ runtimes, store, logger });
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger, activity })
+      : createRuntimeSteps({ runtimes, store, logger, activity });
   }
   const ambient =
     opts.ambient ??
@@ -103,6 +105,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     steps,
     limits: config.limits,
     logger,
+    activity,
     ...(ambient ? { ambient } : {}),
     ...(opts.reportTimeoutMs ? { reportTimeoutMs: opts.reportTimeoutMs } : {}),
   });

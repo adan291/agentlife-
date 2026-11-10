@@ -33,28 +33,54 @@ function relayHarness() {
 }
 
 const summary = (e: NewEvent) =>
-  e.type === "agent.goto" ? `goto:${e.anchor}` : e.type === "agent.state_changed" ? `state:${e.state}` : e.type === "agent.say" ? `say:${e.text}` : e.type;
+  e.type === "agent.goto"
+    ? `goto:${e.anchor}`
+    : e.type === "agent.state_changed"
+      ? `state:${e.state}`
+      : e.type === "agent.say"
+        ? `say:${e.text}`
+        : e.type === "agent.activity"
+          ? `act:${e.text}`
+          : e.type;
 
 describe("crew relay", () => {
   it("maps started, activity and finished to builder agent events", () => {
     const { relay, out, advance } = relayHarness();
     relay.handle({ kind: "started", session: "S9", spec: "agent-pipeline", model: "auto" });
-    expect(out.map(summary)).toEqual(["goto:desk", "state:working", "say:S9 agent-pipeline (auto)"]);
+    expect(out.map(summary)).toEqual([
+      "goto:desk",
+      "state:working",
+      "say:S9 agent-pipeline (auto)",
+      "act:Started S9 agent-pipeline (auto)",
+    ]);
     expect(out.every((e) => e.taskId === "build:S9" && "agentId" in e && e.agentId === "builder")).toBe(true);
 
     out.length = 0;
     advance(5000);
     relay.handle({ kind: "activity", session: "S9", activity: "think" });
     relay.handle({ kind: "activity", session: "S9", activity: "edit", text: "editing a.ts" });
-    expect(out.map(summary)).toEqual(["state:thinking", "state:working", "say:editing a.ts"]);
+    expect(out.map(summary)).toEqual(["state:thinking", "state:working", "say:editing a.ts", "act:editing a.ts"]);
 
     out.length = 0;
     relay.handle({ kind: "finished", session: "S9", ok: true });
-    expect(out.map(summary)).toEqual(["say:done", "state:done", "goto:home", "state:idle"]);
+    expect(out.map(summary)).toEqual(["say:done", "act:Finished S9", "state:done", "goto:home", "state:idle"]);
 
     out.length = 0;
     relay.handle({ kind: "finished", session: "S9", ok: false });
-    expect(out.map(summary)).toEqual(["say:failed", "state:error", "goto:home", "state:idle"]);
+    expect(out.map(summary)).toEqual(["say:failed", "act:Failed S9", "state:error", "goto:home", "state:idle"]);
+  });
+
+  it("emits at most one activity line per second for builder activity", () => {
+    const { relay, out, advance } = relayHarness();
+    const act = (text: string): CrewEvent => ({ kind: "activity", session: "S1", activity: "edit", text });
+    relay.handle(act("editing a.ts"));
+    advance(300);
+    relay.handle(act("editing b.ts"));
+    advance(300);
+    relay.handle(act("editing c.ts"));
+    advance(500);
+    relay.handle(act("editing d.ts"));
+    expect(out.filter((e) => e.type === "agent.activity").map(summary)).toEqual(["act:editing a.ts", "act:editing d.ts"]);
   });
 
   it("emits at most one say per 3 s for activity updates but still updates the state", () => {

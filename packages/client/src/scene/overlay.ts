@@ -1,13 +1,12 @@
 import { Container, Graphics, Sprite, Text } from "pixi.js";
 import type { AgentState } from "@agentlife/shared";
 import { PALETTE } from "../palette.ts";
+import { bubbleTextStyle, labelStyle } from "./label-style.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { bubbleDurationMs, shortStatus } from "./timing.ts";
 
-const FONT = "monospace";
-
 function label(text: string, size: number, fill: number): Text {
-  return new Text({ text, style: { fontFamily: FONT, fontSize: size, fill, fontWeight: "bold" }, resolution: 2 });
+  return new Text({ text, style: labelStyle(size, fill), resolution: 2 });
 }
 
 /** Name tag, status badge and speech bubble that float above one avatar. */
@@ -15,7 +14,7 @@ export class AvatarOverlay {
   readonly container = new Container();
   private readonly badgeRow = new Container();
   private readonly badgeSprite = new Sprite();
-  private readonly badgeText = label("", 10, PALETTE.text);
+  private readonly badgeText = label("", 11, PALETTE.text);
   private readonly badgeBg = new Graphics();
   private readonly bubble = new Container();
   private readonly tag = new Container();
@@ -33,7 +32,7 @@ export class AvatarOverlay {
 
     if (hasStatus) {
       this.badgeRow.position.set(0, -84);
-      this.badgeText.position.set(10, -6);
+      this.badgeText.position.set(10, -7);
       this.badgeRow.addChild(this.badgeBg, this.badgeSprite, this.badgeText);
       this.badgeRow.visible = false;
       this.container.addChild(this.badgeRow);
@@ -84,17 +83,7 @@ export class AvatarOverlay {
 
   say(text: string, now: number): void {
     this.bubble.removeChildren().forEach((c) => c.destroy({ children: true }));
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: FONT,
-        fontSize: 11,
-        fill: PALETTE.bubbleText,
-        wordWrap: true,
-        wordWrapWidth: 170,
-      },
-      resolution: 2,
-    });
+    const t = new Text({ text, style: bubbleTextStyle(11, 170), resolution: 2 });
     const padX = 8;
     const padY = 5;
     const w = t.width + padX * 2;

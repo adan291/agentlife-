@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (room-hints tasks 1–5 done)
+Updated: 2026-11-11 (room-ux tasks 1–5 done)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -22,7 +22,7 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 | agent-pipeline | 11 / 13 | main | Live run 1 OK (~70 s per job: analyze 29 s, develop 17 s, tests 1.5 s, review 19 s). Run 2 waiting for approval. Next: run 3, then task 13 (export demo run) |
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
-| room-ux | 0 / 5 | — | Team bar, job stepper, your-turn toast, live activity terminal, readability. S10C (Sonnet 5.5) |
+| room-ux | 5 / 5 | feat/room-ux | Done on the branch, not merged. Browser look pending (user). S10C |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
@@ -39,6 +39,15 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- room-ux (branch `feat/room-ux`, tasks 1–5 done, `pnpm check` and `vite build` pass; decisions in the spec's design.md under "Decisions made while implementing"). Nothing was looked at in a browser. User to check with `RUNTIME=fake` engine or the world-server's fake engine (the fake engine now emits activity lines too):
+  - Team bar (left): four rows with model, state, last activity, elapsed time; working/thinking rows highlighted with a bobbing icon; click a row: camera pans to the agent, tooltip for 2 s, camera returns after 3 s; collapse button.
+  - Stepper (top centre): appears with the first job, steps Plan / Approve / Build / Test / Review / Report with durations; "Your turn" on Approve is a button that opens the mailbox without walking; failed or rejected jobs show a red step. Reload during a job: the stepper comes back (the world-server now sends `job_update` after `welcome`).
+  - Toast under the stepper when a plan waits: "The Architect's plan is ready..." + Open mailbox; hides when the mailbox opens, returns if it is closed while pending; tab title "(1) AGENT LIFE". It replaces the old HUD line "Plan waiting for your approval".
+  - Terminal (bottom): lines `HH:MM:SS  Role  text`, filter by agent, Hide/Show, drag the thin bar on top to resize, auto-scroll stops when you scroll up, reload keeps the last 50 lines. In a live run it shows Architect/Developer/QA tool calls (`Reading: src/...`), plan/approval/test lines and Builder lines during `pnpm session`.
+  - Readability: A−/A+ in the HUD (12 to 18 px, remembered), wider centred panels, diff colouring in the report, name tags and badges at 11 px with a dark outline.
+  - Not verified live: real kiro-cli `progress` text through the terminal (only unit tests with scripted runtimes). If the lines look noisy, tune `MAX_PROGRESS_CHARS`/mapping in `runtimes/kiro-cli.ts` `progressFor`.
+  - Known gap: the Builder row has no model (welcome only carries role models).
+  - Pending: merge to main.
 - Live run 2/3, task-f29edbb9 on 2026-11-10: goal 'Add tests for the untested summarize function'; analyze 25 s, develop 19 s, tests 1.4 s (11 passed, 1 skipped), review 20 s; QA pass; delivered. Durations now recorded. User feedback: mailbox attention, readability, activity terminal and who-is-working are missing -> spec room-ux.
 - room-hints (branch `feat/room-hints`, tasks 1–5 done, `pnpm check` and `vite build` pass; decisions in the spec's design.md): the client changes have not been looked at in a browser. User to check: hover computer/mailbox/board (tooltip after 300 ms, glow pulse, stronger on hover); hover each ghost (role line, state, model; model shows "fake" with RUNTIME=fake, real names otherwise, and only after a reload if the engine started after the world-server); mailbox badge with count while a plan waits, dot after a report until the mailbox is opened, HUD line "Plan waiting for your approval"; guide card on first load (clear localStorage `agentlife-guide-seen` to see it again), "?" button, Esc. Step durations: the engine now writes `durationMs` per step; confirm in live run 2 that the report shows real times (the report step's own line has none). Pending: merge to main.
 - Live run 1/3 (agent-pipeline task 12), task-22799857 on 2026-11-10: real Architect found the 3 seeded issues in ~30 s; user approved in the mailbox; Developer fixed isOverdue (<= to <) and unskipped its test (2 files); Docker tests 8/8; QA pass; report delivered. Defect (step durations 0 s): addressed in room-hints task 1, to confirm live.

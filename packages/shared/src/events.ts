@@ -31,6 +31,8 @@ export type JobState = z.infer<typeof JobStateSchema>;
 export const ApprovalDecisionSchema = z.enum(["approve", "reject"]);
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
 
+export const ACTIVITY_TEXT_MAX = 80;
+
 const base = {
   seq: z.number().int().nonnegative(),
   /** Epoch milliseconds. */
@@ -59,6 +61,8 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({ ...agentBase, type: z.literal("agent.goto"), anchor: SemanticAnchorSchema }),
   z.object({ ...agentBase, type: z.literal("agent.say"), text: z.string().min(1).max(300) }),
+  /** One line of the activity terminal. Text is sanitised (no paths, no secrets) and at most 80 chars. */
+  z.object({ ...agentBase, type: z.literal("agent.activity"), text: z.string().min(1).max(ACTIVITY_TEXT_MAX) }),
   z.object({
     ...optAgentBase,
     type: z.literal("artifact.created"),
