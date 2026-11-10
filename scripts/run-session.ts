@@ -60,7 +60,7 @@ function blockerSince(startRef: string): string | null {
   // Only lines this session added to STATUS.md, so an old, already-resolved blocker does not count.
   const added = run("git", ["diff", "-U0", `${startRef}..HEAD`, "--", "docs/STATUS.md"]).out
     .split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
-  const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b/.test(l));
+  const line = [...msgs.split("\n"), ...added].find((l) => /\bBLOCK(ER|ED)\b|\bblocker\b|\bFAILED\b|check failed|not marked done/.test(l));
   return line ? line.trim().slice(0, 300) : null;
 }
 
