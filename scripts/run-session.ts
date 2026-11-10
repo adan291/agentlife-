@@ -101,6 +101,14 @@ function preflight(s: Session, models: Set<string>): void {
   }
   const status = run("git", ["status", "--porcelain"]);
   if (status.out.trim() !== "") fail("working tree has uncommitted changes; commit or stash them first.");
+  // Start every session from main: the builder creates or switches to feat/<spec> itself, and a
+  // feature branch may carry an older copy of this runner and of the agent configs.
+  const branch = run("git", ["branch", "--show-current"]).out.trim();
+  if (branch !== "main") {
+    if (run("git", ["switch", "main"]).code !== 0) fail(`could not switch from ${branch} to main`);
+    console.log(`[session] switched from ${branch} to main; restart with the same command so the main copy of this script runs.`);
+    process.exit(2);
+  }
 }
 
 function kiroArgs(agent: string, model: string, effort: string, prompt: string, headless: boolean): string[] {
@@ -126,7 +134,7 @@ function snapshotNotify(): void {
 /** Best-effort Discord message via scripts/notify.ts (no Kiro credits). Never fails the session. */
 function notify(text: string): void {
   if (process.env.AGENTLIFE_NOTIFY === "0" || !existsSync(NOTIFY_COPY)) return;
-  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", NOTIFY_COPY, text], { cwd: ROOT, encoding: "utf8", windowsHide: true, env: { ...process.env, AGENTLIFE_ROOT: ROOT } });
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", NOTIFY_COPY, "--auto", text], { cwd: ROOT, encoding: "utf8", windowsHide: true, env: { ...process.env, AGENTLIFE_ROOT: ROOT } });
   if (r.status !== 0) console.warn(`[session] Discord notification skipped: ${(r.stderr ?? "").trim()}`);
 }
 

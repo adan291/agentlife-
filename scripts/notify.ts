@@ -2,6 +2,8 @@
 //
 //   pnpm notify "text"     post the text as-is
 //   add --dry-run to print instead of posting
+//   add --auto for automatic messages: skipped while the user is at the PC (see presence below)
+//   pnpm notify --here | --away   set presence by hand
 //   pnpm notify --status   post a status summary: task counts and dates are computed here,
 //                          the short narrative is written by local Ollama (skipped if Ollama is down)
 //
@@ -11,7 +13,7 @@
 // The token is only sent to discord.com and is never printed.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,10 +140,39 @@ async function statusMessage(): Promise<string> {
   ].join("\n");
 }
 
+// Presence = where the user last wrote from. A Kiro IDE hook writes "here" on every prompt in this
+// workspace; Kiro Crew's steering writes "away" on every Discord turn (pnpm notify --away).
+const PRESENCE = join(ROOT, "data", "presence.json");
+
+function setPresence(mode: "here" | "away"): void {
+  mkdirSync(dirname(PRESENCE), { recursive: true });
+  writeFileSync(PRESENCE, JSON.stringify({ mode, ts: Date.now() }));
+}
+
+function presence(): "here" | "away" {
+  try {
+    return (JSON.parse(readFileSync(PRESENCE, "utf8")) as { mode?: string }).mode === "here" ? "here" : "away";
+  } catch {
+    return "away"; // unknown: better an unneeded DM than a missed one
+  }
+}
+
 async function main(): Promise<void> {
   const all = process.argv.slice(2);
+  if (all[0] === "--here" || all[0] === "--away") {
+    setPresence(all[0] === "--here" ? "here" : "away");
+    console.log(`[notify] presence: ${all[0].slice(2)}`);
+    return;
+  }
   const dryRun = all.includes("--dry-run");
-  const args = all.filter((a) => a !== "--dry-run");
+  // --auto: automatic message (session finished). Sent only when the user is away; at the PC the
+  // result is reported in the Kiro chat instead.
+  const auto = all.includes("--auto");
+  const args = all.filter((a) => a !== "--dry-run" && a !== "--auto");
+  if (auto && presence() === "here") {
+    console.log("[notify] user is at the PC (last message from Kiro IDE); Discord not used");
+    return;
+  }
   const text = args[0] === "--status" ? await statusMessage() : args.join(" ").trim();
   if (dryRun) {
     console.log(text);
