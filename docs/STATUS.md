@@ -20,7 +20,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
 | agent-pipeline | 10 / 13 | feat/agent-pipeline | S8 + S9 done (fixture, agents, runtime, analyze, develop, Docker runner, review, report). Next: S10 live runs (user present) |
-| build-crew | 0 / 5 | — | New: Builder ghost mirrors build sessions in the room. S9B (tasks 1–4) after S9 |
+| build-crew | 4 / 5 | feat/build-crew | Tasks 1-4 done (builder agent + desk, `POST /crew/events` relay, runner reporting via scripts/crew-map.ts, ghost staff in the client). Left: task 5 manual check with engine + world-server + client and a real `pnpm session` run (user present) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
@@ -37,6 +37,7 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- build-crew notes: `AgentId` now includes `builder`; the engine runtimes use `Role = Exclude<AgentId, "builder">`. Root `pnpm check` now also typechecks `scripts/crew-map.ts` + tests (`scripts/tsconfig.json`) and runs `vitest --root scripts`; `run-session.ts` itself is not typechecked. `started`/`finished` Builder speech bypasses the 3 s throttle (design.md). Reporting is on by default; `AGENTLIFE_CREW=0` disables it. Client/office changes (ghost figures, builder desk at tile 11,6) have not been looked at in a browser yet (task 5).
 - Decided in agent-engine task 6 (recorded in the spec's design.md): the transition table gained `created -> failed`, `awaiting_plan_approval -> failed` and `reviewing -> failed` (review timeout and restart recovery, as recommended). Other conventions: plan rejection and cancel end in `cancelled` with no report; a step error or timeout ends `failed -> report_ready -> delivered` with a failure report; `report_ready`/`failed` are not cancellable (409). Not in risks-and-decisions.md because it is not architectural.
 - agent-engine e2e check (agent-engine task 10): done with an in-process script (real engine + HttpEngineLink + gateway + WebSocket client, fake runtime): start_job -> approval -> approve -> delivered + report in ~1.3 s with 150 ms fake delay. Running the engine and world-server as two background processes from the unattended shell did not stay up, so the two-process run and the browser run are still for the user.
 - Gateway change made in task 10: `jobActive` is cleared when the current task reaches `cancelled` or `delivered` (the real engine does not send task.failed/completed after a rejected plan, which would have left the UI on "Job running...").
