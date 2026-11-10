@@ -19,7 +19,7 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 |---|---|---|---|
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 11 / 13 | feat/agent-pipeline-wire | Tasks 1–11 done. Task 11 on branch `feat/agent-pipeline-wire` (not merged; `feat/agent-pipeline` is stale, behind main, and could not be merged or reset from the unattended session). Next: S10 live runs (tasks 12–13, with the user) |
+| agent-pipeline | 11 / 13 | main | Tasks 1–11 done and merged. Engine runs real kiro-cli roles (architect/qa claude-haiku-5.5, developer auto; ambient lines from local Ollama). Next: live runs with the user (tasks 12–13) |
 | build-crew | 4 / 5 | main | Tasks 1–4 done and merged (ghost staff, Builder, crew events). Task 5: manual check during S10 |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
