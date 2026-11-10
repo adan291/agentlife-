@@ -1,5 +1,25 @@
 # Roadmap de sesiones, prompts y modelos
 
+## Modo automático (recomendado)
+
+El plan de modelos está en `scripts/sessions.json` y lo ejecuta `scripts/run-session.ts` con `kiro-cli`, usando el agente `agentlife-builder`:
+
+```powershell
+pnpm session list              # sesiones y estado
+pnpm session next --dry-run    # ver qué se va a ejecutar, sin gastar
+pnpm session next              # ejecutar la siguiente con su modelo y effort
+pnpm session next --review     # y después la revisión con agentlife-reviewer (Haiku)
+```
+
+- Fija `--model` y `--effort` de cada sesión. Si tu cuenta no tiene ese modelo, **se detiene antes de gastar** y no lo sustituye por otro.
+- Se niega a arrancar con cambios sin commit.
+- Al terminar ejecuta `pnpm check` y apunta el resultado en `docs/session-log.md`. `next` salta las sesiones marcadas como `ok`.
+- Si una sesión falla, no sigas con la siguiente: lee `docs/STATUS.md` y usa la sesión X (rescate).
+- S10 es interactiva (ejecuciones en vivo contigo): el script abre un chat normal con su modelo.
+- Para cambiar un modelo, edita `scripts/sessions.json`, no este documento.
+
+Las tablas siguientes explican el porqué de cada elección y sirven para trabajar a mano desde el IDE.
+
 Cada sesión es una conversación **nueva** de Kiro. El repositorio es la memoria: el steering `workflow.md` hace que cada sesión lea `docs/STATUS.md` al empezar y lo actualice al terminar. Copia los prompts tal cual.
 
 ## Cómo ahorrar créditos
@@ -110,7 +130,7 @@ Durante el desarrollo, usa `RUNTIME=fake` (sin coste). Ejecuta agentes reales so
 | 30 nov – 3 dic | Grabar el vídeo (menos de 3 min) y subirlo a YouTube como público |
 | Antes del 3 dic | Rellenar Devpost: categoría Resurrection, URL de la demo, repositorio, vídeo y write-up |
 
-**Nota sobre cuentas:** `kiro-cli` tiene sesión iniciada con Google (`<email>`) y solo ve los modelos del plan Free (Auto, Sonnet 4.5, Haiku 4.5 y los baratos). No ve Opus. Si los créditos del hackathon están en otra cuenta, inicia sesión en `kiro-cli` con esa cuenta antes de S2. Si no, los agentes del producto gastarán de la cuenta Free, que tiene 50 créditos al mes.
+**Nota sobre cuentas:** `kiro-cli` debe tener la sesión iniciada con la misma cuenta que el IDE, que es la que tiene los créditos del hackathon. Compruébalo con `kiro-cli whoami`. Si `kiro-cli chat --list-models` solo muestra los modelos del plan Free (sin Opus), está en otra cuenta.
 
 ## Kiro Crew + Discord (opcional)
 

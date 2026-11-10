@@ -1,0 +1,16 @@
+{
+  "name": "agentlife-builder",
+  "description": "Unattended implementer for AGENT LIFE spec tasks. Used by scripts/run-session.ts, which passes the model and effort per session.",
+  "prompt": "file://./prompts/agentlife-builder.md",
+  "tools": ["read", "write", "shell"],
+  "permissions": {
+    "rules": [
+      { "capability": "fs_read", "match": ["**"], "effect": "allow" },
+      { "capability": "fs_write", "match": ["packages/**", "fixtures/**", "docs/**", "scripts/**", ".kiro/specs/**", ".github/workflows/**", "*.md", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json", ".gitignore"], "effect": "allow" },
+      { "capability": "fs_write", "match": [".env", ".env.*", "**/.env", "**/.env.*", "data/**", ".kiro/steering/**", "LICENSE"], "effect": "deny" },
+      { "capability": "shell", "match": ["pnpm *", "node *", "npx vitest *", "npx tsc *", "docker build *", "docker images*", "docker info*", "git status*", "git diff*", "git log*", "git show*", "git add *", "git commit *", "git switch *", "git checkout -b *", "git branch*", "git rev-parse *", "git worktree *", "kiro-cli chat *", "kiro-cli agent *", "kiro-cli whoami*"], "effect": "allow" },
+      { "capability": "shell", "match": ["git push*", "git merge*", "git rebase*", "git reset*", "git clean*", "git branch -D*", "git branch -d*", "git config*", "pnpm publish*", "npm publish*", "Remove-Item *", "rm *", "del *", "rmdir *"], "effect": "deny" }
+    ]
+  },
+  "resources": ["file://.kiro/steering/**/*.md"]
+}

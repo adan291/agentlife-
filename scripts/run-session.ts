@@ -1,0 +1,172 @@
+// Runs one planned Kiro session unattended with the model and effort fixed in scripts/sessions.json.
+//
+//   pnpm session next            run the first session not yet completed
+//   pnpm session S3              run a specific session
+//   pnpm session S3 --dry-run    print the command without running it
+//   pnpm session S3 --review     also run the read-only reviewer afterwards
+//   pnpm session list            show sessions and their status
+//
+// The model is never downgraded or upgraded: if the planned model is not available to the
+// logged-in account, the run stops before spending anything.
+
+import { spawn, spawnSync } from "node:child_process";
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+interface Session {
+  id: string;
+  spec: string;
+  model: string;
+  effort: "low" | "medium" | "high" | "xhigh" | "max";
+  prompt: string;
+  interactive?: boolean;
+}
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const PLAN = join(ROOT, "scripts", "sessions.json");
+const LOG = join(ROOT, "docs", "session-log.md");
+const RUNS = join(ROOT, "data", "sessions");
+const BUILDER = "agentlife-builder";
+const REVIEWER = "agentlife-reviewer";
+const REVIEWER_MODEL = "claude-haiku-4.5";
+
+function fail(msg: string): never {
+  console.error(`\n[session] ${msg}`);
+  process.exit(1);
+}
+
+function loadPlan(): Session[] {
+  const raw = JSON.parse(readFileSync(PLAN, "utf8")) as { sessions?: Session[] };
+  if (!Array.isArray(raw.sessions)) fail("scripts/sessions.json has no sessions array");
+  return raw.sessions;
+}
+
+function completedIds(): Set<string> {
+  if (!existsSync(LOG)) return new Set();
+  const done = new Set<string>();
+  for (const line of readFileSync(LOG, "utf8").split("\n")) {
+    const m = /^\| (S\d+) \|.*\| ok \|/.exec(line);
+    if (m?.[1]) done.add(m[1]);
+  }
+  return done;
+}
+
+function recordRun(s: Session, status: "ok" | "failed", minutes: number, logFile: string): void {
+  if (!existsSync(LOG)) {
+    writeFileSync(LOG, "# Session log\n\nWritten by scripts/run-session.ts.\n\n| Session | Date | Model | Effort | Minutes | Status | Raw log |\n|---|---|---|---|---|---|---|\n");
+  }
+  const date = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const rel = logFile.slice(ROOT.length + 1).replaceAll("\\", "/");
+  appendFileSync(LOG, `| ${s.id} | ${date} | ${s.model} | ${s.effort} | ${minutes.toFixed(1)} | ${status} | ${rel} |\n`);
+}
+
+function run(cmd: string, args: string[]): { code: number; out: string } {
+  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", windowsHide: true });
+  if (r.error) fail(`could not run ${cmd}: ${r.error.message}`);
+  return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+}
+
+function availableModels(): Set<string> {
+  const r = run("kiro-cli", ["chat", "--list-models", "--format", "json"]);
+  const start = r.out.indexOf("{");
+  if (r.code !== 0 || start < 0) fail(`kiro-cli --list-models failed:\n${r.out}`);
+  const data = JSON.parse(r.out.slice(start)) as { models: { model_id: string }[] };
+  return new Set(data.models.map((m) => m.model_id));
+}
+
+function preflight(s: Session, models: Set<string>): void {
+  if (!models.has(s.model)) {
+    fail(
+      `${s.id} is planned for model "${s.model}", which this account cannot use.\n` +
+        `Available: ${[...models].join(", ")}\n` +
+        `Not substituting another model. Log in with the account that has the credits (kiro-cli logout; kiro-cli login) or change the plan in scripts/sessions.json.`,
+    );
+  }
+  const status = run("git", ["status", "--porcelain"]);
+  if (status.out.trim() !== "") fail("working tree has uncommitted changes; commit or stash them first.");
+}
+
+function kiroArgs(agent: string, model: string, effort: string, prompt: string, headless: boolean): string[] {
+  const args = ["chat", "--v3", "--agent", agent, "--model", model, "--effort", effort];
+  if (headless) args.push("--no-interactive", "--output-format", "stream-json");
+  args.push(prompt);
+  return args;
+}
+
+function quote(a: string): string {
+  return /[\s"]/.test(a) ? `"${a.replaceAll('"', '\\"')}"` : a;
+}
+
+async function runHeadless(label: string, args: string[], logFile: string): Promise<number> {
+  mkdirSync(RUNS, { recursive: true });
+  const out = createWriteStream(logFile);
+  console.log(`[session] ${label}: running (raw log: ${logFile})`);
+  const child = spawn("kiro-cli", args, { cwd: ROOT, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  child.stdout.on("data", (chunk: Buffer) => {
+    out.write(chunk);
+    process.stdout.write(".");
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    out.write(chunk);
+    process.stderr.write(chunk);
+  });
+  const code = await new Promise<number>((resolve) => child.on("close", (c) => resolve(c ?? 1)));
+  out.end();
+  console.log(`\n[session] ${label}: exit code ${code}`);
+  return code;
+}
+
+async function main(): Promise<void> {
+  const [target, ...flags] = process.argv.slice(2);
+  const dryRun = flags.includes("--dry-run");
+  const review = flags.includes("--review");
+  const plan = loadPlan();
+  const done = completedIds();
+
+  if (!target || target === "list") {
+    for (const s of plan) console.log(`${done.has(s.id) ? "[x]" : "[ ]"} ${s.id.padEnd(4)} ${s.spec.padEnd(15)} ${s.model.padEnd(18)} ${s.effort.padEnd(7)} ${s.interactive ? "(interactive)" : ""}`);
+    return;
+  }
+
+  const session = target === "next" ? plan.find((s) => !done.has(s.id)) : plan.find((s) => s.id.toLowerCase() === target.toLowerCase());
+  if (!session) fail(target === "next" ? "all sessions are completed." : `unknown session ${target}`);
+
+  const headless = !session.interactive;
+  const args = kiroArgs(BUILDER, session.model, session.effort, session.prompt, headless);
+  console.log(`[session] ${session.id} | spec ${session.spec} | model ${session.model} | effort ${session.effort}${headless ? "" : " | interactive"}`);
+
+  if (dryRun) {
+    console.log(`kiro-cli ${args.map(quote).join(" ")}`);
+    return;
+  }
+
+  preflight(session, availableModels());
+
+  if (!headless) {
+    console.log("[session] This session needs you at the keyboard. Starting an interactive chat with the planned model.");
+    const r = spawnSync("kiro-cli", args, { cwd: ROOT, stdio: "inherit" });
+    recordRun(session, r.status === 0 ? "ok" : "failed", 0, join(RUNS, "interactive"));
+    return;
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const logFile = join(RUNS, `${session.id}-${stamp}.jsonl`);
+  const started = Date.now();
+  const code = await runHeadless(session.id, args, logFile);
+
+  const check = run("pnpm", ["check"]);
+  const ok = code === 0 && check.code === 0;
+  recordRun(session, ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
+  console.log(`[session] pnpm check: ${check.code === 0 ? "passed" : "FAILED"}`);
+  if (!ok) fail(`${session.id} did not finish cleanly. Read docs/STATUS.md and ${logFile}. Do not run the next session until this is fixed.`);
+
+  if (review) {
+    const reviewLog = join(RUNS, `${session.id}-${stamp}-review.jsonl`);
+    await runHeadless("review", kiroArgs(REVIEWER, REVIEWER_MODEL, "low", "Review the current branch against main.", true), reviewLog);
+    console.log("[session] review written to docs/reviews/");
+  }
+  console.log(`[session] ${session.id} done. Check the spend in your Kiro usage panel before the next one.`);
+}
+
+await main();
