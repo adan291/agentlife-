@@ -66,6 +66,8 @@ Architect and QA end their reply with exactly one fenced block:
 ## kiro-cli runtime
 
 - `spawn("kiro-cli", args, { cwd, env: minimalEnv, stdio: ["pipe","pipe","pipe"], windowsHide: true })`; on POSIX `detached: true` for group kill.
+- Args always include `--v3`. Never `--trust-all-tools` or `--trust-tools` (spike: with `--trust-all-tools` on the default V2 engine a write outside cwd succeeded; with `--v3` and no trust flag it is denied). A unit test asserts the args.
+- The final message is `runFinished.data.finalText` (docs/spikes/kiro-cli.md). Credits are not in the stream; the export records wall time only.
 - Parse stdout line by line; unknown record types are kept raw and ignored. The exact record shapes come from the spike and are captured as zod schemas in `runtimes/kiro-cli.schema.ts`.
 - Timeout via `AbortSignal`; abort → `killTree(pid)`.
 - Metrics: wall time; credits/tokens if the stream reports them.

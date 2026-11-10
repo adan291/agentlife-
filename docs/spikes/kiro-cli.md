@@ -1,31 +1,34 @@
 # Spike: kiro-cli (agent-pipeline task 1)
 
-Status: FAILED on one check (write outside cwd is not denied). Task 1 not marked done.
+Status: DONE (2026-11-10). One finding changed the design (see "Decisions").
 
-Script: `packages/agent-engine/spikes/kiro-cli-spike.mjs` (run with `node --env-file=.env ...`). Agent used: `data/kiro-home/agents/spike-ro.json` (git-ignored). All calls used `--model claude-haiku-5.5`, `--no-interactive --output-format stream-json --trust-all-tools`, `KIRO_HOME=data/kiro-home`, cwd = temp repo, minimal env.
+Scripts: `packages/agent-engine/spikes/kiro-cli-spike.mjs` (first pass) and `packages/agent-engine/spikes/containment-spike.mjs` (re-check), both run with `node --env-file=.env ...`. Agents under `data/kiro-home/agents/` (git-ignored). All calls used `--model claude-haiku-5.5`, `KIRO_HOME=data/kiro-home`, cwd = a temp repo, minimal env.
 
 ## Results
 | Check | Result |
 |---|---|
 | kiro-cli version | 3.1.0 (design assumed 2.34) |
-| Auth with KIRO_API_KEY and empty KIRO_HOME | OK. Runs complete, exit 0 |
+| Auth with `KIRO_API_KEY` and empty `KIRO_HOME` | OK, runs complete with exit 0 |
 | `--agent` lookup from `KIRO_HOME/agents` with cwd in another repo | OK |
 | Missing agent | exit 4, `runError` record: `agent "<name>" not found, stopping (exit 4)` (stage `init`) |
-| `kiro-cli agent validate --path` | OK (silent, exit 0) with the reviewer-style syntax (`permissions.rules` with `capability`, `match`, `effect`) |
-| Write inside cwd | OK, file created |
-| Shell denied (`shell` rule `**` deny) | OK, `shell.txt` not created |
-| Write outside cwd denied | FAIL. `outside.txt` was created in the temp dir despite rules `fs_write allow ./**` and no other fs_write allow |
+| `kiro-cli agent validate --path` | OK with `permissions.rules` (`capability`, `match`, `effect`) |
+| Write inside cwd (`fs_write allow ./**`) | OK, file created |
+| Shell denied (`shell` deny) | OK, nothing ran |
+| Write outside cwd, first pass (default V2 engine + `--trust-all-tools`) | NOT denied: the file was created |
+| Write outside cwd, re-check (`--v3`, no `--trust-all-tools`) | Denied for an absolute path and for `../`; nothing created; the CLI reports "tool permission approval is not supported in non-interactive mode" |
+| Credits per run | Not exposed in stream-json (no usage field in `runFinished` or session updates; only context-window percentages). Measure from the Kiro usage panel during the live runs (task 12) |
 
 ## stream-json shape
-One JSON object per line, `{"type": ..., "data": {...}}`. Types seen: `runStarted`, `sessionUpdate`, `runFinished`, `runError`. `sessionUpdate.data.update.sessionUpdate` carries sub-kinds: `available_commands_update`, `config_option_update`, `session_info_update` (context usage), `agent_thought_chunk`, `tool_call` (`title`, `kind`, `status`, `locations`, `rawInput`), `tool_call_update` (`status`: pending, ...). Exit code 0 on success, 4 on missing agent. Stdout per run is 25-60 KB, mostly session updates. Stderr is 69 bytes on success runs (content not inspected).
+One JSON object per line, `{"type": ..., "data": {...}}`. Types: `runStarted`, `sessionUpdate`, `runFinished`, `runError`.
+- `sessionUpdate.data.update.sessionUpdate` sub-kinds: `available_commands_update`, `config_option_update`, `session_info_update` (context usage), `agent_thought_chunk`, `tool_call` (`title`, `kind`, `status`, `locations`, `rawInput`), `tool_call_update` (`status`).
+- `runFinished.data`: `{ sessionId, status: "success", stopReason: "end_turn", finalText, finalTextTruncated }`. The Architect/QA JSON block is read from `finalText`.
+- Exit code 0 on success, 4 on missing agent. Stdout per run 25–60 KB.
 
-## Run timings (haiku-5.5)
-read 13.4 s, write-cwd 17.8 s, write-outside 17.8 s, shell 14.0 s, missing agent 9.8 s.
+## Timings (haiku-5.5)
+10–21 s per small call (read 13 s, write 13–18 s, denied write 19–21 s, missing agent 10 s).
 
-## Not yet verified
-- Credits per run (no credit field found yet in the records examined; check `runFinished`).
-- Whether the outside write is blocked without `--trust-all-tools` (non-interactive denies unapproved tools?) or with an explicit `fs_write deny` for paths outside cwd.
-- `--agent-engine v2|v3` differences.
-
-## Impact
-The security rule "Developer may write only inside its task worktree" cannot rely on the agent's fs_write allow rule under `--trust-all-tools`. Candidate mitigations to test next (not applied, needs user decision): drop `--trust-all-tools` and use `--trust-tools` with an explicit list; add an explicit deny for absolute/outside paths; or enforce containment in the engine (diff validation plus checking that nothing outside the worktree changed).
+## Decisions (applied to the agent-pipeline design)
+1. Always run `kiro-cli chat --v3`. The default engine is V2 when no flag is given.
+2. Never pass `--trust-all-tools` or `--trust-tools` to product agents. Their grant surface is only the agent file's `allow` rules; anything else is denied in headless mode.
+3. Keep the engine-side containment check after the Developer step (diff validation plus "nothing outside the worktree changed") as a second layer.
+4. Cost is measured from the usage panel, not from the stream.

@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. kiro-cli spike (run early; it gates this spec)
+- [x] 1. kiro-cli spike (run early; it gates this spec)
   - Throwaway script in `packages/agent-engine/spikes/` plus `docs/spikes/kiro-cli.md` with findings
   - Verify KIRO_API_KEY auth with `KIRO_HOME=data/kiro-home`, agent lookup, stream-json record shapes, exit codes, write-outside-cwd denied, shell denied, credits per run
   - If anything fails, stop and record the alternative in docs/risks-and-decisions.md

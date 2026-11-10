@@ -3,7 +3,7 @@
 Updated: 2026-11-11
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: S8 (agent-pipeline tasks 2–5). S2 (kiro-cli spike) is blocked on a security finding, see below.
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
@@ -19,7 +19,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 |---|---|---|---|
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
+| agent-pipeline | 1 / 13 | feat/agent-pipeline | Spike done (docs/spikes/kiro-cli.md). Next: S8 (tasks 2–5) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
@@ -43,7 +43,7 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 - Engine restarts: the HttpEngineLink starts from the engine's head (`/health.lastSeq`), so a world-server restart does not replay old jobs; it reconnects with the last seq and resets if the engine DB has a lower seq.
 - agent-engine naming: the engine-side job view is `EngineJobViewSchema` (`JobView` already exists as the client-facing view in protocol.ts); recorded in design.md. Fold conventions (steps from state changes, verdict via reason `verdict:pass|fail` on the transition into `report_ready`) are in design.md. Token/credit per step is not in events yet (task 9).
 - `pnpm-workspace.yaml` now has `allowBuilds: better-sqlite3: true` (needed for the prebuilt binary).
-- S2 (agent-pipeline task 1, kiro-cli spike) on feat/agent-pipeline: auth with KIRO_API_KEY, agent lookup, write-in-cwd and shell-deny OK; write OUTSIDE cwd was NOT denied (spike used --trust-all-tools). Proposed fix awaiting user OK: no --trust-all-tools + explicit outside-path deny, keep engine-side containment check; then re-run only that check. Findings: docs/spikes/kiro-cli.md on feat/agent-pipeline.
+- S2 spike resolved: with `--v3` and no trust flags, writes outside cwd are denied (the earlier failure came from V2 + `--trust-all-tools`). Product agents must always use `--v3` and never trust flags; engine-side containment check stays. Credits are not in stream-json: measure from the usage panel in the live runs.
 - Review suggestions not done yet (non-blocking): gateway sends some messages twice (`job_update`, `approval`); no in-flight state on approve (double click); engine error text is forwarded to the client (max 200 chars). `jobActive` timeout is partly covered (cleared on cancelled/delivered). Revisit with the next review.
 - Server packages must avoid constructor parameter properties and enums (`--experimental-strip-types`). Mirrored avatar directions are 0↔6, 1↔5, 2↔4 (design.md).
 - GitHub public repo not created yet (needs user).
