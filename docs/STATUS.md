@@ -20,6 +20,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
 | agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
+| build-crew | 0 / 5 | — | New: Builder ghost mirrors build sessions in the room. S9B (tasks 1–4) after S9 |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
