@@ -15,7 +15,7 @@ Verified by headless Chrome screenshot: room, furniture, 3 agents with badges an
 ## Specs
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
-| world-room | 12 / 12 | feat/world-room | Pending user browser check and review |
+| world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
 | agent-engine | 0 / 10 | — | S6–S7 |
 | agent-pipeline | 0 / 13 | — | Task 1 (kiro-cli spike) in S2; it gates this spec |
 | demo-replay | 0 / 7 | — | S11–S13 |

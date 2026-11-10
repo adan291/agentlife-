@@ -119,6 +119,12 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     });
   };
 
+  /** A finished, failed or cancelled job can no longer be approved; keep its resolved approvals
+   *  (history) but drop the pending ones so the mailbox never offers a dead Approve button. */
+  const dropPendingApprovals = (taskId: string) => {
+    for (const [id, a] of approvals) if (a.taskId === taskId && a.status === "pending") approvals.delete(id);
+  };
+
   const onEngineEvent = (ev: AgentEvent) => {
     deliver(sim.handleAgentEvent(ev));
     enqueue(async () => {
@@ -132,10 +138,12 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           if (ws) await jobUpdate(ws);
           break;
         case "task.state_changed":
+          if (ev.state === "cancelled" || ev.state === "delivered" || ev.state === "failed") dropPendingApprovals(ev.taskId);
           if (ws && ev.taskId === currentTaskId) await jobUpdate(ws);
           break;
         case "task.failed":
         case "task.completed":
+          dropPendingApprovals(ev.taskId);
           if (ev.taskId === currentTaskId) jobActive = false;
           if (ws && ev.taskId === currentTaskId) await jobUpdate(ws);
           break;
