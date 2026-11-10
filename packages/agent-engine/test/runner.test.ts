@@ -5,7 +5,7 @@ import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentEvent, JobState, Plan, Review } from "@agentlife/shared";
 import type { LimitsConfig } from "../src/config.ts";
-import { ConflictError, NotFoundError } from "../src/errors.ts";
+import { ConflictError, DiffRejectedError, NotFoundError } from "../src/errors.ts";
 import { JobRunner } from "../src/jobs/runner.ts";
 import type { StepContext, Steps, TestResult } from "../src/jobs/steps.ts";
 import { canTransition, isTerminal } from "../src/jobs/transitions.ts";
@@ -366,5 +366,59 @@ describe("JobRunner properties (requirement 3.6)", () => {
       }),
       { numRuns: 150 },
     );
+  });
+});
+
+describe("JobRunner plan approval and task choice", () => {
+  const TWO: Plan = {
+    tasks: [
+      { id: "t1", title: "First", why: "w", files: ["a.ts"], acceptance: "ok", risk: "low" },
+      { id: "t2", title: "Second", why: "w", files: ["b.ts"], acceptance: "ok", risk: "high" },
+    ],
+  };
+
+  it("offers one option per plan task and builds the first task", async () => {
+    const seen: string[] = [];
+    const { store, runner } = setup(
+      okSteps({
+        analyze: async () => TWO,
+        develop: async (_c, input) => (seen.push(`develop:${input.task.id}`), { diff: "diff" }),
+        review: async (_c, input) => (seen.push(`review:${input.task.id}`), pass),
+        report: async (_c, input) => (seen.push(`report:${input.task?.id}`), { title: "R", markdown: "# R" }),
+      }),
+    );
+    autoApprove(store, runner);
+    const id = runner.start("haunted-todo", "goal");
+    await runner.done(id);
+    const request = store.eventsFor(id).find((e) => e.type === "approval.requested");
+    if (request?.type !== "approval.requested") throw new Error("no approval");
+    expect(request.options).toEqual(["t1: First", "t2: Second"]);
+    expect(request.summary).toContain("Approving builds task 1: First");
+    expect(seen).toEqual(["develop:t1", "review:t1", "report:t1"]);
+  });
+});
+
+describe("JobRunner with a rejected diff", () => {
+  it("fails the job, stores the rejected patch and hands it to the report", async () => {
+    let reported: string | undefined;
+    const { store, runner } = setup(
+      okSteps({
+        develop: async () => {
+          throw new DiffRejectedError("protected file: package.json", "--- a/package.json\n+++ b/package.json\n");
+        },
+        report: async (_c, input) => ((reported = input.diff), { title: "R", markdown: "# R" }),
+      }),
+    );
+    autoApprove(store, runner);
+    const id = runner.start("haunted-todo", "goal");
+    await runner.done(id);
+    const view = store.getJob(id)!;
+    expect(view.state).toBe("delivered");
+    expect(view.verdict).toBe("fail");
+    expect(view.artifacts.map((a) => a.kind)).toEqual(["plan", "diff", "report"]);
+    expect(store.artifactsFor(id).find((a) => a.kind === "diff")?.content).toContain("+++ b/package.json");
+    expect(reported).toContain("+++ b/package.json");
+    const failed = store.eventsFor(id).find((e) => e.type === "task.failed");
+    expect(failed && failed.type === "task.failed" ? failed.reason : "").toContain("protected file: package.json");
   });
 });

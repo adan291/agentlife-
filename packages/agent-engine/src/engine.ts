@@ -1,5 +1,7 @@
 import type http from "node:http";
 import { loadConfig, type EngineConfig } from "./config.ts";
+import { installAgents, ROLES } from "./agents.ts";
+import { dataPaths } from "./paths.ts";
 import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, type Route } from "./http/server.ts";
 import { createEventsRoute } from "./http/sse.ts";
 import { createExportRoute } from "./http/export.ts";
@@ -17,6 +19,8 @@ export interface EngineOptions {
   config?: EngineConfig;
   store?: Store;
   storeOptions?: StoreOptions;
+  /** Runtime data directory (kiro-home, repos, worktrees). Default: `<project>/data`. */
+  dataDir?: string;
   /** Overrides the steps (tests). Default: runtime-backed steps from config/agents.json. */
   steps?: Steps;
   logger?: Logger;
@@ -59,6 +63,10 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const config = opts.config ?? loadConfig();
   const logger = opts.logger ?? noopLogger;
   const store = opts.store ?? new Store(opts.storeOptions);
+  if (!opts.steps && process.env["RUNTIME"] !== "fake" && ROLES.some((r) => config.agents[r].runtime === "kiro-cli")) {
+    const installed = installAgents({ kiroHome: dataPaths(opts.dataDir).kiroHome });
+    logger.info("role agents installed", { dir: installed.dir, agents: installed.installed });
+  }
   const steps = opts.steps ?? createRuntimeSteps({ runtimes: buildRuntimes(config, opts.fakeDelayMs ?? 0), store, logger });
   const ambient =
     opts.ambient ??
