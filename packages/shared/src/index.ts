@@ -5,3 +5,4 @@ export * from "./geometry/projection.ts";
 export * from "./geometry/heightmap.ts";
 export * from "./geometry/depth.ts";
 export * from "./geometry/dir.ts";
+export * from "./geometry/pathfind.ts";

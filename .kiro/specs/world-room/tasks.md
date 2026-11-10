@@ -6,7 +6,7 @@
   - Unit tests plus fast-check properties: projection round-trip, depth ordering for non-overlapping footprints
   - _Requirements: 2.1, 2.2, 2.4_
 
-- [ ] 2. Pathfinding in shared
+- [x] 2. Pathfinding in shared
   - `shared/src/geometry/pathfind.ts`: A* 8-neighbour, no corner cutting, max height step 1
   - fast-check properties: adjacency and walkability of every step, ends at target, null when unreachable
   - _Requirements: 3.2, 3.5_
