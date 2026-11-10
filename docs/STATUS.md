@@ -15,6 +15,7 @@ Phase 0 done: scaffold, steering, CI, discovery docs, the four specs, reviewer a
 
 ## Open problems / pending decisions
 - GitHub public repo not created yet (needs user).
+- S2 (agent-pipeline task 1, kiro-cli spike) BLOCKED on branch feat/agent-pipeline: needs KIRO_API_KEY in D:\Kiroween\.env (user creates it at app.kiro.dev → API Keys). Re-run with `pnpm session S2`. S1 done on feat/world-room.
 - KIRO_API_KEY not configured yet (needed for S2).
 - Codex CLI not on PATH; reviews can use the Codex app or extension.
 - Discord: `pnpm notify` (free, Ollama summary, DM via the Crew bot) and Kiro Crew for remote work; see docs/sessions.md. The Crew bot cannot post in its configured channel (403), so notifications go by DM.
