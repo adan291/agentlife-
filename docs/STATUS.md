@@ -3,7 +3,7 @@
 Updated: 2026-11-11
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
@@ -17,7 +17,7 @@ With the real engine (RUNTIME=fake): start the engine first, then the world-serv
 ## Specs
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
-| world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
+| world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
 | agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
 | build-crew | 0 / 5 | — | New: Builder ghost mirrors build sessions in the room. S9B (tasks 1–4) after S9 |
