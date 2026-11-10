@@ -3,7 +3,7 @@
 Updated: 2026-11-10
 
 ## Phase
-Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. `pnpm check` passes (153 tests). Next: S6 (agent-engine tasks 1–5). S2 (kiro-cli spike) is blocked on a security finding, see below.
+Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–11 done, task 12 waits for the user's browser check). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. S6 done on branch feat/agent-engine (agent-engine tasks 1–5: engine-api schemas, config, SQLite store + foldJob, transition table, runtimes); `pnpm check` passes. Next: S7 (agent-engine tasks 6–10), starting with JobRunner. S2 (kiro-cli spike) is blocked on a security finding, see below.
 
 ## Run the client
 Two terminals from the repo root (the client needs the world-server on 127.0.0.1:8787):
@@ -14,7 +14,7 @@ Two terminals from the repo root (the client needs the world-server on 127.0.0.1
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
 | world-room | 11 / 12 | main | Task 12 open: scripted WebSocket e2e passed; browser checklist below pending (user) |
-| agent-engine | 0 / 10 | — | Next: S6 (tasks 1–5), S7 (6–10) |
+| agent-engine | 5 / 10 | feat/agent-engine | Tasks 1–5 done; next S7 (6–10) |
 | agent-pipeline | 0 / 13 | feat/agent-pipeline | Task 1 (spike) blocked, see open problems |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
@@ -32,6 +32,9 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- Design gap for agent-engine task 6: the transition table has no `reviewing -> failed` (nor `awaiting_plan_approval -> failed`), but requirement 5.1/5.2 says a review timeout records `task.failed`. Decide before task 6: add `failed` to `reviewing`'s targets (recommended), or map a review timeout to `report_ready` with `verdict:fail`. Table currently implemented exactly as designed (jobs/transitions.ts).
+- agent-engine naming: the engine-side job view is `EngineJobViewSchema` (`JobView` already exists as the client-facing view in protocol.ts); recorded in design.md. Fold conventions (steps from state changes, verdict via reason `verdict:pass|fail` on the transition into `report_ready`) are in design.md. Token/credit per step is not in events yet (task 9).
+- `pnpm-workspace.yaml` now has `allowBuilds: better-sqlite3: true` (needed for the prebuilt binary).
 - S2 (agent-pipeline task 1, kiro-cli spike) on feat/agent-pipeline: auth with KIRO_API_KEY, agent lookup, write-in-cwd and shell-deny OK; write OUTSIDE cwd was NOT denied (spike used --trust-all-tools). Proposed fix awaiting user OK: no --trust-all-tools + explicit outside-path deny, keep engine-side containment check; then re-run only that check. Findings: docs/spikes/kiro-cli.md on feat/agent-pipeline.
 - Review suggestions not done yet (non-blocking): gateway sends some messages twice (`job_update`, `approval`); no in-flight state on approve (double click); `jobActive` has no timeout; engine error text is forwarded to the client (max 200 chars). Address in agent-engine integration (S7, task 10).
 - Server packages must avoid constructor parameter properties and enums (`--experimental-strip-types`). Mirrored avatar directions are 0↔6, 1↔5, 2↔4 (design.md).
