@@ -27,7 +27,7 @@
   - Property test: after any random sequence of valid intents and agent events, every avatar is on a walkable tile
   - _Requirements: 3.1, 3.3, 4.2, 4.4, 5.2, 5.3, 5.4_
 
-- [ ] 6. World-server gateway
+- [x] 6. World-server gateway
   - `world-server/src/main.ts`, `gateway.ts`: load + validate room (fail fast with field path), ws on 127.0.0.1:8787, zod validation, 16 KB max payload, 20 msg/s rate limit, welcome on connect
   - Use `fileURLToPath` for the room path (Windows)
   - Tests with a real ws client on an ephemeral port
