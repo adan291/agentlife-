@@ -39,7 +39,7 @@
   - Verify Windows path mounting
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 9. Review step
+- [x] 9. Review step
   - QA prompt with task, diff, test log; ReviewSchema with retry; force `fail` when tests failed
   - _Requirements: 7.1, 7.2, 7.3_
 
