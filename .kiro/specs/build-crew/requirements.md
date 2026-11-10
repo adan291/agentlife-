@@ -25,6 +25,15 @@ Context: scripts/run-session.ts, docs/spikes/kiro-cli.md (stream-json shape), ag
 3. THE client SHALL draw the Builder as a floating ghost (procedural, palette colours, no Habbo or Kiro brand assets), distinct from the three job agents, with the same name tag, status badge and bubble overlays.
 4. WHEN no build session is running, THE Builder SHALL be `idle` at `home_builder`.
 
+### Requirement 1b: Ghost staff theme
+
+**User Story:** As a judge, I want the hotel staff to be ghosts, so that the room is clearly Kiroween and each role is easy to tell apart.
+
+#### Acceptance Criteria
+1. ALL agent residents (Architect, Developer, QA, Builder) SHALL be drawn as floating ghosts with one shared original ghost shape (rounded head, wavy hem, two eyes) and a distinct body colour per role from the palette; the user's avatar stays a human guest.
+2. Ghosts SHALL float with a 2–3 px bob instead of a walk cycle, keep the 8 logical directions (mirrored as today), and keep name tags, status badges and bubbles unchanged.
+3. THE ghost design SHALL be our own procedural drawing. It SHALL NOT trace or reproduce the Kiro logo or any other brand mark (see .kiro/steering/security.md).
+
 ### Requirement 2: Crew events API
 
 **User Story:** As the session runner, I want to report session progress to the engine, so that the world can show it.

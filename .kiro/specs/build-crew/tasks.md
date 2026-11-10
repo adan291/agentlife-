@@ -15,10 +15,11 @@
   - Make root `pnpm check` run `scripts/test/*.test.ts`
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.1_
 
-- [ ] 4. Client: ghost Builder
-  - Ghost figure with float bob, name tag with session label, idle at home when no session
+- [ ] 4. Client: ghost staff (all agents) and the Builder
+  - One original ghost figure (float bob, wavy hem, eyes) used for Architect, Developer, QA and Builder, coloured per role; user avatar unchanged
+  - Builder name tag with session label, idle at home when no session
   - Sim or world-server test: builder goto desk and back home
-  - _Requirements: 1.3, 1.4, 4.3_
+  - _Requirements: 1.3, 1.4, 1b.1, 1b.2, 1b.3, 4.3_
 
 - [ ] 5. Manual check
   - With engine + world-server (ENGINE=http) + client running, run one short real session and record in docs/STATUS.md what was seen

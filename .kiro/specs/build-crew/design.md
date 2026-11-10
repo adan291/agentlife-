@@ -35,7 +35,8 @@ No new transport. The engine already streams agent events to the world-server, a
 
 ## Client (`packages/client`)
 
-- `scene/figure.ts`: a `ghost` figure kind for `builder`: rounded body with a wavy hem, two eyes, soft float bob (2–3 px) instead of a walk cycle; mirrored directions as for other avatars.
+- Ghost staff: every agent id (`architect`, `developer`, `qa`, `builder`) uses the ghost figure, body colour from the role colour already in `palette.ts` (Builder: a new pale violet). The user avatar keeps the human figure.
+- `scene/figure.ts`: a `ghost` figure kind: rounded body with a wavy hem, two eyes, soft float bob (2–3 px) instead of a walk cycle; mirrored directions as for other avatars.
 - Name tag: "Builder" plus the session label from the latest `say` that matches `^S\d+`.
 
 ## Testing strategy
