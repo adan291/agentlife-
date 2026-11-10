@@ -1,4 +1,4 @@
-﻿# Implementation Plan
+# Implementation Plan
 
 - [x] 1. Isometric geometry in shared
   - Create `shared/src/geometry/projection.ts` (`tileToScreen`, `screenToTile`), `heightmap.ts` (`parseHeightmap`), `depth.ts` (`depthKey`)
