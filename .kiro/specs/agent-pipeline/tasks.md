@@ -15,7 +15,7 @@
   - Copy fixture to `data/repos/<id>/`, `git init`, commit with fixed author; refuse repos containing `.kiro/agents/agentlife-*`
   - _Requirements: 2.2_
 
-- [ ] 4. Role agents and prompts
+- [x] 4. Role agents and prompts
   - `agents/agentlife-{architect,developer,qa}.json` (same shape as `.kiro/agents/agentlife-reviewer.json`) using the syntax confirmed in the spike; install into `data/kiro-home/agents` at startup
   - `prompts/*.md` templates with the untrusted-content rule
   - Validate each agent with `kiro-cli agent validate --path`

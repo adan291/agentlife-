@@ -32,3 +32,9 @@ One JSON object per line, `{"type": ..., "data": {...}}`. Types: `runStarted`, `
 2. Never pass `--trust-all-tools` or `--trust-tools` to product agents. Their grant surface is only the agent file's `allow` rules; anything else is denied in headless mode.
 3. Keep the engine-side containment check after the Developer step (diff validation plus "nothing outside the worktree changed") as a second layer.
 4. Cost is measured from the usage panel, not from the stream.
+
+## Addendum (agent-pipeline task 4, 2026-11-10)
+Script: `packages/agent-engine/spikes/stdin-spike.mjs`.
+- The prompt can be written to stdin with no positional input: `kiro-cli chat --v3 --no-interactive --output-format stream-json --agent agentlife-architect` read it, exit 0, 340 stream lines (1 `runStarted`, 338 `sessionUpdate`, 1 `runFinished`), 27 s with haiku-5.5 on the haunted-todo fixture. The final message ended with one json block that parses as a plan.
+- `kiro-cli agent validate --path` only checks that the file loads. It accepts an unknown capability and an invalid `effect`, and needs no API key. It is still run for each role agent, but the permission rules are checked by `test/agents.test.ts` (shape) and by the live runs (behaviour).
+- Design doc says "a `deny` always wins"; the Developer agent still lists the allowed path and the denied paths as separate rules, so it does not depend on rule order.
