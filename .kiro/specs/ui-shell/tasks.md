@@ -8,7 +8,7 @@
   - Team bar → side, terminal → dock, stepper + status + HUD controls → top bar; toast, tooltip, guide, panels → stage (absolute); remove all `position: fixed` shell rules
   - _Requirements: 1.5, 4.1, 4.2_
 
-- [ ] 3. Side bar and dock behaviour
+- [x] 3. Side bar and dock behaviour
   - Collapsed side bar (52 px icons, tooltips), single chevron toggle with aria-label, ellipsis + title; dock drag-resize, collapse to header with latest line and unread count; persisted state
   - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2_
 

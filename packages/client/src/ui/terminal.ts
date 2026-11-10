@@ -11,23 +11,37 @@ export const TERMINAL_MAX_LINES = 300;
 export type TerminalFilter = AgentId | "all";
 export const TERMINAL_AGENTS: readonly AgentId[] = ["architect", "developer", "qa", "builder"];
 
-/** Ring buffer of activity lines plus the agent filter. Pure: the DOM layer renders `visible()`. */
+/** Ring buffer of activity lines plus the agent filter and the unread count. Pure: the DOM layer renders `visible()`. */
 export class TerminalModel {
   private all: ActivityLine[] = [];
   filter: TerminalFilter = "all";
+  /** Lines that arrived while the dock was collapsed and have not been shown yet. */
+  unread = 0;
 
   get size(): number {
     return this.all.length;
   }
 
-  /** Replaces the content (welcome snapshot after a reload). */
+  /** Replaces the content (welcome snapshot after a reload). Seeded lines count as read. */
   seed(lines: readonly ActivityLine[]): void {
     this.all = lines.slice(-TERMINAL_MAX_LINES);
+    this.unread = 0;
   }
 
-  push(line: ActivityLine): void {
+  /** `unseen`: nobody can see the line right now (dock collapsed), so it counts as unread. */
+  push(line: ActivityLine, unseen = false): void {
     this.all.push(line);
     if (this.all.length > TERMINAL_MAX_LINES) this.all.splice(0, this.all.length - TERMINAL_MAX_LINES);
+    if (unseen) this.unread = Math.min(this.unread + 1, TERMINAL_MAX_LINES);
+  }
+
+  markRead(): void {
+    this.unread = 0;
+  }
+
+  /** Newest line of any agent (the filter does not apply); shown in the collapsed dock header. */
+  latest(): ActivityLine | undefined {
+    return this.all[this.all.length - 1];
   }
 
   /** Lines that pass the filter, oldest first (newest at the bottom). */
@@ -39,6 +53,18 @@ export class TerminalModel {
 /** One terminal row as plain parts: `HH:MM:SS  Role  text`. */
 export function formatLine(line: ActivityLine): { time: string; role: string; text: string } {
   return { time: formatTime(line.ts), role: ROLE_INFO[line.agentId].name, text: line.text };
+}
+
+/** Text of the collapsed dock header: the newest line, or a hint while there is none. */
+export function collapsedSummary(line: ActivityLine | undefined): string {
+  if (!line) return "No activity yet";
+  const f = formatLine(line);
+  return `${f.time}  ${f.role}  ${f.text}`;
+}
+
+/** "3 new" for the unread badge; empty for none. */
+export function unreadText(n: number): string {
+  return n > 0 ? `${n} new` : "";
 }
 
 /** Pixels from the bottom within which the view still follows new lines. */
@@ -54,7 +80,12 @@ const CSS = `
 .al-term-grip { position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; background: ${UI_COLOURS.border}; touch-action: none; }
 .al-term[data-collapsed="true"] .al-term-grip, .al-term[data-collapsed="true"] .al-term-body { display: none; }
 .al-term-head { display: flex; gap: 8px; align-items: center; height: ${DOCK_HEADER_PX}px; padding: 0 8px; box-sizing: border-box; flex: none; }
-.al-term-head b { color: ${UI_COLOURS.accentText}; margin-right: auto; }
+.al-term-head b { color: ${UI_COLOURS.accentText}; flex: none; }
+.al-term-latest { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${UI_COLOURS.muted}; }
+.al-term[data-collapsed="false"] .al-term-latest { visibility: hidden; }
+.al-term-unread { flex: none; padding: 0 8px; border-radius: 10px; background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; font-weight: bold; white-space: nowrap; }
+.al-term-unread[hidden] { display: none; }
+.al-term[data-collapsed="true"] .al-term-head select { display: none; }
 .al-term-head select { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; font: inherit; padding: 0 4px; }
 .al-term-body { overflow-y: auto; overflow-x: hidden; padding: 2px 8px 4px; flex: 1; min-height: 0; }
 .al-term-row { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -106,7 +137,13 @@ export function createTerminal(shell: Shell): Terminal {
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "al-btn";
-  head.append(title, select, toggle);
+  const latest = document.createElement("span");
+  latest.className = "al-term-latest";
+  const unread = document.createElement("span");
+  unread.className = "al-term-unread";
+  unread.hidden = true;
+  unread.setAttribute("role", "status");
+  head.append(title, latest, unread, select, toggle);
 
   const body = document.createElement("div");
   body.className = "al-term-body";
@@ -115,15 +152,26 @@ export function createTerminal(shell: Shell): Terminal {
   root.append(grip, head, body);
   shell.dock.appendChild(root);
 
-  const setCollapsed = (collapsed: boolean) => {
-    root.dataset["collapsed"] = String(collapsed);
-    toggle.textContent = collapsed ? "Show" : "Hide";
-    toggle.setAttribute("aria-expanded", String(!collapsed));
+  const collapsed = () => root.dataset["collapsed"] === "true";
+  const paintSummary = () => {
+    const text = collapsed() ? collapsedSummary(model.latest()) : "";
+    latest.textContent = text;
+    latest.title = text;
+    unread.textContent = unreadText(model.unread);
+    unread.hidden = model.unread === 0;
+  };
+  const setCollapsed = (c: boolean) => {
+    root.dataset["collapsed"] = String(c);
+    toggle.textContent = c ? "Show" : "Hide";
+    toggle.setAttribute("aria-label", c ? "Show activity" : "Hide activity");
+    toggle.setAttribute("aria-expanded", String(!c));
+    if (!c) model.markRead();
+    paintSummary();
   };
   toggle.addEventListener("click", () => shell.toggleDock());
   setCollapsed(shell.template.dockCollapsed);
   shell.onChange((t) => {
-    const was = root.dataset["collapsed"] === "true";
+    const was = collapsed();
     setCollapsed(t.dockCollapsed);
     if (was && !t.dockCollapsed) body.scrollTop = body.scrollHeight;
   });
@@ -183,13 +231,15 @@ export function createTerminal(shell: Shell): Terminal {
   return {
     model,
     push(line) {
-      model.push(line);
+      model.push(line, collapsed());
       render();
+      paintSummary();
     },
     seed(lines) {
       model.seed(lines);
       render();
       body.scrollTop = body.scrollHeight;
+      paintSummary();
     },
   };
 }

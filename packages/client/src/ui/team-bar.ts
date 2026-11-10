@@ -118,8 +118,13 @@ const CSS = `
 .al-team { height: 100%; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
 .al-team-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; }
 .al-team-head b { color: ${UI_COLOURS.accentText}; }
+.al-team-toggle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; }
+.al-chevron { width: 8px; height: 8px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateX(2px) rotate(45deg); }
+.al-team[data-collapsed="true"] .al-chevron { transform: translateX(-2px) rotate(-135deg); }
 .al-team[data-collapsed="true"] .al-team-head { justify-content: center; }
 .al-team[data-collapsed="true"] .al-team-head b, .al-team[data-collapsed="true"] .al-team-text { display: none; }
+.al-team[data-collapsed="true"] .al-team-row { justify-content: center; padding: 8px 0; border-left-width: 0; }
+.al-team[data-collapsed="true"] .al-team-ghost { margin-top: 0; box-shadow: 0 0 0 2px ${UI_COLOURS.panelBg}, 0 0 0 4px var(--al-row-colour); }
 .al-team-row { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-top: 1px solid ${UI_COLOURS.border}; border-left: 3px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; box-sizing: border-box; }
 .al-team-row:hover, .al-team-row:focus-visible { background: ${UI_COLOURS.inputBg}; }
 .al-team-row[data-highlight="true"] { background: ${UI_COLOURS.inputBg}; }
@@ -133,8 +138,8 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .al-team-row[data-animate="true"] .al-team-ghost { animation: none; } }
 .al-team-text { min-width: 0; flex: 1; }
 .al-team-line { display: flex; justify-content: space-between; gap: 6px; }
-.al-team-name { font-weight: bold; color: var(--al-role-colour); }
-.al-team-elapsed { color: ${UI_COLOURS.muted}; }
+.al-team-name { font-weight: bold; color: var(--al-role-colour); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.al-team-elapsed { color: ${UI_COLOURS.muted}; flex: none; }
 .al-team-sub { display: block; color: ${UI_COLOURS.muted}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-team-sub[hidden] { display: none; }
 .al-team-state::before { content: "\\25CF"; color: var(--al-row-colour); margin-right: 0.5ch; }
@@ -168,11 +173,14 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
   title.textContent = "Team";
   const toggle = document.createElement("button");
   toggle.type = "button";
-  toggle.className = "al-btn";
+  toggle.className = "al-btn al-team-toggle";
+  const chevron = document.createElement("span");
+  chevron.className = "al-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  toggle.appendChild(chevron);
   const setCollapsed = (c: boolean) => {
     root.dataset["collapsed"] = String(c);
-    toggle.textContent = c ? "»" : "«";
-    toggle.title = c ? "Show the team bar" : "Collapse the team bar";
+    toggle.title = c ? "Expand team" : "Collapse team";
     toggle.setAttribute("aria-label", toggle.title);
     toggle.setAttribute("aria-expanded", String(!c));
   };
@@ -222,13 +230,19 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     e.button.dataset["animate"] = String(tone.animate);
     e.button.dataset["state"] = row.state;
     e.button.style.setProperty("--al-row-colour", cssHex(tone.colour));
-    e.state.textContent = row.text ? `${stateLabel(row.state)}: ${row.text}` : stateLabel(row.state);
+    const stateText = row.text ? `${stateLabel(row.state)}: ${row.text}` : stateLabel(row.state);
+    e.state.textContent = stateText;
+    e.state.title = stateText;
     e.model.textContent = row.model ?? "";
+    e.model.title = row.model ?? "";
     e.model.hidden = !row.model;
     e.activity.textContent = row.activity ?? "";
+    e.activity.title = row.activity ?? "";
     e.activity.hidden = !row.activity;
     e.elapsed.textContent = elapsedText(row, now);
-    e.button.title = `${ROLE_INFO[row.agentId].name}: ${stateLabel(row.state)}. Click to find it in the room.`;
+    const full = `${ROLE_INFO[row.agentId].name}: ${stateText}`;
+    e.button.title = `${full}. Click to find it in the room.`;
+    e.button.setAttribute("aria-label", full);
   };
   const paintAll = () => {
     const now = Date.now();
