@@ -21,7 +21,7 @@
   - Validate each agent with `kiro-cli agent validate --path`
   - _Requirements: 3.2, 4.1, 5.2, 7.1_
 
-- [ ] 5. KiroCliRuntime
+- [x] 5. KiroCliRuntime
   - Spawn, minimal env, stream-json parsing with zod schemas from the spike, raw log files, timeout and tree kill, error with redacted stderr tail
   - Unit tests with a fake child process; live test behind `AGENTLIFE_LIVE=1`
   - _Requirements: 3.1, 3.3, 3.4, 3.5, 3.6_

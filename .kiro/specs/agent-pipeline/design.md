@@ -44,7 +44,7 @@ To verify in the spike: that `KIRO_API_KEY` auth works with an empty KIRO_HOME, 
 
 ## Role agents (shape; validate syntax in the spike)
 
-Common: `resources` none (no steering leak), `tools` minimal, explicit `deny` rules as defence in depth.
+Common: `resources` none (no steering leak), `tools` minimal, explicit `deny` rules as defence in depth. The files use the confirmed syntax (`permissions.rules` with `capability`, `match`, `effect`); the system `prompt` is inline in the JSON (short role and safety rules), and the task prompt templates in `prompts/*.md` are sent on stdin. `kiro-cli agent validate` only checks that the file loads (it accepts unknown capabilities), so `test/agents.test.ts` checks the permission shape.
 
 - architect / qa: `tools: ["read"]`; rules: `fs_read allow`, `fs_write deny **`, `shell deny`, `web_fetch deny`.
 - developer: `tools: ["read", "write"]`; rules: `fs_write allow ./**`, `fs_write deny .git/** **/.env* package.json **/package-lock.json **/pnpm-lock.yaml .github/**`, `shell deny`, `web_fetch deny`.
@@ -68,9 +68,11 @@ Architect and QA end their reply with exactly one fenced block:
 - `spawn("kiro-cli", args, { cwd, env: minimalEnv, stdio: ["pipe","pipe","pipe"], windowsHide: true })`; on POSIX `detached: true` for group kill.
 - Args always include `--v3`. Never `--trust-all-tools` or `--trust-tools` (spike: with `--trust-all-tools` on the default V2 engine a write outside cwd succeeded; with `--v3` and no trust flag it is denied). A unit test asserts the args.
 - The final message is `runFinished.data.finalText` (docs/spikes/kiro-cli.md). Credits are not in the stream; the export records wall time only.
-- Parse stdout line by line; unknown record types are kept raw and ignored. The exact record shapes come from the spike and are captured as zod schemas in `runtimes/kiro-cli.schema.ts`.
-- Timeout via `AbortSignal`; abort → `killTree(pid)`.
-- Metrics: wall time; credits/tokens if the stream reports them.
+- Parse stdout line by line; unknown record types are kept raw and ignored. Record shapes are loose zod schemas in `runtimes/kiro-cli.schema.ts`. Mapping (task 5): `runStarted` becomes progress `started`; `tool_call` becomes progress `<title>: <path relative to cwd>` (`(outside)` for paths outside it, 120 chars max); `runFinished.finalText` becomes `output` (the streamed `agent_message_chunk` text is used when `finalTextTruncated`); `runFinished.usage` becomes `usage` if a later kiro-cli version reports it (3.1.0 does not); `runError` or a non-zero exit throws `KiroCliError` with exit code, runError message and the last 20 stderr lines, all redacted.
+- The prompt is written to stdin (verified live in the spike addendum, and with a 300 KB prompt in the unit tests). `minimalEnv` is PATH, SystemRoot, TEMP, TMP, KIRO_HOME and KIRO_API_KEY; the live test on Windows passes with only these.
+- Raw lines: `RuntimeInput.rawLogPath` (added in task 5). Steps pass `data/runs/<taskId>/<step>.raw.jsonl`. `<step>.jsonl` stays the mapped-event log written by the store, so the two never mix. Lines are redacted before they are written.
+- Timeout via `timeoutMs` and the input `AbortSignal`; either one calls `killTree(pid)`. A consumer that stops reading early also kills the process.
+- Metrics: wall time only; credits are read from the Kiro usage panel in task 12.
 
 ## Diff validation
 

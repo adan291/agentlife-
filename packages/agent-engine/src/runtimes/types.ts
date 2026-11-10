@@ -9,6 +9,8 @@ export interface RuntimeInput {
   cwd: string;
   timeoutMs: number;
   signal: AbortSignal;
+  /** Where a real runtime keeps the raw output lines (JSONL). The fake runtime ignores it. */
+  rawLogPath?: string;
 }
 
 export type RuntimeEvent =
