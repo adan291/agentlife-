@@ -180,7 +180,7 @@ export function collectFacts(deps: PipelineDeps, taskId: string): StepFact[] {
     return {
       step: rec.step,
       status: rec.status,
-      ...(rec.endedAt === undefined ? {} : { durationMs: Math.max(0, rec.endedAt - rec.startedAt) }),
+      ...(rec.durationMs === undefined ? {} : { durationMs: rec.durationMs }),
       ...(credits === undefined ? {} : { credits }),
       ...(tokens === undefined ? {} : { tokens: Math.round(tokens) }),
     };

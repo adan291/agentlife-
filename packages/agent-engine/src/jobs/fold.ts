@@ -20,6 +20,7 @@ function closeRunning(view: EngineJobView, ts: number, status: "ok" | "failed" |
     if (s.status === "running") {
       s.status = status;
       s.endedAt = ts;
+      s.durationMs = Math.max(0, ts - s.startedAt);
     }
   }
 }

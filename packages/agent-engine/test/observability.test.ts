@@ -9,6 +9,8 @@ import { collectSecrets, createJsonLogger, createRedactor } from "../src/log.ts"
 import { FAKE_OUTPUTS, FakeRuntime } from "../src/runtimes/fake.ts";
 import type { AgentRuntime, RuntimeEvent } from "../src/runtimes/types.ts";
 import { Store } from "../src/store.ts";
+import { buildReport, collectFacts } from "../src/steps/report.ts";
+import type { PipelineDeps } from "../src/steps/deps.ts";
 
 const engines: Engine[] = [];
 const dirs: string[] = [];
@@ -103,6 +105,36 @@ describe("GET /tasks/:id/export", () => {
     expect(done.map((p) => p["step"])).toEqual(["analyze", "develop", "test", "review", "report"]);
     expect(done.every((p) => p["taskId"] === taskId && typeof p["durationMs"] === "number" && p["status"] === "ok")).toBe(true);
     expect(parsed.some((p) => p["msg"] === "step usage" && p["credits"] === 1.5)).toBe(true);
+  });
+
+  it("records durationMs for every finished step in the job view, the export and report.md", async () => {
+    const runsDir = tmp();
+    const store = new Store({ dbPath: ":memory:", runsDir });
+    const runtimes = {
+      architect: new FakeRuntime({ delayMs: 15 }),
+      developer: new FakeRuntime({ delayMs: 15 }),
+      qa: new FakeRuntime({ delayMs: 15 }),
+    };
+    const engine = await startEngine({ store, port: 0, steps: createRuntimeSteps({ runtimes, store }) });
+    engines.push(engine);
+    const url = `http://127.0.0.1:${engine.port}`;
+    const taskId = await runJob(engine, url, "g");
+
+    const view = (await (await fetch(`${url}/tasks/${taskId}`)).json()) as { steps: { step: string; status: string; durationMs?: number }[] };
+    const exp = RunExportSchema.parse(await (await fetch(`${url}/tasks/${taskId}/export`)).json());
+    for (const steps of [view.steps, exp.job.steps]) {
+      expect(steps.map((s) => s.step)).toEqual(["analyze", "develop", "test", "review", "report"]);
+      for (const s of steps) {
+        expect(s.status).toBe("ok");
+        expect(s.durationMs, s.step).toBeGreaterThan(0);
+      }
+    }
+    // The real report step reads these facts (the fake steps use the fallback report, which has no step list).
+    const facts = collectFacts({ store } as unknown as PipelineDeps, taskId);
+    expect(facts.map((f) => f.step)).toEqual(["analyze", "develop", "test", "review", "report"]);
+    expect(facts.every((f) => f.durationMs !== undefined && f.durationMs > 0)).toBe(true);
+    const md = buildReport({ goal: "g", verdict: "pass" }, facts).markdown;
+    expect(md).toMatch(/\*\*analyze:\*\* ok, [\d.]+ (ms|s)/);
   });
 
   it("stores raw runtime output per step in data/runs/<taskId>/<step>.jsonl", async () => {

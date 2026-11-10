@@ -50,6 +50,8 @@ export const StepRecordSchema = z.object({
   step: StepNameSchema,
   startedAt: z.number().int().nonnegative(),
   endedAt: z.number().int().nonnegative().optional(),
+  /** `endedAt - startedAt`, present once the step has ended. */
+  durationMs: z.number().int().nonnegative().optional(),
   status: z.enum(["running", "ok", "failed", "cancelled"]),
   credits: z.number().nonnegative().optional(),
   tokens: z.number().int().nonnegative().optional(),

@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Engine: step durations
+- [x] 1. Engine: step durations
   - Record `endedAt` for every finished step; test that all finished steps have `durationMs > 0` in the job view, export and report
   - _Requirements: 6.1, 6.2_
 
