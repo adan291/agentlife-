@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-12 (hotel-floors tasks 1–5 done on branch feat/hotel-floors, not merged; review and verification fixes applied, needs a new verification)
+Updated: 2026-11-12 (build-board tasks 1–2 done on branch feat/build-board, not merged; hotel-floors merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -67,7 +67,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
 | hotel-floors | 5 / 5 | main | Done. Lobby and elevator checked by the user 2026-11-12; two-project queue and demo-with-floors checks in docs/HUMAN-CHECKS.md |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
-| build-board | 0 / 2 | — | Construction board in the lobby (TASKMAP row 3). S15B |
+| build-board | 2 / 2 | feat/build-board | Done, not merged: needs review + verification. Not looked at in a browser |
 | job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
 | night-shift | 0 / 4 | — | Night jobs, morning summary (row 4) |
 | project-memory | 0 / 3 | — | The Library (row 6) |
@@ -88,6 +88,11 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- build-board (tasks 1–2 done on `feat/build-board`, `pnpm check` and `security:scan` pass; the spec has no design.md, decisions here):
+  - Engine: `GET /build/board` and `GET /build/verify/:spec` (`agent-engine/src/build-board.ts`, parsers are pure and tested); the board reads only TASKMAP.md, each row's `.kiro/specs/<spec>/tasks.md`, `data/sessions/log.md` and `docs/reviews/feat-<spec>-verify.md` of the AGENT LIFE repo (spec names must match `^[a-z0-9-]+$`). Crew event kind `phase` (session `conduct`, field `phase`); the relay keeps the latest phase, the Builder walks to its desk and says it. `scripts/crew-phase.ts` sends it; `scripts/conduct.ts` reports session, review, verify, fix, merge, stopped and done (best effort).
+  - Row status: TASKMAP `done` is merged, `needs-check` waits for you (human check), `skip` skipped; the phase marks the spec running/verifying, a `stopped` phase makes it wait for you with the reason. Waiting rows are first.
+  - World/client: lobby furniture `construction_board` (north wall, x=7), panel `build`, messages `build_board`/`build_report` (client and server). The panel asks again every 10 s and 1.5 s after a Builder message. The scripted engine and the demo have no board: the panel says so.
+  - Known: the board shows the tasks of the checked-out branch (feature-branch ticks show only after the branch is checked out or merged). Not looked at in a browser; not run against a live conductor.
 - hotel-floors (tasks 1–5 done on `feat/hotel-floors`, `pnpm check` passes; decisions in the spec's design.md under "Decisions made while implementing"). What to know for review and the live check:
   - Checked in Edge with Playwright (`$env:E2E_CHANNEL='msedge'; pnpm --filter @agentlife/client e2e`, 36 tests, now one worker because the world-server serves one user): lobby, elevator panel, door transition, floor label, remembered floor, team bar per floor. `e2e:demo` passes with the replay hotel. The user has not looked at it.
   - Protocol additions: client `go_to { roomId }` (only accepted while the avatar stands in front of an elevator) and `activity_scope { scope: "floor" | "all" }`; server `floors`, `welcome.roomId`, `ActivityLine.roomId`, panels `elevator`, `directory`, `door`; event `task.queued`; agent ids in events may be `<projectId>:<role>`; `RunExport.roomId`.

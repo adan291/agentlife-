@@ -247,6 +247,25 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  /** Construction board data and verify reports: read-only, from the engine. */
+  const sendBuildBoard = async (ws: WebSocket) => {
+    if (!engine?.getBuildBoard) return sendError(ws, "engine_unavailable", "the construction board needs the real engine");
+    try {
+      send(ws, { type: "build_board", board: await engine.getBuildBoard() });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot read the construction board");
+    }
+  };
+
+  const sendBuildReport = async (ws: WebSocket, spec: string) => {
+    if (!engine?.getBuildReport) return sendError(ws, "engine_unavailable", "the construction board needs the real engine");
+    try {
+      send(ws, { type: "build_report", report: await engine.getBuildReport(spec) });
+    } catch {
+      sendError(ws, "engine_unavailable", "no verification report for that spec");
+    }
+  };
+
   /** The repositories the computer of a floor can start a job on: the floor's own project. */
   const sendRepos = async (ws: WebSocket, roomId: string) => {
     if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
@@ -286,6 +305,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       await sendJobUpdate(roomId);
     } else if (panel === "elevator" || panel === "directory") {
       pushFloors(true);
+    } else if (panel === "build") {
+      await sendBuildBoard(ws);
     }
   };
 
@@ -703,6 +724,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         goTo(ws, msg.roomId);
       } else if (msg.type === "activity_scope") {
         setActivityScope(msg.scope);
+      } else if (msg.type === "build_board") {
+        void sendBuildBoard(ws);
+      } else if (msg.type === "build_report") {
+        void sendBuildReport(ws, msg.spec);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

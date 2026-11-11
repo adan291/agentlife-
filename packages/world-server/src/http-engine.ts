@@ -1,5 +1,7 @@
 import {
   AgentEventSchema,
+  BuildBoardSchema,
+  BuildReportSchema,
   DeliveryInfoSchema,
   ErrorResponseSchema,
   HealthResponseSchema,
@@ -13,6 +15,8 @@ import {
   type AgentEvent,
   type AgentId,
   type ApprovalDecision,
+  type BuildBoard,
+  type BuildReport,
   type DeliveryInfo,
   type JobDetails,
   type JobView,
@@ -102,6 +106,14 @@ export class HttpEngineLink implements EngineLink {
 
   async removeProject(projectId: string): Promise<void> {
     await this.request("DELETE", `/projects/${encodeURIComponent(projectId)}`);
+  }
+
+  async getBuildBoard(): Promise<BuildBoard> {
+    return BuildBoardSchema.parse(await this.request("GET", "/build/board"));
+  }
+
+  async getBuildReport(spec: string): Promise<BuildReport> {
+    return BuildReportSchema.parse(await this.request("GET", `/build/verify/${encodeURIComponent(spec)}`));
   }
 
   async deliver(taskId: string): Promise<DeliveryInfo> {

@@ -8,6 +8,7 @@ import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, ty
 import { createEventsRoute } from "./http/sse.ts";
 import { createExportRoute } from "./http/export.ts";
 import { createCrewRelay, createCrewRoute } from "./crew.ts";
+import { createBuildBoardRoutes } from "./build-board.ts";
 import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
@@ -141,6 +142,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     ...(opts.reportTimeoutMs ? { reportTimeoutMs: opts.reportTimeoutMs } : {}),
   });
   runner.recover();
+  const crewRelay = createCrewRelay({ append: (ev) => store.appendEvent(ev) });
   const server = createEngineServer({
     store,
     runner,
@@ -151,7 +153,8 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
       createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
-      createCrewRoute(createCrewRelay({ append: (ev) => store.appendEvent(ev) })),
+      createCrewRoute(crewRelay),
+      ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
       ...createProjectRoutes(projects, runner, store),
       createDeliverRoute({ registry: projects, paths, store, logger }),
       ...(opts.extraRoutes ?? []),

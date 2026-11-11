@@ -35,12 +35,24 @@ function say(msg: string): void {
   console.log(`[conduct] ${msg}`);
 }
 
+let currentSpec: string | undefined;
+
+/** Tells the engine what the conductor is doing so the construction board and the Builder show it. Best effort. */
+function reportPhase(phase: string, spec: string | undefined = currentSpec): void {
+  try {
+    spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(ROOT, "scripts", "crew-phase.ts"), phase, ...(spec ? [spec] : [])], { cwd: ROOT, windowsHide: true, timeout: 5000, stdio: "ignore" });
+  } catch {
+    // never blocks the conductor
+  }
+}
+
 function notify(msg: string): void {
   sh(process.execPath, ["--experimental-strip-types", "--no-warnings", join(ROOT, "scripts", "notify.ts"), "--auto", `AGENT LIFE conductor: ${msg}`]);
 }
 
 function stop(msg: string): never {
   say(`STOP: ${msg}`);
+  reportPhase(`stopped: ${msg}`);
   notify(`parado. ${msg}`);
   process.exit(1);
 }
@@ -76,6 +88,7 @@ function onMain(): void {
 
 function runSession(id: string): void {
   say(`session ${id}`);
+  reportPhase(`session ${id}`);
   // The runner may switch to main and ask for a restart once.
   for (let i = 0; i < 2; i++) {
     const r = sh("pnpm", ["-s", "session", id], true);
@@ -93,9 +106,11 @@ function verify(spec: string): "PASS" | "FAIL" {
   const branch = branchOf(spec);
   if (sh("git", ["switch", branch]).code !== 0) stop(`branch ${branch} not found`);
   say(`review of ${branch}`);
+  reportPhase("review");
   const rv = sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-reviewer", "--model", "claude-haiku-5.5", "--no-interactive", "Review the current branch against main."]);
   if (rv.code !== 0) stop(`the reviewer failed for ${spec} (exit ${rv.code})`);
   say(`acceptance verification of ${spec}`);
+  reportPhase("verify");
   const vf = sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-verifier", "--no-interactive", `Verify branch ${branch} against the ${spec} spec.`]);
   if (vf.code !== 0) stop(`the verifier failed for ${spec} (exit ${vf.code})`);
   const report = join(ROOT, "docs", "reviews", `${branch.replace(/\//g, "-")}-verify.md`);
@@ -111,6 +126,7 @@ function fixSession(spec: string, round: number): void {
   const branch = branchOf(spec);
   const prompt = `Fix every FAIL listed in docs/reviews/${branch.replace(/\//g, "-")}-verify.md and every blocking issue in docs/reviews/${branch.replace(/\//g, "-")}.md for the ${spec} spec, on branch ${branch}. Do not start other tasks. Follow workflow.md.`;
   say(`fix round ${round} for ${spec}`);
+  reportPhase(`fix ${round}`);
   sh("git", ["switch", "main"]);
   const r = sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-builder", "--model", "claude-sonnet-5.5", "--no-interactive", prompt], true);
   if (r.code !== 0) stop(`fix session for ${spec} failed`);
@@ -118,6 +134,7 @@ function fixSession(spec: string, round: number): void {
 
 function merge(spec: string): void {
   const branch = branchOf(spec);
+  reportPhase("merge");
   onMain();
   const m = sh("git", ["merge", "--no-ff", branch, "-m", `merge: ${spec}`]);
   if (m.code !== 0) {
@@ -144,6 +161,7 @@ function merge(spec: string): void {
 }
 
 function conduct(item: Item): void {
+  currentSpec = item.spec;
   onMain();
   if (!specDone(item.spec)) for (const s of item.sessions) runSession(s);
   if (!specDone(item.spec)) stop(`${item.spec} still has unchecked tasks after its sessions`);
@@ -199,4 +217,5 @@ if (items.length === 0) {
 }
 for (const item of args.has("--once") ? items.slice(0, 1) : items) conduct(item);
 say("taskmap complete");
+reportPhase("done", "");
 notify("todas las specs del taskmap están terminadas.");

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
+import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
 import { FloorStatusSchema } from "./floors.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
@@ -19,7 +20,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent ids are strings, so they never collide. */
@@ -155,6 +156,10 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
    * the other floors' lines as they happen, plus their buffered lines right away.
    */
   z.object({ type: z.literal("activity_scope"), scope: z.enum(["floor", "all"]) }),
+  /** Construction board: ask for fresh data. Answered with `build_board`. */
+  z.object({ type: z.literal("build_board") }),
+  /** Construction board: the verifier report of a spec. Answered with `build_report`. */
+  z.object({ type: z.literal("build_report"), spec: SpecNameSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -207,6 +212,9 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("job_details"), details: JobDetailsSchema }),
   /** Every floor with its live status. Sent after `welcome` and whenever a status changes. */
   z.object({ type: z.literal("floors"), floors: z.array(FloorStatusSchema).max(100) }),
+  /** Construction board data (the engine's `GET /build/board`) and a verifier report. */
+  z.object({ type: z.literal("build_board"), board: BuildBoardSchema }),
+  z.object({ type: z.literal("build_report"), report: BuildReportSchema }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

@@ -1,0 +1,40 @@
+VERDICT: PASS
+
+# Verification: feat/build-board against the build-board spec
+
+Branch: `feat/build-board` (3 commits over main: a2f85b4, cb095f8, 985a7db). Tasks 1 and 2 are marked `[x]`.
+`pnpm check`: exit 0 (shared 183, world-server 98, client 361, agent-engine 305 + 6 skipped, scripts 16).
+Extra: `node scripts/crew-phase.ts review build-board` with no engine listening exits 0 (best effort confirmed).
+No `build-board` Playwright test exists (`e2e/` has demo, job-insight, shell only); not required by the spec.
+The spec has no design.md; decisions are in docs/STATUS.md.
+
+| Requirement.criterion | Result | Evidence |
+|---|---|---|
+| 1.1 `GET /build/board` returns TASKMAP rows, tasks with done/total, last 10 session lines, verdicts, validated by `BuildBoardSchema` | PASS | `agent-engine/src/build-board.ts` `parseTaskmap`, `parseTasks`, `parseSessionLog` (`slice(-10)`), `parseVerdict`, `readBuildBoard` (ends in `BuildBoardSchema.parse`), route `/build/board` uses `sendJson(res, 200, BuildBoardSchema, ...)`. Schema in `shared/src/build.ts`. Tests in `agent-engine/test/build-board.test.ts`: "reads TASKMAP rows...", "reads checkboxes...", "reads the session log, keeps the last 10...", "reads the verdict from the first line only", "builds a valid board from the files", "serves the board of this repository...". Column layout matches the real `docs/TASKMAP.md` and `data/sessions/log.md` headers. |
+| 1.2 Reads only the fixed files, spec names `^[a-z0-9-]+$`, nothing from user projects | PASS | `readText(root, ...)` is called only with `docs/TASKMAP.md`, `.kiro/specs/<spec>/tasks.md`, `docs/reviews/feat-<spec>-verify.md`, `data/sessions/log.md`, and checks `isInside`. Spec names pass `SPEC_NAME_RE` in `parseTaskmap` and `readVerifyReport`; root is `PROJECT_ROOT` (engine.ts:115 area, imported from paths.ts). Tests: "skips malformed ones and path tricks" (`../evil`), "reads verify reports only for valid spec names" (`../TASKMAP`, `..\x`, `a/b`, ...), and the HTTP check returning 404 for `../x`. World-server test rejects `../secret` with `bad_message` (zod `SpecNameSchema`). |
+| 1.3 Missing or malformed files give empty sections, never an error | PASS | `readText` catches all errors and returns "". Test "returns empty sections when the files are missing" expects `{ rows: [], specs: [], sessions: [] }`; malformed rows are skipped in the parser tests. |
+| 2.1 Conductor reports `session <id>`, `review`, `verify`, `fix <n>`, `merge`, `stopped: <reason>`, `done` via `POST /crew/events` kind `phase`, best effort | PASS | `shared/src/crew.ts` adds kind `phase` and field `phase`. `scripts/conduct.ts` calls `reportPhase` in `runSession`, `verify` (review, verify), `fixSession`, `merge`, `stop` and at the end (`done`). `scripts/crew-phase.ts` posts with a 1 s timeout and swallows errors; `reportPhase` wraps the spawn in try/catch with a 5 s timeout. Tests: `scripts/test/crew-phase.test.ts` (all seven phase texts accepted by the schema), engine test "serves the board... the phase" (real POST to `/crew/events`, then the phase appears in `/build/board`). The conductor-side calls themselves are not run in a test (see Human checks). |
+| 2.2 Board shows the current phase and spec; Builder says the phase in a bubble | PASS | `agent-engine/src/crew.ts` case `phase` emits `agent.goto`, `agent.state_changed` and `agent.say` (not throttled), plus an activity line. Test "stores the phase and makes the Builder work and say it". Board: `phaseLine` and `.al-build-phase` in `client/src/ui/build-board.ts`; test "describes the conductor phase" and "lists rows...` asserts "Conductor: verify on build-board". Builder desk/home anchors exist in `world-server/rooms/lobby.json`. |
+| 3.1 Lobby has an interactive construction board with hint "What is being built and what waits for you" | PASS | `shared/src/furni.ts` def `construction_board` (interaction `build`, that exact hint); `rooms/lobby.json` item `construction_board_1` at x=7 (no overlap with neighbours); recipe in `client/src/scene/recipes.ts`. World-server test "sends the board before it opens the panel when the user uses the construction board". |
+| 3.2 Panel lists rows in order with status chip (6 statuses), progress bar, expandable tasks, running row highlighted, waits-for-you rows on top with reason | PASS | `renderBuildBoard`/`renderRow`: `chipText` covers all six, progressbar with `aria-valuenow`, "Show tasks"/"Hide tasks" toggle, `Waits for you: <reason>`. Server orders with `waitingFirst`. CSS `.al-build-row[data-status="running"|"verifying"]` and `[data-attention="true"]` in `panels.ts`. Client tests: "says every status in words", "lists rows in the order given with chip, progress bar and the highlighted running row", "shows tasks only for expanded rows..."; engine test "a stop waits for the user with its reason and goes to the top". The visual highlight itself is CSS and needs a look (Human checks). |
+| 3.3 Refresh on crew/phase events and at most every 10 s otherwise | PASS | `panels.ts`: `syncBuildTimers` sets a 10 s interval (`BUILD_REFRESH_MS`) only while the board is open; `handle()` calls `scheduleBuildRefresh` (1.5 s, coalesced) when `isBuilderMessage(msg)`. Tests: "refreshes at most every 10 seconds" (constant), "recognises Builder messages as refresh triggers". The timer wiring in `panels.ts` is not unit tested (read only). |
+| 3.4 Verdict chip links to the verify report rendered as Markdown (safe renderer) | PASS | `renderRow` adds a verdict button only when the verdict is PASS/FAIL; click sends `build_report` and shows `renderBuildReport`, which uses `renderMarkdown` (plain nodes built with `createElement`/`textContent`, no `innerHTML`). Engine route `/build/verify/:spec`, gateway `build_report`. Tests: "offers the verdict link only for verified specs and opens the report", "renders the report as text: raw HTML never becomes an element", world-server "answers a refresh and a report request...". |
+| 4.1 Parser tests on fixtures including malformed input; spec-name validation rejects path tricks | PASS | `agent-engine/test/build-board.test.ts` describe "parsers" and "readBuildBoard" (malformed TASKMAP rows, broken log lines, `\u0000garbage`, empty input, path tricks). |
+| 4.2 Phase events mapped to board state and Builder bubbles | PASS | describe "phase to board state" (running, verifying, fix, stopped, merged rows unchanged, done/no spec) and "crew relay phase events" (say, state, goto home on stop/done, empty phase ignored, invalid spec dropped). |
+
+## To fix
+
+None.
+
+Non-blocking observations (not criteria):
+- `applyPhase` keeps `reason` when a `waits_for_you` row (TASKMAP `needs-check`) becomes `running`/`verifying`, so a running row could still show "Waits for you: ...". Not reachable today because the conductor does not run `needs-check` rows.
+- A stale phase stays in engine memory if the conductor is killed without sending `stopped`/`done`.
+
+## Human checks
+
+1. Start the engine and world-server (`ENGINE=http`), open the lobby: the construction board appears on the north wall (x=7) between the directory board and the HR door, with the hint text on hover.
+2. Click it: the panel opens with rows from `docs/TASKMAP.md`, bars matching each spec's `tasks.md`, "Show tasks" expands, the running row is visibly highlighted and "Waits for you" rows are on top with their reason.
+3. Run `pnpm conduct --once` (or send `node --experimental-strip-types scripts/crew-phase.ts verify build-board`) against a live engine: the Builder walks to its desk and says the phase, the panel's phase line changes within about 2 s, and a `stopped: ...` phase turns the row into "Waits for you".
+4. Click a PASS/FAIL verdict button: the report renders as formatted text and "Back" returns to the board.
+5. Open the board with the scripted engine and in the demo: it shows "Not available: ..." and does not break.
+6. Confirm the conductor's real `reportPhase` calls in `scripts/conduct.ts` reach the engine during a full row (not covered by a test; `run-session`-style scripts are outside `pnpm check` typechecking).

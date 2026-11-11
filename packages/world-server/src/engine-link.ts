@@ -2,6 +2,8 @@ import type {
   AgentEvent,
   AgentId,
   ApprovalDecision,
+  BuildBoard,
+  BuildReport,
   DeliveryInfo,
   JobDetails,
   JobView,
@@ -30,6 +32,9 @@ export interface EngineLink {
   removeProject?(projectId: string): Promise<void>;
   /** Fetches the job's branch into the user's repository. Rejects with the engine's message when it refuses. */
   deliver?(taskId: string): Promise<DeliveryInfo>;
+  /** Construction board of the lobby: how AGENT LIFE itself is being built. Optional: the scripted engine has none. */
+  getBuildBoard?(): Promise<BuildBoard>;
+  getBuildReport?(spec: string): Promise<BuildReport>;
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;

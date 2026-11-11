@@ -189,6 +189,22 @@ const directoryBoard: Recipe = (g, c) => {
   });
 };
 
+/** A wall board with a blueprint and progress bars: what is being built. */
+const constructionBoard: Recipe = (g, c) => {
+  const slab = backRect(c, 0.14, 0.04);
+  drawBoxes(g, [piece(slab, 1.0, 3.9, C.woodDark)]);
+  const panel = frontFace(c, slab, 0.05, 0.95, 1.2, 3.7);
+  if (panel) fillPoly(g, panel, C.cork);
+  // Three progress bars of different length, as on a site hoarding.
+  [0.8, 0.55, 0.3].forEach((fill, k) => {
+    const y0 = 3.1 - k * 0.6;
+    const track = frontFace(c, slab, 0.12, 0.88, y0, y0 + 0.3);
+    if (track) fillPoly(g, track, C.screenOff);
+    const bar = frontFace(c, slab, 0.12, 0.12 + 0.76 * fill, y0, y0 + 0.3);
+    if (bar) fillPoly(g, bar, k === 0 ? C.pumpkin : C.screen);
+  });
+};
+
 /** A door in the wall with a lit sign above it. */
 const door: Recipe = (g, c) => {
   const slab = backRect(c, 0.12, 0.04);
@@ -292,6 +308,7 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   reception_desk: receptionDesk,
   elevator,
   directory_board: directoryBoard,
+  construction_board: constructionBoard,
   door,
   chair,
   plant,

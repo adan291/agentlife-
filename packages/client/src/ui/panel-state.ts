@@ -1,4 +1,4 @@
-import type { Approval, FloorStatus, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
+import type { Approval, BuildBoard, BuildReport, FloorStatus, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -25,6 +25,12 @@ export class PanelState {
   viewing: string | null = null;
   /** Answer to the last `register_project`, shown in the Reception panel until it is opened again. */
   registration: RegisterProjectResult | null = null;
+  /** Construction board data (lobby) and the verify report the user is reading, if any. */
+  build: BuildBoard | null = null;
+  buildReport: BuildReport | null = null;
+  buildViewing: string | null = null;
+  /** Why the board has no data (the scripted engine has none). */
+  buildError: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -51,7 +57,18 @@ export class PanelState {
         this.viewing = null;
         if (msg.panel === "computer") this.engineError = null;
         if (msg.panel === "reception") this.registration = null;
+        if (msg.panel === "build") {
+          this.buildViewing = null;
+          this.buildError = null;
+        }
         return true;
+      case "build_board":
+        this.build = msg.board;
+        this.buildError = null;
+        return this.open === "build";
+      case "build_report":
+        this.buildReport = msg.report;
+        return this.open === "build";
       case "repos":
         this.data.repos = msg.repos;
         this.engineError = null;
@@ -86,6 +103,7 @@ export class PanelState {
       case "error":
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;
+          if (this.open === "build") this.buildError = msg.message;
           return true;
         }
         return false;
@@ -97,6 +115,7 @@ export class PanelState {
   close(): void {
     this.open = null;
     this.viewing = null;
+    this.buildViewing = null;
   }
 
   /** Opens an artifact of the job card in the viewer. */
