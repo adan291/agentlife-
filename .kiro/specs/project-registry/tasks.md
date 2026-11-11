@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Shared leak scanner and project schemas
+- [x] 1. Shared leak scanner and project schemas
   - Move the scanning core of scripts/security-scan.ts to `packages/shared/src/leaks.ts` (the script keeps working); `projects.ts` schemas and `delivery.done` event
   - _Requirements: 1.1, 1.4, 5.4_
 
