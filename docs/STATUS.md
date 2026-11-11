@@ -21,18 +21,17 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 afternoon (IDE): user back. Waiting for: browser look at the new shell, live run 3, security decisions 1-3.
 - 2026-11-11 15:50 (IDE): live run 3 passed and was exported for the demo (agent-pipeline 13/13). User feedback: no way to tell which work is which task, Architect and QA share a model (yes, both claude-haiku-5.5 on purpose: cheapest), unreadable colours, stepper overflow with scroll bars, ghosts show no working visual, report delivery went unnoticed. Spec job-insight written; S10F started. Security decisions still pending.
 - 2026-11-11 17:10 (IDE): S10F done; job-insight reviewed (approve), two review fixes applied, merged. Next: user looks at the room (work block, Job panel, report viewer, ghost effects); S11-S13; security decisions 1-3 still pending.
+- 2026-11-11 17:30 (IDE): user proposed an HR agent (hire/fire, agents from the internet), ordering agents, and an elevator with floors; asked Kiro to decide. Decided plan in "Next": demo first (S11 started), then hotel-floors, hr-desk (internet agents: persona only, fixed permission tiers, security review, user approval), pipeline-editor.
 
-## Next (2026-11-11)
-0. job-insight (S10F) is done on `feat/job-insight`: review it (agentlife-reviewer) and merge. What the user should look at in a browser: team bar work block (title, step, elapsed, context meter, files) while a job runs; tooltip on a busy ghost; terminal lines with `#d232 develop` tags; click the board or a stepper step for the Job card (steps table, Documents buttons, credits line); at report delivery the Architect says "Report delivered", the mailbox glows and bounces, a "Report ready: PASS" toast with Open report, the mailbox lists reports with badge and NEW; ghost signs (cloud, candle, envelope, exclamation, sparkle) and the lit desk monitor; stepper without scroll bars (icons below ~660 px of top bar); themed repository dropdown (one repository shows a line). Live run needed to confirm: real `session_info_update` context %, file counts from kiro-cli, the report "Run facts" with the new numbers.
-   - Origin check is on: the client must be served from `http://localhost:5173` or `http://127.0.0.1:5173`, otherwise set `WORLD_ALLOWED_ORIGINS` (comma-separated) for the world-server. Scripts without an Origin header still work on loopback.
-   - Playwright: `$env:E2E_CHANNEL='msedge'; pnpm --filter @agentlife/client e2e` (34 tests; job-insight.spec.ts proxies the world-server WebSocket to inject states).
-   - Not done / limits: the Job card refreshes on state changes and, while open, 1.5 s after a `work` message; reports of an earlier job are dropped when a new job starts (gateway behaviour, unchanged); the demo replay (S11) must build `report.verdict`/`ts` and `job_details` from the export (`jobDetailsFromExport` is in shared).
-1. User looks at the new shell in the browser (collapse team bar, resize terminal, minimise/restore).
-2. Live run 3 from the room (goal: "Validate todo titles in addTodo"), then agent-pipeline task 13: export it to packages/client/public/demo/run-001.json.
-3. S11 (demo-replay 1–4), S12 (5–6 + polish, needs the GitHub repo), S13 (submission texts).
-4. User decisions: see Security below.
-
-Start-up for live runs: Docker Desktop, Ollama, then engine (KIRO_API_KEY from .env, LLM_BASE_URL/LLM_MODEL for ambient lines), world-server with ENGINE=http, client dev.
+## Next (decided 2026-11-11)
+1. Demo first: S11 (demo-replay 1-4), S12 (5-6), S13 (submission texts). Not published yet.
+2. User: security decisions 1-3, then history rewrite (applied by Kiro with a backup) and the public GitHub repo.
+3. New specs, in this order, written after S13:
+   - `hotel-floors`: lobby with reception and an elevator, Engineering floor (today's office), HR floor; elevator is a furniture interaction that changes room.
+   - `hr-desk`: HR agent and desk; local catalogue of agent templates; hire, fire and rename; permissions only from fixed tiers (read-only, developer-in-worktree), never from imported files; internet import limited to allowlisted sources, persona and description only, reviewed by agentlife-security and approved by the user.
+   - `pipeline-editor`: choose and order roles on the board; the engine validates fixed rules (plan before approval, user approval before code changes, tests before review).
+   - Then, if time allows: Codex as an independent reviewer, a second approval on the final diff, per-job time and context budget, Kiroween ambience (sound, elevator, flicker), two more fixture repos.
+4. Re-record the demo run with the new features, then the video. Cut order if late: step 3 extras first, never the demo.
 
 ## Security (before the first push)
 First audit: data/security/2026-11-11-first-push.md (local only). Verdict: NOT safe to publish yet; the current tree is clean, the problems are in git history.
