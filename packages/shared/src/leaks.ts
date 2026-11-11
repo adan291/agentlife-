@@ -47,7 +47,7 @@ export function leakHash(value: string): string {
 export function maskLeak(value: string): string {
   const at = value.indexOf("@");
   if (at > 0) return `${value[0]}***@${value.slice(at + 1)}`;
-  return value.length <= 8 ? "***" : `${value.slice(0, 4)}…${value.slice(-2)} (${value.length} chars)`;
+  return `*** (${value.length} chars)`;
 }
 
 /** Values of the well-known secret variables of this machine, to be matched exactly (never printed). */

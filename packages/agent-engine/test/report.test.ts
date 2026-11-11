@@ -138,7 +138,7 @@ describe("buildReport", () => {
         expect(summary.split("\n").filter((l) => l.startsWith("- ")).length).toBe(4);
       }),
     );
-  });
+  }, 30_000); // 100 random reports with long strings: the default 5 s ran out on a busy machine
 });
 
 /** Lines the mailbox renderer treats as a fence: trimmed start begins with three backticks. */

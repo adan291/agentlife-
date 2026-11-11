@@ -59,11 +59,12 @@ describe("leak scanner", () => {
     expect(accepted.findings).toEqual([]);
   });
 
-  it("identifies a value by hash of kind and value, and masks long values to head, tail and length", () => {
+  it("identifies a value by hash of kind and value, and masks values to their length only (no characters revealed)", () => {
     expect(leakHash("x")).toMatch(/^[0-9a-f]{12}$/);
-    expect(maskLeak("abc")).toBe("***");
+    expect(maskLeak("abc")).toBe("*** (3 chars)");
     expect(maskLeak(email("someone", "host.com"))).toBe("s***@host.com");
-    expect(maskLeak("0123456789abcdef")).toBe("0123…ef (16 chars)");
+    expect(maskLeak("0123456789abcdef")).toBe("*** (16 chars)");
+    expect(maskLeak("0123456789abcdef")).not.toMatch(/0123|ef/);
   });
 
   it("orders groups by severity and treats only low as non-blocking", () => {

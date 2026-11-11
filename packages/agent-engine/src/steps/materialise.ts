@@ -120,11 +120,18 @@ export async function cloneProject(opts: CloneProjectOptions): Promise<ClonedPro
 
   mkdirSync(paths.repos, { recursive: true });
   rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  await git(
-    paths.repos,
-    ["clone", "--quiet", "--no-hardlinks", "--single-branch", "--template=", `--branch=${branch}`, "--", opts.sourcePath, target],
-    gitOpts,
-  );
+  try {
+    await git(
+      paths.repos,
+      ["clone", "--quiet", "--no-hardlinks", "--single-branch", "--template=", `--branch=${branch}`, "--", opts.sourcePath, target],
+      gitOpts,
+    );
+  } catch (e) {
+    if (opts.signal?.aborted) throw e;
+    // git's stderr names the user's absolute path; it must not leave the engine (security.md).
+    rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    throw new MaterialiseError(`could not clone project '${id}' (is the folder still there and readable?)`);
+  }
   try {
     await git(target, ["config", "core.autocrlf", "false"], gitOpts);
     await git(target, ["config", "commit.gpgsign", "false"], gitOpts);

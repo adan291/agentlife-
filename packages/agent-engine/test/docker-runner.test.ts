@@ -107,7 +107,10 @@ describe("buildRunArgs", () => {
     expect(args).toContain(RUNNER_IMAGE);
     const script = args[args.length - 1]!;
     expect(args[args.length - 3]).toBe("sh");
-    expect(script.startsWith("cp -r /src/. /work/ && cd /work && ")).toBe(true);
+    expect(script.startsWith("cp -r /src/. /work/ && find /work ")).toBe(true);
+    // Accepted secret files are deleted from the copy before the tests run (review of project-registry).
+    expect(script).toMatch(/-name '\.env' .*-delete && cd \/work && /);
+    expect(script).toContain("! -name '.env.example'");
     expect(script.endsWith("&& npm test")).toBe(true);
   });
 

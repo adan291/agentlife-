@@ -82,7 +82,7 @@ export async function deliverBranch(opts: DeliverOptions): Promise<DeliveryInfo>
     throw new ConflictError("branch_exists", `The branch ${branch} already exists in your repository. Nothing was changed.`);
   }
   try {
-    await git(real, [...QUIET, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", clone, `${ref}:${ref}`], opts.signal ? { signal: opts.signal } : {});
+    await git(real, [...QUIET, "fetch", "--quiet", "--no-write-fetch-head", "--no-tags", "--no-recurse-submodules", clone, `${ref}:${ref}`], opts.signal ? { signal: opts.signal } : {});
   } catch (e) {
     opts.logger?.error("delivery failed", { taskId, error: e instanceof Error ? e.message : String(e) });
     throw new ConflictError("delivery_failed", "Git could not create the branch in your repository. Nothing was changed.");

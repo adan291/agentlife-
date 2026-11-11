@@ -89,7 +89,9 @@ export interface DockerRunSpec {
  * a read-only mount of the worktree copied into a size-limited tmpfs, no capabilities, a non-root user.
  */
 export function buildRunArgs(spec: DockerRunSpec): string[] {
-  const script = `cp -r /src/. /work/ && cd /work && ln -s /deps/node_modules node_modules && ${spec.testCommand}`;
+  // Secret-looking files the user accepted at registration never reach the tests' output (and from there QA and the report).
+  const scrub = "find /work \\( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.pem' -o -name '*.key' -o -name 'id_rsa*' -o -name 'id_ed25519*' -o -name '*.p12' -o -name '*.pfx' -o -name '*.jks' -o -name '*.keystore' -o -name '.npmrc' -o -name '.netrc' -o -name '.pypirc' \\) ! -name '.env.example' -type f -delete";
+  const script = `cp -r /src/. /work/ && ${scrub} && cd /work && ln -s /deps/node_modules node_modules && ${spec.testCommand}`;
   return [
     "run",
     "--rm",
