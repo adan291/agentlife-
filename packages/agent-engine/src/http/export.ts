@@ -1,5 +1,6 @@
 import { RunExportSchema, type EngineJobView, type RunExport } from "@agentlife/shared";
 import { NotFoundError } from "../errors.ts";
+import { branchName } from "../steps/develop.ts";
 import type { Store } from "../store.ts";
 import { sendJson, type Route } from "./server.ts";
 
@@ -24,6 +25,11 @@ function withUsage(store: Store, job: EngineJobView): EngineJobView {
   return { ...job, steps };
 }
 
+/** The branch exists once the Developer step has started (the worktree is created at its start). */
+function withBranch(job: EngineJobView): EngineJobView {
+  return job.steps.some((s) => s.step === "develop") ? { ...job, branch: branchName(job.taskId) } : job;
+}
+
 /** One JSON document with the job (steps include duration, status and usage), its events and artifact contents. */
 export function buildExport(store: Store, taskId: string, now: () => number = Date.now): RunExport {
   const job = store.getJob(taskId);
@@ -31,7 +37,7 @@ export function buildExport(store: Store, taskId: string, now: () => number = Da
   return {
     version: 1,
     recordedAt: now(),
-    job: withUsage(store, job),
+    job: withBranch(withUsage(store, job)),
     events: store.eventsFor(taskId),
     artifacts: store.artifactsFor(taskId).map((a) => ({ id: a.id, kind: a.kind, content: a.content })),
   };

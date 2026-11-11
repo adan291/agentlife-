@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AgentEventSchema, type AgentEvent } from "@agentlife/shared";
+import { AgentEventSchema, RunExportSchema, type AgentEvent } from "@agentlife/shared";
+import { buildExport } from "../src/http/export.ts";
 import { JobRunner } from "../src/jobs/runner.ts";
 import { createRuntimeSteps } from "../src/jobs/runtime-steps.ts";
 import { FAKE_WORK, FakeRuntime } from "../src/runtimes/fake.ts";
@@ -236,5 +237,23 @@ describe("a whole job with the fake runtime", () => {
     const titles = workOf(store.eventsFor(id)).map((w) => `${w.step}:${w.title}`);
     expect(titles).toContain("analyze:Analysing haunted-todo");
     expect(titles).toContain("develop:Add the requested change");
+    // The export names the Developer's branch once a develop step ran, and carries the new numbers.
+    const exported = buildExport(store, id);
+    expect(exported.job.branch).toBe(`agentlife/${id}`);
+    expect(exported.job.steps.find((s) => s.step === "develop")).toMatchObject({ filesEdited: 1 });
+    expect(RunExportSchema.safeParse(JSON.parse(JSON.stringify(exported))).success).toBe(true);
+  });
+
+  it("names no branch for a job that never reached develop", async () => {
+    const store = newStore();
+    const fake = new FakeRuntime();
+    const steps = createRuntimeSteps({ runtimes: { architect: fake, developer: fake, qa: fake }, store });
+    const runner = new JobRunner({ store, steps, limits: LIMITS });
+    store.bus.on("event", (ev: AgentEvent) => {
+      if (ev.type === "approval.requested") queueMicrotask(() => runner.resolveApproval(ev.approvalId, "reject"));
+    });
+    const id = runner.start("haunted-todo", "g");
+    await runner.done(id);
+    expect(buildExport(store, id).job.branch).toBeUndefined();
   });
 });

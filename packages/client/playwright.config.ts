@@ -23,7 +23,12 @@ export default defineConfig({
       command: "pnpm --filter @agentlife/world-server start",
       cwd: "../..",
       port: WORLD_PORT,
-      env: { PORT: String(WORLD_PORT), ENGINE: "fake" },
+      env: {
+        PORT: String(WORLD_PORT),
+        ENGINE: "fake",
+        // The page is served from WEB_PORT, so the Origin check must allow it.
+        WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`,
+      },
       reuseExistingServer: !process.env["CI"],
     },
     {

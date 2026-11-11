@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AgentEventSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
-import { GOAL_MAX_CHARS } from "./protocol.ts";
+import { GOAL_MAX_CHARS } from "./limits.ts";
 
 // The public repo view is `RepoSchema` in protocol.ts; `source` paths are never exposed.
 
@@ -94,8 +94,42 @@ export const EngineJobViewSchema = z.object({
   approvals: z.array(ApprovalRecordSchema),
   artifacts: z.array(ArtifactRefSchema),
   verdict: VerdictSchema.optional(),
+  /** Git branch of the Developer's worktree. Set by the export once a develop step ran. */
+  branch: z.string().min(1).max(200).optional(),
 });
 export type EngineJobView = z.infer<typeof EngineJobViewSchema>;
+
+/** The viewer shows at most this many characters of an artifact; the rest is cut and flagged. */
+export const ARTIFACT_VIEW_MAX_CHARS = 200_000;
+
+export const ArtifactViewSchema = z.object({
+  artifactId: z.string().min(1),
+  kind: z.string().min(1),
+  title: z.string().min(1).max(200),
+  content: z.string().max(ARTIFACT_VIEW_MAX_CHARS + 200),
+  truncated: z.boolean(),
+});
+export type ArtifactView = z.infer<typeof ArtifactViewSchema>;
+
+/** `job_details` answer: the job and the (size-capped) contents of its artifacts, in creation order. */
+export const JobDetailsSchema = z.object({
+  job: EngineJobViewSchema,
+  artifacts: z.array(ArtifactViewSchema).max(40),
+});
+export type JobDetails = z.infer<typeof JobDetailsSchema>;
+
+/** Builds the `job_details` answer from a run export (live engine or recorded demo). Pure. */
+export function jobDetailsFromExport(exp: RunExport): JobDetails {
+  const titles = new Map(exp.job.artifacts.map((a) => [a.artifactId, a.title] as const));
+  const artifacts = exp.artifacts.slice(0, 40).map((a): ArtifactView => {
+    const truncated = a.content.length > ARTIFACT_VIEW_MAX_CHARS;
+    const content = truncated
+      ? `${a.content.slice(0, ARTIFACT_VIEW_MAX_CHARS)}\n[cut: ${a.content.length} characters in total]`
+      : a.content;
+    return { artifactId: a.id, kind: a.kind, title: titles.get(a.id) ?? a.kind, content, truncated };
+  });
+  return { job: exp.job, artifacts };
+}
 
 export const RunExportSchema = z.object({
   version: z.literal(1),

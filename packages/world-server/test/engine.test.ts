@@ -165,6 +165,67 @@ describe("gateway with the fake engine", () => {
     expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "bad_message" });
   });
 
+  it("sends work messages and puts the latest work of each agent in the welcome of a later client", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
+    await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+    const work = await c.next((m) => m.type === "work" && m.agentId === "architect" && m.work.filesRead === 2);
+    expect(work).toMatchObject({ work: { taskId: "task-1", step: "analyze", title: "Analysing haunted-todo", model: "fake", contextPct: 18.5, filesEdited: 0 } });
+
+    const late = new WebSocket(`ws://127.0.0.1:${c.port}`);
+    sockets.push(late);
+    const welcome = await new Promise<ServerMsg>((resolve) => {
+      late.once("message", (d) => resolve(ServerMsgSchema.parse(JSON.parse(d.toString()))));
+    });
+    if (welcome.type !== "welcome") throw new Error("unreachable");
+    expect(welcome.agents.find((a) => a.agentId === "architect")?.work).toMatchObject({ step: "analyze", filesRead: 2, startedAt: expect.any(Number) });
+    expect(welcome.agents.find((a) => a.agentId === "developer")?.work).toBeUndefined();
+  });
+
+  it("forgets the work when the job ends", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
+    const approval = await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+    if (approval.type !== "approval") throw new Error("unreachable");
+    c.send({ type: "approve", approvalId: approval.approval.approvalId, decision: "approve" });
+    await c.next((m) => m.type === "report");
+    await new Promise((r) => setTimeout(r, 30));
+    const late = new WebSocket(`ws://127.0.0.1:${c.port}`);
+    sockets.push(late);
+    const welcome = await new Promise<ServerMsg>((resolve) => {
+      late.once("message", (d) => resolve(ServerMsgSchema.parse(JSON.parse(d.toString()))));
+    });
+    if (welcome.type !== "welcome") throw new Error("unreachable");
+    expect(welcome.agents.every((a) => a.work === undefined)).toBe(true);
+  });
+
+  it("answers job_details with the steps and the artifact contents", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
+    const approval = await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+    if (approval.type !== "approval") throw new Error("unreachable");
+    c.send({ type: "approve", approvalId: approval.approval.approvalId, decision: "approve" });
+    await c.next((m) => m.type === "report");
+    c.send({ type: "job_details", taskId: approval.approval.taskId });
+    const msg = await c.next((m) => m.type === "job_details");
+    if (msg.type !== "job_details") throw new Error("unreachable");
+    const { job, artifacts } = msg.details;
+    expect(job).toMatchObject({ taskId: "task-1", repoId: "haunted-todo", goal: "fix it", branch: "agentlife/task-1" });
+    expect(job.steps.map((s) => s.step)).toEqual(["analyze", "develop", "test", "review", "report"]);
+    expect(job.steps[0]).toMatchObject({ model: "fake", contextPeak: 18.5, filesRead: 2, filesEdited: 0 });
+    expect(job.steps[1]).toMatchObject({ filesRead: 1, filesEdited: 1 });
+    expect(artifacts.map((a) => a.kind)).toEqual(["plan", "diff", "test_log", "review", "report"]);
+    expect(artifacts[0]?.content).toContain("Fix the failing test");
+  });
+
+  it("answers an unknown task with engine_unavailable and a malformed id with bad_message", async () => {
+    const c = await setup();
+    c.send({ type: "job_details", taskId: "task-99" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "engine_unavailable" });
+    c.send({ type: "job_details", taskId: "../etc/passwd" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "bad_message" });
+  });
+
   it("replies engine_unavailable for a non-allowlisted repo", async () => {
     const c = await setup();
     c.send({ type: "start_job", repoId: "evil", goal: "x" });

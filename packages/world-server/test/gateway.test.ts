@@ -110,6 +110,14 @@ describe("gateway", () => {
     expect(await c.next((m) => m.type === "open_panel")).toMatchObject({ panel: "board" });
   });
 
+  it("replies engine_unavailable to job_details when there is no engine", async () => {
+    const g = await setup();
+    const c = connect(g.port);
+    await c.open;
+    c.ws.send(JSON.stringify({ type: "job_details", taskId: "task-1" }));
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "engine_unavailable" });
+  });
+
   it("closes the connection for messages over 16 KB", async () => {
     const g = await setup();
     const c = connect(g.port);
