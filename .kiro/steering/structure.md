@@ -9,6 +9,6 @@ docs/                   discovery and design decisions (source of truth for "why
 .kiro/                  steering, specs, hooks, custom agents — must stay committed
 ```
 
-- One spec per feature block under `.kiro/specs/`: world-room, agent-engine, agent-pipeline, build-crew (the Builder ghost mirrors `pnpm session` runs in the room), room-hints (tooltips and onboarding), room-ux (team bar, stepper, activity terminal), room-fixes (bugfix), ui-shell (grid layout), demo-replay.
+- One spec per feature block under `.kiro/specs/`: world-room, agent-engine, agent-pipeline, build-crew (the Builder ghost mirrors `pnpm session` runs in the room), room-hints (tooltips and onboarding), room-ux (team bar, stepper, activity terminal), room-fixes (bugfix), ui-shell (grid layout), job-insight (work attribution, report viewer), demo-replay.
 - Runtime data (worktrees, run logs, SQLite) goes in `data/`, which is git-ignored.
 - Decisions that change the architecture are recorded in `docs/risks-and-decisions.md`.

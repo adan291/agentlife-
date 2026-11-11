@@ -19,6 +19,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 morning (IDE): ui-shell reviewed and merged; services started; security scanner, publishing gate and agentlife-security agent created; first audit says history must be cleaned before the first push (decisions below). User went out.
 - 2026-11-11 09:47 (Discord): user asked for a summary; Crew had no project context (its steering was not in the per-channel session folder). Fixed: steering copied to the Discord session folders and now tells Crew to read this section first.
 - 2026-11-11 afternoon (IDE): user back. Waiting for: browser look at the new shell, live run 3, security decisions 1-3.
+- 2026-11-11 15:50 (IDE): live run 3 passed and was exported for the demo (agent-pipeline 13/13). User feedback: no way to tell which work is which task, Architect and QA share a model (yes, both claude-haiku-5.5 on purpose: cheapest), unreadable colours, stepper overflow with scroll bars, ghosts show no working visual, report delivery went unnoticed. Spec job-insight written; S10F started. Security decisions still pending.
 
 ## Next (2026-11-11)
 1. User looks at the new shell in the browser (collapse team bar, resize terminal, minimise/restore).
@@ -48,6 +49,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
+| job-insight | 0 / 5 | — | Work attribution (task, step, model, context %, files), Job panel, report delivery + viewer, stepper fix, working visuals on ghosts, contrast, WebSocket Origin check (audit M3). S10F (Sonnet 5.5) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
