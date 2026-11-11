@@ -14,6 +14,14 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 - `pnpm --filter @agentlife/agent-engine start` (`FAKE_DELAY_MS`, default 800, sets the pace of the fake agents)
 - PowerShell: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start`
 
+## Next (2026-11-11)
+1. User looks at the new shell in the browser (collapse team bar, resize terminal, minimise/restore).
+2. Live run 3 from the room (goal: "Validate todo titles in addTodo"), then agent-pipeline task 13: export it to packages/client/public/demo/run-001.json.
+3. S11 (demo-replay 1–4), S12 (5–6 + polish, needs the GitHub repo), S13 (submission texts).
+4. User decisions: rewrite git history to remove the other account's email before the first push; create the public GitHub repo.
+
+Start-up for live runs: Docker Desktop, Ollama, then engine (KIRO_API_KEY from .env, LLM_BASE_URL/LLM_MODEL for ambient lines), world-server with ENGINE=http, client dev.
+
 ## Specs
 | Spec | Tasks done | Branch | Notes |
 |---|---|---|---|
