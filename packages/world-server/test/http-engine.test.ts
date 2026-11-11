@@ -166,7 +166,7 @@ describe("HttpEngineLink events", () => {
     mock.push(say(1), say(2), say(3));
     const it = link.events()[Symbol.asyncIterator]();
     const pending = take(it, 2);
-    await sleep(50);
+    await waitFor(() => mock.clients.size > 0);
     mock.push(say(4), say(5));
     expect(seqs(await pending)).toEqual([4, 5]);
     expect(mock.seenSince[0]).toBe(3);
@@ -175,12 +175,12 @@ describe("HttpEngineLink events", () => {
   it("reconnects with the last seen seq and loses nothing", async () => {
     const { mock, link } = await setup();
     const it = link.events()[Symbol.asyncIterator]();
-    await sleep(50);
+    await waitFor(() => mock.clients.size > 0);
     mock.push(say(1), say(2));
     const first = await take(it, 2);
     mock.dropStreams();
     mock.push(say(3), say(4)); // while disconnected
-    await sleep(100);
+    await waitFor(() => mock.clients.size > 0);
     mock.push(say(5));
     const rest = await take(it, 3);
     expect([...seqs(first), ...seqs(rest)]).toEqual([1, 2, 3, 4, 5]);
@@ -190,7 +190,7 @@ describe("HttpEngineLink events", () => {
   it("keeps retrying while the engine is down, then resumes", async () => {
     const { mock, link } = await setup();
     const it = link.events()[Symbol.asyncIterator]();
-    await sleep(50);
+    await waitFor(() => mock.clients.size > 0);
     mock.push(say(1));
     await take(it, 1);
     const port = mock.port;
@@ -209,7 +209,7 @@ describe("HttpEngineLink events", () => {
     const { mock, link } = await setup();
     mock.push(say(1), say(2), say(3));
     const it = link.events()[Symbol.asyncIterator]();
-    await sleep(50);
+    await waitFor(() => mock.clients.size > 0);
     mock.push(say(4));
     await take(it, 1);
     mock.events = []; // engine restarted with a fresh database
@@ -224,7 +224,7 @@ describe("HttpEngineLink events", () => {
   it("ignores duplicates and invalid events", async () => {
     const { mock, link } = await setup();
     const it = link.events()[Symbol.asyncIterator]();
-    await sleep(50);
+    await waitFor(() => mock.clients.size > 0);
     for (const c of mock.clients) c.write(`id: 1\nevent: agent\ndata: {"type":"nope"}\n\n`);
     mock.push(say(1));
     for (const c of mock.clients) c.write(`id: 1\nevent: agent\ndata: ${JSON.stringify(say(1))}\n\n`);
