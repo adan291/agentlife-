@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Engine: build board data and phase events
+- [x] 1. Engine: build board data and phase events
   - Parsers for TASKMAP, tasks.md, session log and verify reports; `GET /build/board`; crew event kind `phase`; conductor reports its phase
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 4.1_
 

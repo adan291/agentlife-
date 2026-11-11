@@ -1,5 +1,5 @@
-import { CrewEventSchema, OkResponseSchema } from "@agentlife/shared";
-import type { CrewEvent } from "@agentlife/shared";
+import { CrewEventSchema, OkResponseSchema, SPEC_NAME_RE, phaseGroup } from "@agentlife/shared";
+import type { BuildPhase, CrewEvent } from "@agentlife/shared";
 import { createActivityEmitter } from "./activity.ts";
 import { parseBody, sendJson, type Route } from "./http/server.ts";
 import type { NewEvent } from "./store.ts";
@@ -14,6 +14,8 @@ export interface CrewRelayOptions {
 
 export interface CrewRelay {
   handle(ev: CrewEvent): void;
+  /** Latest conductor phase, if one was reported since the engine started. */
+  phase(): BuildPhase | undefined;
 }
 
 /**
@@ -23,10 +25,12 @@ export interface CrewRelay {
 export function createCrewRelay(opts: CrewRelayOptions): CrewRelay {
   const now = opts.now ?? Date.now;
   let lastSayAt = Number.NEGATIVE_INFINITY;
+  let current: BuildPhase | undefined;
   // Builder lines for the activity terminal follow the same 1 per second rule as the roles.
   const activity = createActivityEmitter({ append: opts.append, now });
 
   return {
+    phase: () => current,
     handle(ev) {
       const taskId = `build:${ev.session}`;
       const base = { taskId, agentId: "builder" as const };
@@ -59,6 +63,23 @@ export function createCrewRelay(opts: CrewRelayOptions): CrewRelay {
           state(ok ? "done" : "error");
           opts.append({ ...base, type: "agent.goto", anchor: "home" });
           state("idle");
+          return;
+        }
+        case "phase": {
+          const text = (ev.phase ?? "").trim().slice(0, 80);
+          if (!text) return;
+          current = { text, ...(ev.spec && SPEC_NAME_RE.test(ev.spec) ? { spec: ev.spec } : {}), at: now() };
+          const group = phaseGroup(text);
+          if (group === "running" || group === "verifying") {
+            opts.append({ ...base, type: "agent.goto", anchor: "desk" });
+            state("working", text);
+          } else {
+            state(group === "stopped" ? "error" : "done");
+            opts.append({ ...base, type: "agent.goto", anchor: "home" });
+            state("idle");
+          }
+          say(text);
+          activity.line(taskId, "builder", `Phase: ${text}`);
           return;
         }
       }
