@@ -24,7 +24,9 @@ const GIT_ENV = { ...process.env, GIT_AUTHOR_NAME: "adan291", GIT_AUTHOR_EMAIL: 
 const args = new Set(process.argv.slice(2));
 
 function sh(cmd: string, a: string[], inherit = false): { code: number; out: string } {
-  const shell = process.platform === "win32" && (cmd === "pnpm" || cmd === "kiro-cli");
+  // Only pnpm needs a shell on Windows (it is a .cmd shim). kiro-cli is a real executable: through a shell its
+  // multi-word prompt would be split into separate arguments (that is how review and verification got lost).
+  const shell = process.platform === "win32" && cmd === "pnpm";
   const r = spawnSync(cmd, a, { cwd: ROOT, encoding: "utf8", env: GIT_ENV, shell, windowsHide: true, maxBuffer: 64 * 1024 * 1024, stdio: inherit ? "inherit" : "pipe" });
   return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
@@ -89,9 +91,11 @@ function verify(spec: string): "PASS" | "FAIL" {
   const branch = branchOf(spec);
   if (sh("git", ["switch", branch]).code !== 0) stop(`branch ${branch} not found`);
   say(`review of ${branch}`);
-  sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-reviewer", "--model", "claude-haiku-5.5", "--no-interactive", "Review the current branch against main."]);
+  const rv = sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-reviewer", "--model", "claude-haiku-5.5", "--no-interactive", "Review the current branch against main."]);
+  if (rv.code !== 0) stop(`the reviewer failed for ${spec} (exit ${rv.code})`);
   say(`acceptance verification of ${spec}`);
-  sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-verifier", "--no-interactive", `Verify branch ${branch} against the ${spec} spec.`]);
+  const vf = sh("kiro-cli", ["chat", "--v3", "--agent", "agentlife-verifier", "--no-interactive", `Verify branch ${branch} against the ${spec} spec.`]);
+  if (vf.code !== 0) stop(`the verifier failed for ${spec} (exit ${vf.code})`);
   const report = join(ROOT, "docs", "reviews", `${branch.replace(/\//g, "-")}-verify.md`);
   if (!existsSync(report)) stop(`the verifier wrote no report for ${spec}`);
   const verdict = /^VERDICT:\s*PASS/m.test(readFileSync(report, "utf8")) ? "PASS" : "FAIL";

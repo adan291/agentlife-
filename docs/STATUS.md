@@ -30,6 +30,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 21:25 (IDE): user asked for the HR rooms and the functional hotel, not only a demo. Specs hotel-floors, hr-desk, pipeline-editor written and queued as S15-S19 after S14 (project-registry).
 - 2026-11-11 22:00 (IDE): S14 done and merged after review. GitHub: Linux CI green, Windows CI failed on GitHub (passes in a clean local clone; the log needs a signed-in GitHub, gh not installed); Pages build still queued. Next: live check of project-registry with a small project in D:\AgentHotel, then S15.
 - 2026-11-11 22:40 (IDE): user asked for a full taskmap run with agents to 100 %. Created docs/TASKMAP.md, specs job-types, night-shift, project-memory, list-mode, hr-desk task 5 (Ollama intern), agent agentlife-verifier and the conductor `pnpm conduct` (build -> review -> verify -> fix -> merge). Started with row 2 (hotel-floors).
+- 2026-11-12 (IDE): user wants to see the tasks inside the app; spec build-board added as TASKMAP row 3. Conductor bug found and fixed: kiro-cli was spawned through the Windows shell, so review and verification prompts were split into words and did nothing; hotel-floors sessions S15-S16 are done (5/5) and wait for review + verification.
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
@@ -62,6 +63,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
 | hotel-floors | 0 / 5 | — | Lobby (Reception, elevator, HR door, directory), one floor per project, elevator with live floor status, per-project jobs (max 2 at once). S15-S16 |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
+| build-board | 0 / 2 | — | Construction board in the lobby (TASKMAP row 3). S15B |
 | job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
 | night-shift | 0 / 4 | — | Night jobs, morning summary (row 4) |
 | project-memory | 0 / 3 | — | The Library (row 6) |

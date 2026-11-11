@@ -10,19 +10,20 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 |---|---|---|---|---|---|
 | 1 | `project-registry` | S14 | yes | skip | Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch |
 | 2 | `hotel-floors` | S15 S16 | yes | todo | Lobby, elevator with live floor status, one floor per project, two jobs at once |
-| 3 | `job-types` | S20 S21 | no | todo | Review my branch, write tests, document: each from its own furniture |
-| 4 | `night-shift` | S22 S23 | yes | todo | Schedule jobs for the night; morning summary in the mailbox and on Discord |
-| 5 | `hr-desk` | S17 S18 S24 | yes | todo | HR office: hire, rename, change model, fire; trusted imports; local Ollama intern |
-| 6 | `project-memory` | S25 | no | todo | The Library: what agents learned, used in every next job |
-| 7 | `list-mode` | S26 | no | todo | List view and command palette for daily use |
-| 8 | `pipeline-editor` | S19 | no | todo | Choose and order roles per project with fixed safety rules |
-| 9 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
+| 3 | `build-board` | S15B | no | todo | Construction board in the lobby: TASKMAP rows, tasks per spec, conductor phase, what waits for you |
+| 4 | `job-types` | S20 S21 | no | todo | Review my branch, write tests, document: each from its own furniture |
+| 5 | `night-shift` | S22 S23 | yes | todo | Schedule jobs for the night; morning summary in the mailbox and on Discord |
+| 6 | `hr-desk` | S17 S18 S24 | yes | todo | HR office: hire, rename, change model, fire; trusted imports; local Ollama intern |
+| 7 | `project-memory` | S25 | no | todo | The Library: what agents learned, used in every next job |
+| 8 | `list-mode` | S26 | no | todo | List view and command palette for daily use |
+| 9 | `pipeline-editor` | S19 | no | todo | Choose and order roles per project with fixed safety rules |
+| 10 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
 
-Dependencies: 2 needs 1; 3, 4, 5, 6 need 2; 4 needs 3; 7 needs 3 and 4; 8 needs 5. The order above respects them.
+Dependencies: 2 needs 1; 3 needs 2; 4, 5, 6, 7 need 2; 5 needs 4; 8 needs 4 and 5; 9 needs 6. The order above respects them.
 
-Cut order if late (freeze 2026-12-01): 8, then 7, then 6. Never cut 1, 2, 3, 4 or 9.
+Cut order if late (freeze 2026-12-01): 9, then 8, then 7. Never cut 1, 2, 4, 5 or 10.
 
 ## Agents
 

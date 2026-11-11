@@ -156,6 +156,13 @@
       "prompt": "Implement tasks 4 and 5 of the hotel-floors spec. Follow workflow.md."
     },
     {
+      "id": "S15B",
+      "spec": "build-board",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 and 2 of the build-board spec (.kiro/specs/build-board). Follow workflow.md."
+    },
+    {
       "id": "S17",
       "spec": "hr-desk",
       "model": "claude-sonnet-5.5",
