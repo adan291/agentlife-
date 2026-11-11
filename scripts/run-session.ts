@@ -33,6 +33,7 @@ const RUNS = join(ROOT, "data", "sessions");
 const BUILDER = "agentlife-builder";
 const REVIEWER = "agentlife-reviewer";
 const REVIEWER_MODEL = "claude-haiku-5.5";
+const NOREPLY = "krallenTv@users.noreply.github.com";
 
 function fail(msg: string): never {
   console.error(`\n[session] ${msg}`);
@@ -189,7 +190,8 @@ function quote(a: string): string {
 /** KIRO_API_KEY from the git-ignored .env, passed only through the child environment. The agents
  *  are denied reading .env, so the key never enters a prompt, a log or a commit. */
 function sessionEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+  // Commits made by sessions use the public noreply identity, whatever the local git config says.
+  const env = { ...process.env, GIT_AUTHOR_NAME: "krallenTv", GIT_AUTHOR_EMAIL: NOREPLY, GIT_COMMITTER_NAME: "krallenTv", GIT_COMMITTER_EMAIL: NOREPLY };
   const file = join(ROOT, ".env");
   if (!env.KIRO_API_KEY && existsSync(file)) {
     const line = readFileSync(file, "utf8").replace(/^\uFEFF/, "").split(/\r?\n/).find((l) => l.startsWith("KIRO_API_KEY="));

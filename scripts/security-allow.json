@@ -1,4 +1,13 @@
-{
-  "$comment": "Findings the user has reviewed and accepted, by id from `pnpm security:scan` (a hash: no value is stored here). Add an entry only on an explicit user decision.",
-  "allow": []
+﻿{
+    "$comment":  "Findings the user has reviewed and accepted, by id from `pnpm security:scan` (a hash: no value is stored here). Add an entry only on an explicit user decision.",
+    "allow":  [
+                  {
+                      "id":  "bcb6b3c4713c",
+                      "note":  "C:\\Users\\me fixtures in sanitiser tests (accepted 2026-11-11)"
+                  },
+                  {
+                      "id":  "a6c8a3987c3b",
+                      "note":  "C:\\Users\\me mentioned in STATUS.md (accepted 2026-11-11)"
+                  }
+              ]
 }
