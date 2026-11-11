@@ -4,6 +4,7 @@ import type { PanelContent } from "./computer.ts";
 import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { renderFloorList } from "./elevator.ts";
+import { BUILD_EVENT_REFRESH_MS, BUILD_REFRESH_MS, isBuilderMessage, renderBuildBoard, renderBuildReport } from "./build-board.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
 import { UI_COLOURS } from "./theme.ts";
@@ -65,6 +66,26 @@ const CSS = `
 .al-floor-name { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-floor-status { flex: 1; min-width: 0; color: ${UI_COLOURS.muted}; overflow-wrap: anywhere; }
 .al-floor[data-attention="true"] .al-floor-status { color: ${UI_COLOURS.accentText}; font-weight: bold; }
+.al-build-list, .al-build-sessions, .al-build-tasks { list-style: none; margin: 0; padding: 0; }
+.al-build-phase { margin: 0 0 var(--al-s2); font-weight: bold; color: ${UI_COLOURS.accentText}; }
+.al-build-row { margin: var(--al-s2) 0; padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); }
+.al-build-row[data-status="running"], .al-build-row[data-status="verifying"] { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
+.al-build-row[data-attention="true"] { border-color: var(--al-accent); box-shadow: inset 4px 0 0 var(--al-accent); }
+.al-build-head { display: flex; align-items: center; gap: var(--al-s3); }
+.al-build-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.al-build-chip[data-status="merged"] { color: ${UI_COLOURS.add}; border-color: ${UI_COLOURS.add}; }
+.al-build-chip[data-status="waits_for_you"], .al-build-chip[data-status="running"], .al-build-chip[data-status="verifying"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
+.al-build-purpose { margin: var(--al-s1) 0; }
+.al-build-meta { display: flex; align-items: center; gap: var(--al-s3); }
+.al-build-bar { flex: 1; height: 10px; border: 1px solid var(--al-border); border-radius: var(--al-s1); background: ${UI_COLOURS.inputBg}; overflow: hidden; }
+.al-build-fill { height: 100%; background: var(--al-accent); }
+.al-build-count { flex: none; }
+.al-build-reason { margin: var(--al-s1) 0; color: ${UI_COLOURS.accentText}; font-weight: bold; }
+.al-build-tasks { margin-top: var(--al-s2); }
+.al-build-tasks li { margin: var(--al-s1) 0; overflow-wrap: anywhere; }
+.al-build-tasks li[data-done="true"] { color: ${UI_COLOURS.muted}; }
+.al-build-verdict[data-verdict="pass"] { color: ${UI_COLOURS.add}; }
+.al-build-verdict[data-verdict="fail"] { color: ${UI_COLOURS.del}; }
 `;
 
 const TITLES: Record<PanelName, string> = {
@@ -75,6 +96,7 @@ const TITLES: Record<PanelName, string> = {
   elevator: "Elevator",
   directory: "Floors",
   door: "Door",
+  build: "Construction board",
 };
 
 /** The door panel is never shown in practice: the server turns a door into a floor change. */
@@ -155,8 +177,60 @@ export function createPanels(
   root.append(header, body, footer);
   host.appendChild(root);
 
+  const expandedSpecs = new Set<string>();
+  let buildInterval: ReturnType<typeof setInterval> | undefined;
+  let buildEventTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** The construction board, or the verification report the user opened from it. */
+  const renderBuild = (): HTMLElement => {
+    if (state.buildViewing) {
+      return renderBuildReport(document, state.buildViewing, state.buildReport, () => {
+        state.buildViewing = null;
+        render();
+      });
+    }
+    return renderBuildBoard(
+      document,
+      state.build,
+      expandedSpecs,
+      {
+        toggle: (spec) => {
+          if (!expandedSpecs.delete(spec)) expandedSpecs.add(spec);
+          render();
+        },
+        openReport: (spec) => {
+          state.buildViewing = spec;
+          state.buildReport = null;
+          send({ type: "build_report", spec });
+          render();
+        },
+      },
+      state.buildError,
+    );
+  };
+
+  /** While the board is open: a refresh every 10 s, and one soon after a Builder message (crew or phase event). */
+  const syncBuildTimers = () => {
+    if (state.open === "build") {
+      buildInterval ??= setInterval(() => send({ type: "build_board" }), BUILD_REFRESH_MS);
+      return;
+    }
+    clearInterval(buildInterval);
+    buildInterval = undefined;
+    clearTimeout(buildEventTimer);
+    buildEventTimer = undefined;
+  };
+  const scheduleBuildRefresh = () => {
+    if (buildEventTimer !== undefined) return;
+    buildEventTimer = setTimeout(() => {
+      buildEventTimer = undefined;
+      if (state.open === "build") send({ type: "build_board" });
+    }, BUILD_EVENT_REFRESH_MS);
+  };
+
   let lastViewKey = "";
   const render = () => {
+    syncBuildTimers();
     if (!state.open) {
       root.hidden = true;
       onChange();
@@ -166,7 +240,7 @@ export function createPanels(
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
-    root.dataset["wide"] = String(state.open === "board" || (state.open === "mailbox" && state.viewing !== null));
+    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
@@ -193,7 +267,9 @@ export function createPanels(
               ? { body: renderFloorList(document, state.floors, state.roomId, { go: (roomId) => hooks.goTo?.(roomId) }) }
               : state.open === "directory"
                 ? { body: renderFloorList(document, state.floors, state.roomId) }
-                : state.open === "door"
+                : state.open === "build"
+                  ? { body: renderBuild() }
+                  : state.open === "door"
                   ? { body: doorNote(document) }
                   : {
                       body: renderJobPanel(document, state.data, state.viewing, {
@@ -260,6 +336,7 @@ export function createPanels(
     openReport,
     handle(msg) {
       const changed = state.apply(msg);
+      if (state.open === "build" && isBuilderMessage(msg)) scheduleBuildRefresh();
       if (state.open === "board") {
         if (msg.type === "open_panel" || msg.type === "job_update") requestDetails();
         else if (msg.type === "work") scheduleRefresh();

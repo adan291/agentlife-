@@ -157,6 +157,9 @@ export class ReplayTransport implements Transport {
         return this.goTo(msg.roomId);
       case "activity_scope":
         return; // every recorded line belongs to the one recorded floor
+      case "build_board":
+      case "build_report":
+        return; // the demo has no construction board data (the panel says so when it opens)
       default: {
         const room = this.userRoom();
         const sim = room ? this.hotel.sim(room) : undefined;
@@ -545,6 +548,8 @@ export class ReplayTransport implements Transport {
       this.emitJob();
     } else if (panel === "elevator" || panel === "directory") {
       this.pushFloors(true);
+    } else if (panel === "build") {
+      this.emit({ type: "error", code: "engine_unavailable", message: "the construction board shows this repository's own build and is not part of the recorded demo" });
     }
   }
 

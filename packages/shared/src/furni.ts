@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const InteractionSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door"]);
+export const InteractionSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build"]);
 export type Interaction = z.infer<typeof InteractionSchema>;
 
 export const FurniDefSchema = z.object({
@@ -50,6 +50,7 @@ const DEFS: FurniDef[] = [
   def("reception_desk", "Reception desk", 2, 1, 2, false, "reception", "Register and manage projects"),
   def("elevator", "Elevator", 2, 1, 5, false, "elevator", "Take the elevator to another floor"),
   def("directory_board", "Floor directory", 2, 1, 4, false, "directory", "See every floor and what is happening on it"),
+  def("construction_board", "Construction board", 2, 1, 4, false, "build", "What is being built and what waits for you"),
   def("door", "Door", 1, 1, 5, false, "door", "Go through the door"),
   def("agent_desk", "Agent desk", 2, 1, 2, false),
   def("chair", "Chair", 1, 1, 2, true),
