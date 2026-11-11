@@ -1,25 +1,180 @@
 {
   "$comment": "Source of truth for automated sessions. Model ids from `kiro-cli chat --list-models`. Edit here, not in the script.",
   "sessions": [
-    { "id": "S1",  "spec": "world-room",     "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 4 of the world-room spec (.kiro/specs/world-room). Follow workflow.md." },
-    { "id": "S2",  "spec": "agent-pipeline", "model": "auto",              "effort": "low",    "prompt": "Do task 1 of the agent-pipeline spec: the kiro-cli spike. KIRO_API_KEY is provided as an environment variable of this session: never read .env, never print the key, only check whether it is set. Use claude-haiku-5.5 as --model for every kiro-cli call in the spike. Document findings in docs/spikes/kiro-cli.md. Stop and report if any check fails." },
-    { "id": "S3",  "spec": "world-room",     "model": "auto",              "effort": "medium", "prompt": "Implement tasks 5 to 7 of the world-room spec. Follow workflow.md." },
-    { "id": "S4",  "spec": "world-room",     "model": "auto",              "effort": "medium", "prompt": "Implement tasks 8 to 10 of the world-room spec. Follow workflow.md. At the end, write the command to run the client in docs/STATUS.md." },
-    { "id": "S5",  "spec": "world-room",     "model": "auto",              "effort": "low",    "prompt": "Implement tasks 11 and 12 of the world-room spec. Follow workflow.md. For task 12, list in docs/STATUS.md the manual checks the user must do in the browser." },
-    { "id": "S6",  "spec": "agent-engine",   "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 5 of the agent-engine spec. Follow workflow.md." },
-    { "id": "S7",  "spec": "agent-engine",   "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 6 to 10 of the agent-engine spec. Follow workflow.md." },
-    { "id": "S8",  "spec": "agent-pipeline", "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 2 to 5 of the agent-pipeline spec, using the findings in docs/spikes/kiro-cli.md. Follow workflow.md." },
-    { "id": "S9",  "spec": "agent-pipeline", "model": "claude-sonnet-5.5", "effort": "high",   "prompt": "Implement tasks 6 to 10 of the agent-pipeline spec. Follow workflow.md." },
-    { "id": "S9B", "spec": "build-crew",     "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 4 of the build-crew spec (.kiro/specs/build-crew). Follow workflow.md." },
-    { "id": "S10", "spec": "agent-pipeline", "model": "auto",              "effort": "low",    "prompt": "Implement task 11 of the agent-pipeline spec only (wire the real steps into the engine; kiro-cli runtimes for architect, developer and qa in config/agents.json; FakeRuntime stays the default in tests and CI via RUNTIME=fake). Do not run live kiro-cli jobs: tasks 12 and 13 are done later with the user. Follow workflow.md." },
-    { "id": "S10B", "spec": "room-hints",    "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 5 of the room-hints spec (.kiro/specs/room-hints). Follow workflow.md." },
-    { "id": "S10C", "spec": "room-ux",       "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 1 to 5 of the room-ux spec (.kiro/specs/room-ux). Follow workflow.md." },
-    { "id": "S10D", "spec": "room-fixes",    "model": "auto",              "effort": "low",    "prompt": "Fix the three bugs in .kiro/specs/room-fixes (bugfix.md, tasks 1 to 3). Follow workflow.md." },
-    { "id": "S10E", "spec": "ui-shell",      "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 1 to 5 of the ui-shell spec (.kiro/specs/ui-shell). Follow workflow.md." },
-    { "id": "S10F", "spec": "job-insight",   "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 1 to 5 of the job-insight spec (.kiro/specs/job-insight). Follow workflow.md." },
-    { "id": "S11", "spec": "demo-replay",    "model": "auto",              "effort": "medium", "prompt": "Implement tasks 1 to 4 of the demo-replay spec. Follow workflow.md." },
-    { "id": "S12", "spec": "demo-replay",    "model": "auto",              "effort": "low",    "prompt": "Implement tasks 5 and 6 of the demo-replay spec, then list visual polish items for the Kiroween look in docs/STATUS.md and do the top three." },
-    { "id": "S13", "spec": "demo-replay",    "model": "claude-haiku-5.5",  "effort": "low",    "prompt": "Do task 7 of the demo-replay spec: README, docs/kiro-usage.md and docs/video-script.md, in English. Follow workflow.md." }
-    ,{ "id": "S14", "spec": "project-registry", "model": "claude-sonnet-5.5", "effort": "medium", "prompt": "Implement tasks 1 to 5 of the project-registry spec (.kiro/specs/project-registry). Task 6 is a live check done later with the user. Follow workflow.md." }
+    {
+      "id": "S1",
+      "spec": "world-room",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 4 of the world-room spec (.kiro/specs/world-room). Follow workflow.md."
+    },
+    {
+      "id": "S2",
+      "spec": "agent-pipeline",
+      "model": "auto",
+      "effort": "low",
+      "prompt": "Do task 1 of the agent-pipeline spec: the kiro-cli spike. KIRO_API_KEY is provided as an environment variable of this session: never read .env, never print the key, only check whether it is set. Use claude-haiku-5.5 as --model for every kiro-cli call in the spike. Document findings in docs/spikes/kiro-cli.md. Stop and report if any check fails."
+    },
+    {
+      "id": "S3",
+      "spec": "world-room",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 5 to 7 of the world-room spec. Follow workflow.md."
+    },
+    {
+      "id": "S4",
+      "spec": "world-room",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 8 to 10 of the world-room spec. Follow workflow.md. At the end, write the command to run the client in docs/STATUS.md."
+    },
+    {
+      "id": "S5",
+      "spec": "world-room",
+      "model": "auto",
+      "effort": "low",
+      "prompt": "Implement tasks 11 and 12 of the world-room spec. Follow workflow.md. For task 12, list in docs/STATUS.md the manual checks the user must do in the browser."
+    },
+    {
+      "id": "S6",
+      "spec": "agent-engine",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 5 of the agent-engine spec. Follow workflow.md."
+    },
+    {
+      "id": "S7",
+      "spec": "agent-engine",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 6 to 10 of the agent-engine spec. Follow workflow.md."
+    },
+    {
+      "id": "S8",
+      "spec": "agent-pipeline",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 2 to 5 of the agent-pipeline spec, using the findings in docs/spikes/kiro-cli.md. Follow workflow.md."
+    },
+    {
+      "id": "S9",
+      "spec": "agent-pipeline",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement tasks 6 to 10 of the agent-pipeline spec. Follow workflow.md."
+    },
+    {
+      "id": "S9B",
+      "spec": "build-crew",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 4 of the build-crew spec (.kiro/specs/build-crew). Follow workflow.md."
+    },
+    {
+      "id": "S10",
+      "spec": "agent-pipeline",
+      "model": "auto",
+      "effort": "low",
+      "prompt": "Implement task 11 of the agent-pipeline spec only (wire the real steps into the engine; kiro-cli runtimes for architect, developer and qa in config/agents.json; FakeRuntime stays the default in tests and CI via RUNTIME=fake). Do not run live kiro-cli jobs: tasks 12 and 13 are done later with the user. Follow workflow.md."
+    },
+    {
+      "id": "S10B",
+      "spec": "room-hints",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 5 of the room-hints spec (.kiro/specs/room-hints). Follow workflow.md."
+    },
+    {
+      "id": "S10C",
+      "spec": "room-ux",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 5 of the room-ux spec (.kiro/specs/room-ux). Follow workflow.md."
+    },
+    {
+      "id": "S10D",
+      "spec": "room-fixes",
+      "model": "auto",
+      "effort": "low",
+      "prompt": "Fix the three bugs in .kiro/specs/room-fixes (bugfix.md, tasks 1 to 3). Follow workflow.md."
+    },
+    {
+      "id": "S10E",
+      "spec": "ui-shell",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 5 of the ui-shell spec (.kiro/specs/ui-shell). Follow workflow.md."
+    },
+    {
+      "id": "S10F",
+      "spec": "job-insight",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 5 of the job-insight spec (.kiro/specs/job-insight). Follow workflow.md."
+    },
+    {
+      "id": "S11",
+      "spec": "demo-replay",
+      "model": "auto",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 4 of the demo-replay spec. Follow workflow.md."
+    },
+    {
+      "id": "S12",
+      "spec": "demo-replay",
+      "model": "auto",
+      "effort": "low",
+      "prompt": "Implement tasks 5 and 6 of the demo-replay spec, then list visual polish items for the Kiroween look in docs/STATUS.md and do the top three."
+    },
+    {
+      "id": "S13",
+      "spec": "demo-replay",
+      "model": "claude-haiku-5.5",
+      "effort": "low",
+      "prompt": "Do task 7 of the demo-replay spec: README, docs/kiro-usage.md and docs/video-script.md, in English. Follow workflow.md."
+    },
+    {
+      "id": "S14",
+      "spec": "project-registry",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 5 of the project-registry spec (.kiro/specs/project-registry). Task 6 is a live check done later with the user. Follow workflow.md."
+    },
+    {
+      "id": "S15",
+      "spec": "hotel-floors",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 3 of the hotel-floors spec (.kiro/specs/hotel-floors). Follow workflow.md."
+    },
+    {
+      "id": "S16",
+      "spec": "hotel-floors",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 4 and 5 of the hotel-floors spec. Follow workflow.md."
+    },
+    {
+      "id": "S17",
+      "spec": "hr-desk",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 and 2 of the hr-desk spec (.kiro/specs/hr-desk). Follow workflow.md."
+    },
+    {
+      "id": "S18",
+      "spec": "hr-desk",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 3 and 4 of the hr-desk spec. Follow workflow.md."
+    },
+    {
+      "id": "S19",
+      "spec": "pipeline-editor",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 3 of the pipeline-editor spec (.kiro/specs/pipeline-editor). Follow workflow.md."
+    }
   ]
 }
