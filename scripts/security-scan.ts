@@ -73,7 +73,7 @@ const SKIP_FILE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json)$|\.(png|jpg|jpeg|g
 function loadAllow(): Set<string> {
   const f = join(ROOT, "scripts", "security-allow.json");
   if (!existsSync(f)) return new Set();
-  const j = JSON.parse(readFileSync(f, "utf8")) as { allow?: { id: string }[] };
+  const j = JSON.parse(readFileSync(f, "utf8").replace(/^\uFEFF/, "")) as { allow?: { id: string }[] };
   return new Set((j.allow ?? []).map((a) => a.id));
 }
 
