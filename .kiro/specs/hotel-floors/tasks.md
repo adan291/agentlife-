@@ -16,6 +16,6 @@
   - Floor panel with live status, door transition, HUD floor label, remember floor, terminal "This floor / All floors", directory board
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 4.2_
 
-- [ ] 5. Replay with floors
+- [x] 5. Replay with floors
   - `roomId` in exports, replay hotel with lobby + recorded floor, demo smoke test still passes
   - _Requirements: 4.3_

@@ -1,10 +1,13 @@
 import {
   ACTIVITY_BUFFER_SIZE,
   AGENT_IDS,
+  Hotel,
   ServerMsgSchema,
-  WorldSim,
   jobDetailsFromExport,
+  projectIdOfRoom,
+  projectRoomId,
   splitAgentId,
+  statusOfJobState,
 } from "@agentlife/shared";
 import type {
   ActivityLine,
@@ -13,17 +16,28 @@ import type {
   AgentWork,
   Approval,
   ClientMsg,
+  FloorStatus,
   JobDetails,
   JobState,
   JobView,
   Report,
   RoomDef,
+  RoomId,
   RunExport,
   ServerMsg,
   StepName,
+  WelcomeMsg,
 } from "@agentlife/shared";
 import type { ConnectionStatus, Transport } from "../transport.ts";
 import { ReplayEngine } from "./engine.ts";
+
+/** The room files of the hotel (the same three the world-server loads). */
+export interface ReplayRooms {
+  lobby: RoomDef;
+  hr: RoomDef;
+  /** Template of the project floors. */
+  template: RoomDef;
+}
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -51,24 +65,31 @@ export interface ReplayTransportOptions {
 
 /**
  * Plays a recorded run in the browser behind the `Transport` interface. It takes the place of the
- * world-server gateway: `WorldSim` for avatars and walks, `ReplayEngine` for the recorded agent events,
- * and the same bookkeeping as the gateway for panel data (approvals, reports, activity, work, job view).
+ * world-server gateway: a `Hotel` (lobby, HR office and the recorded floor) for avatars and walks, `ReplayEngine` for
+ * the recorded agent events, and the same bookkeeping as the gateway for panel data (approvals, reports, activity,
+ * work, job view, floor status). The user starts on the recorded floor and can take the elevator to the others.
  * The scene and panels cannot tell it from a live connection.
  */
 export class ReplayTransport implements Transport {
   private readonly exp: RunExport;
-  private readonly room: RoomDef;
+  private readonly rooms: ReplayRooms;
+  /** Floor the run was recorded on (`project:<id>`). */
+  private readonly floorRoom: RoomId;
+  private readonly projectId: string;
   private readonly now: () => number;
   private readonly messageListeners = new Set<(msg: ServerMsg) => void>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly stopTicker: () => void;
   private readonly models: Partial<Record<AgentId, string>> = {};
-  private sim: WorldSim;
+  private hotel: Hotel;
   private engine: ReplayEngine;
   private you = 1;
   private lastTick: number;
   private closed = false;
   private began = false;
+  private lastFloorsKey = "";
+  /** A report the user has not opened yet (cleared when the mailbox is opened), like the gateway's floor status. */
+  private unread: "report_ready" | "failed" | null = null;
 
   // Panel data, mirrored from the recorded events like the gateway does.
   private approvals = new Map<string, Approval>();
@@ -82,12 +103,15 @@ export class ReplayTransport implements Transport {
   private createdArtifacts = new Set<string>();
   private startedSteps = new Set<StepName>();
 
-  constructor(exp: RunExport, room: RoomDef, options: ReplayTransportOptions = {}) {
+  constructor(exp: RunExport, rooms: ReplayRooms, options: ReplayTransportOptions = {}) {
     this.exp = exp;
-    this.room = room;
+    this.rooms = rooms;
+    // Exports made before the hotel have no room id: the floor of a project is named after its repo.
+    this.projectId = projectIdOfRoom(exp.roomId ?? "") ?? exp.job.repoId;
+    this.floorRoom = projectRoomId(this.projectId);
     this.now = options.now ?? Date.now;
     this.lastTick = this.now();
-    this.sim = new WorldSim(room, this.now);
+    this.hotel = this.buildHotel();
     this.engine = new ReplayEngine(exp, this.now());
     // Model per role: from work events when the recording has them, otherwise from the steps of the job.
     const roleOfStep: Partial<Record<StepName, AgentId>> = { analyze: "architect", report: "architect", develop: "developer", review: "qa" };
@@ -129,8 +153,15 @@ export class ReplayTransport implements Transport {
       case "remove_project":
       case "deliver":
         return this.emit({ type: "error", code: "project_error", message: "This is a recorded run: nothing can be changed here." });
-      default:
-        this.deliver(this.sim.handleIntent(this.you, msg));
+      case "go_to":
+        return this.goTo(msg.roomId);
+      case "activity_scope":
+        return; // every recorded line belongs to the one recorded floor
+      default: {
+        const room = this.userRoom();
+        const sim = room ? this.hotel.sim(room) : undefined;
+        if (room && sim) this.deliver(room, sim.handleIntent(this.you, msg));
+      }
     }
   }
 
@@ -188,7 +219,7 @@ export class ReplayTransport implements Transport {
   restart(): void {
     if (this.closed) return;
     this.engine.restart(this.now());
-    this.sim = new WorldSim(this.room, this.now);
+    this.hotel = this.buildHotel();
     this.approvals = new Map();
     this.reports = new Map();
     this.activity = [];
@@ -197,6 +228,7 @@ export class ReplayTransport implements Transport {
     this.jobState = null;
     this.currentStep = undefined;
     this.verdict = undefined;
+    this.unread = null;
     this.createdArtifacts = new Set();
     this.startedSteps = new Set();
     this.lastTick = this.now();
@@ -210,13 +242,66 @@ export class ReplayTransport implements Transport {
     const dt = t - this.lastTick;
     this.lastTick = t;
     for (const ev of this.engine.advance(dt)) this.onEvent(ev);
-    this.deliver(this.sim.dueMessages());
+    const here = this.userRoom();
+    for (const [roomId, sim] of this.hotel.entries()) {
+      const msgs = sim.dueMessages();
+      if (roomId === here) this.deliver(roomId, msgs);
+    }
+  }
+
+  // ---- rooms ----
+
+  /** The lobby, the HR office and the recorded floor; the user starts on the recorded floor. */
+  private buildHotel(): Hotel {
+    const hotel = new Hotel({ ...this.rooms, clock: this.now, startRoom: this.floorRoom });
+    hotel.addProject({ id: this.projectId, name: this.projectId });
+    return hotel;
+  }
+
+  private userRoom(): RoomId | undefined {
+    return this.hotel.roomOf(this.you);
+  }
+
+  private onRecordedFloor(): boolean {
+    return this.userRoom() === this.floorRoom;
+  }
+
+  /** The elevator, as in the gateway: only while the avatar stands in front of one. */
+  private goTo(roomId: string): void {
+    if (!this.hotel.has(roomId)) return this.error("bad_message", "unknown floor");
+    if (roomId === this.userRoom()) return;
+    if (!this.hotel.atElevator(this.you)) return this.error("bad_message", "use the elevator first");
+    this.enterRoom(roomId);
+  }
+
+  private enterRoom(roomId: string): void {
+    const welcome = this.hotel.moveUser(this.you, roomId);
+    if (welcome) this.sendWelcome(welcome);
+  }
+
+  /** The status of every floor: the recorded floor follows the recorded job, the others are idle. */
+  private floorStatuses(): FloorStatus[] {
+    return this.hotel.floors().map((info) => {
+      if (info.roomId !== this.floorRoom) return { roomId: info.roomId, name: info.name, kind: info.kind, status: "idle" as const };
+      const base: ReturnType<typeof statusOfJobState> = this.jobState ? statusOfJobState(this.jobState) : { status: "idle" };
+      const status = base.status === "idle" && this.unread ? this.unread : base.status;
+      return { roomId: info.roomId, name: info.name, kind: info.kind, status, ...(status === "working" && base.who ? { who: base.who } : {}) };
+    });
+  }
+
+  private pushFloors(force = false): void {
+    const floors = this.floorStatuses();
+    const key = JSON.stringify(floors);
+    if (!force && key === this.lastFloorsKey) return;
+    this.lastFloorsKey = key;
+    this.emit({ type: "floors", floors });
   }
 
   // ---- commands ----
 
   private startJob(repoId: string): void {
     if (repoId !== this.engine.repoId) return this.error("bad_message", `unknown repository '${repoId}'`);
+    if (!this.onRecordedFloor()) return this.error("bad_message", "start the job from the computer on the project's floor");
     if (this.engine.started) return this.error("busy", "the recorded run is already playing");
     this.lastTick = this.now();
     for (const ev of this.engine.start()) this.onEvent(ev);
@@ -237,7 +322,8 @@ export class ReplayTransport implements Transport {
   // ---- recorded events ----
 
   private onEvent(ev: AgentEvent): void {
-    this.deliver(this.sim.handleAgentEvent(ev));
+    const floorSim = this.hotel.sim(this.floorRoom);
+    if (floorSim) this.deliver(this.floorRoom, floorSim.handleAgentEvent(ev));
     switch (ev.type) {
       case "task.created":
         this.approvals.clear();
@@ -281,14 +367,14 @@ export class ReplayTransport implements Transport {
           ...(ev.options ? { options: ev.options } : {}),
         };
         this.approvals.set(a.approvalId, a);
-        this.emit({ type: "approval", approval: a });
+        this.emitHere({ type: "approval", approval: a });
         break;
       }
       case "approval.resolved": {
         const a = this.approvals.get(ev.approvalId);
         if (a) {
           a.status = ev.decision === "approve" ? "approved" : "rejected";
-          this.emit({ type: "approval", approval: a });
+          this.emitHere({ type: "approval", approval: a });
         }
         break;
       }
@@ -302,7 +388,8 @@ export class ReplayTransport implements Transport {
           ...(this.verdict ? { verdict: this.verdict } : {}),
         };
         this.reports.set(r.reportId, r);
-        this.emit({ type: "report", report: r });
+        this.unread = r.verdict === "fail" ? "failed" : "report_ready";
+        this.emitHere({ type: "report", report: r });
         break;
       }
       case "agent.activity":
@@ -328,12 +415,13 @@ export class ReplayTransport implements Transport {
           startedAt,
         };
         this.works.set(agentId, work);
-        this.emit({ type: "work", agentId, work });
+        this.emitHere({ type: "work", agentId, work });
         break;
       }
       default:
         break;
     }
+    this.pushFloors();
   }
 
   private dropPending(): void {
@@ -343,7 +431,7 @@ export class ReplayTransport implements Transport {
   private pushActivity(line: ActivityLine): void {
     this.activity.push(line);
     if (this.activity.length > ACTIVITY_BUFFER_SIZE) this.activity.splice(0, this.activity.length - ACTIVITY_BUFFER_SIZE);
-    this.emit({ type: "activity", line });
+    this.emitHere({ type: "activity", line });
   }
 
   // ---- views ----
@@ -361,7 +449,7 @@ export class ReplayTransport implements Transport {
 
   private emitJob(): void {
     const job = this.jobView();
-    if (job) this.emit({ type: "job_update", job });
+    if (job) this.emitHere({ type: "job_update", job });
   }
 
   /** The job card as far as the replay has come: later artifacts, steps and approvals are not revealed early. */
@@ -387,11 +475,18 @@ export class ReplayTransport implements Transport {
 
   // ---- output ----
 
-  private sendWelcome(): void {
-    const { you, welcome } = this.sim.join();
-    this.you = you;
+  /** The welcome of a room: the first one joins the hotel; later ones come from `moveUser` (elevator, door). */
+  private sendWelcome(moved?: WelcomeMsg): void {
+    let welcome = moved;
+    if (!welcome) {
+      const joined = this.hotel.join();
+      this.you = joined.you;
+      welcome = joined.welcome;
+    }
+    const here = (welcome.roomId ?? welcome.room.id) === this.floorRoom;
+    // What happened on the recorded floor (work, activity, pending plan, job) belongs to that floor only.
     const agents = welcome.agents.map((a) => {
-      const work = this.works.get(a.agentId);
+      const work = here ? this.works.get(a.agentId) : undefined;
       return work ? { ...a, work } : a;
     });
     const models = Object.fromEntries(AGENT_IDS.flatMap((id) => (this.models[id] ? [[id, this.models[id]]] : [])));
@@ -399,18 +494,31 @@ export class ReplayTransport implements Transport {
       ...welcome,
       agents,
       ...(Object.keys(models).length > 0 ? { models } : {}),
-      ...(this.activity.length > 0 ? { activity: [...this.activity] } : {}),
+      ...(here && this.activity.length > 0 ? { activity: [...this.activity] } : {}),
     });
+    if (here) {
+      for (const a of this.approvals.values()) if (a.status === "pending") this.emit({ type: "approval", approval: a });
+      this.emitJob();
+    }
+    this.pushFloors(true);
   }
 
   private error(code: "bad_message" | "busy", message: string): void {
     this.emit({ type: "error", code, message });
   }
 
-  /** Simulation output; an `open_panel` is preceded by that panel's data, as the gateway does. */
-  private deliver(msgs: ServerMsg[]): void {
+  /** Output of the simulation of a room: dropped when the user is elsewhere. An `open_panel` is preceded by that panel's data, as the gateway does, and a door leads to its room. */
+  private deliver(roomId: RoomId, msgs: ServerMsg[]): void {
     for (const m of msgs) {
-      if (m.type === "open_panel") this.panelData(m.panel);
+      if (this.userRoom() !== roomId) return;
+      if (m.type === "open_panel") {
+        if (m.panel === "door") {
+          const to = (m.data as { to?: unknown } | undefined)?.to;
+          if (typeof to === "string" && this.hotel.has(to)) this.enterRoom(to);
+          return;
+        }
+        this.panelData(m.panel);
+      }
       this.emit(m);
     }
   }
@@ -429,9 +537,20 @@ export class ReplayTransport implements Transport {
     } else if (panel === "mailbox") {
       for (const a of this.approvals.values()) this.emit({ type: "approval", approval: a });
       for (const r of this.reports.values()) this.emit({ type: "report", report: r, resend: true });
+      if (this.unread) {
+        this.unread = null;
+        this.pushFloors();
+      }
     } else if (panel === "board") {
       this.emitJob();
+    } else if (panel === "elevator" || panel === "directory") {
+      this.pushFloors(true);
     }
+  }
+
+  /** Messages about the recorded job reach the user only on the recorded floor. */
+  private emitHere(msg: ServerMsg): void {
+    if (this.onRecordedFloor()) this.emit(msg);
   }
 
   private emit(msg: ServerMsg): void {

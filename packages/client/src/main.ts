@@ -1,9 +1,10 @@
 import { Application } from "pixi.js";
 import { FURNI_CATALOG, RunExportSchema, validateRoom } from "@agentlife/shared";
-import type { FloorStatus, RoomDef, RunExport, ServerMsg } from "@agentlife/shared";
+import type { FloorStatus, RunExport, ServerMsg } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
 import { DEMO_RUN_PATH, assetUrl, currentMode } from "./mode.ts";
 import { ReplayTransport } from "./replay/transport.ts";
+import type { ReplayRooms } from "./replay/transport.ts";
 import { prefersReducedMotion } from "./scene/glow.ts";
 import { ProceduralSprites } from "./scene/textures.ts";
 import { WorldView } from "./scene/world-view.ts";
@@ -31,13 +32,17 @@ import { reportVerdict } from "./ui/report-viewer.ts";
  */
 const DEMO_BUILD = import.meta.env.VITE_MODE === "demo";
 
-/** Loads the recorded run (from the client's own static files, under any base path) and the room to play it in. */
-async function loadDemo(): Promise<[RunExport, RoomDef]> {
+/** Loads the recorded run (from the client's own static files, under any base path) and the rooms of the hotel to play it in. */
+async function loadDemo(): Promise<[RunExport, ReplayRooms]> {
   const res = await fetch(assetUrl(DEMO_RUN_PATH));
   if (!res.ok) throw new Error(`cannot load the recorded run (${res.status})`);
   const exp = RunExportSchema.parse(await res.json());
-  const { default: officeJson } = await import("../../world-server/rooms/office.json");
-  return [exp, validateRoom(officeJson)];
+  const [{ default: lobby }, { default: hr }, { default: template }] = await Promise.all([
+    import("../../world-server/rooms/lobby.json"),
+    import("../../world-server/rooms/hr.json"),
+    import("../../world-server/rooms/project-template.json"),
+  ]);
+  return [exp, { lobby: validateRoom(lobby), hr: validateRoom(hr), template: validateRoom(template) }];
 }
 
 const theme = createTheme();
@@ -70,8 +75,8 @@ let live: LiveTransport | undefined;
 let replay: ReplayTransport | undefined;
 let transport: Transport;
 if (DEMO_BUILD || mode === "demo") {
-  const [exp, room] = await loadDemo();
-  replay = new ReplayTransport(exp, room);
+  const [exp, rooms] = await loadDemo();
+  replay = new ReplayTransport(exp, rooms);
   transport = replay;
   if (new URLSearchParams(location.search).has("autostart")) {
     // `?autostart` starts the recorded run as soon as the room is up (smoke test, screen recordings). Deferred so
