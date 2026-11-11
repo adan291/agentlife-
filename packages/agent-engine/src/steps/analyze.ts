@@ -1,9 +1,9 @@
 import { PlanSchema, type Plan } from "@agentlife/shared";
 import type { StepContext } from "../jobs/steps.ts";
 import { fence, loadPromptTemplate, renderPrompt } from "../prompts.ts";
-import { findRepo, runRole, type PipelineDeps } from "./deps.ts";
+import { resolveProject, runRole, type PipelineDeps } from "./deps.ts";
 import { runStructured } from "./extract-json.ts";
-import { materialise } from "./materialise.ts";
+import { cloneProject, materialise } from "./materialise.ts";
 
 /** Task ids must be unique, or an approval could not name a task. */
 export function checkPlan(plan: Plan): string | undefined {
@@ -16,23 +16,34 @@ export function checkPlan(plan: Plan): string | undefined {
 }
 
 /**
- * Architect step: materialise the repo, run the read-only Architect on it and return the validated plan.
+ * Architect step: prepare the repo, run the read-only Architect on it and return the validated plan.
+ * The built-in fixture is copied into a one-commit repository; a registered project is cloned at its current
+ * branch and `HEAD` after the registry has checked the folder is still inside an allowed root.
  * An invalid reply gets one retry with the validation error appended (requirement 4.3).
  * The runner stores plan.json and asks for approval, one option per task.
  */
 export async function analyzeStep(deps: PipelineDeps, ctx: StepContext): Promise<Plan> {
-  const repo = findRepo(deps, ctx.repoId);
-  const mat = await materialise({
-    repo,
-    ...(deps.projectRoot ? { projectRoot: deps.projectRoot } : {}),
-    dataDir: deps.paths.root,
-    signal: ctx.signal,
-  });
+  const project = resolveProject(deps, ctx.repoId);
+  let dir: string;
+  if (project.builtin) {
+    const mat = await materialise({
+      repo: { id: project.id, source: project.source ?? "" },
+      ...(deps.projectRoot ? { projectRoot: deps.projectRoot } : {}),
+      dataDir: deps.paths.root,
+      signal: ctx.signal,
+    });
+    dir = mat.dir;
+  } else {
+    if (!deps.projects) throw new Error(`unknown repo '${ctx.repoId}'`);
+    const sourcePath = deps.projects.revalidate(project);
+    const cloned = await cloneProject({ id: project.id, sourcePath, dataDir: deps.paths.root, signal: ctx.signal });
+    dir = cloned.dir;
+  }
   const prompt = renderPrompt(loadPromptTemplate("architect"), { goal: fence(ctx.goal) });
   return runStructured({
     what: "plan",
     schema: PlanSchema,
     check: checkPlan,
-    ask: (note) => runRole(deps, "architect", "analyze", ctx, note ? `${prompt}\n\n${note}` : prompt, mat.dir),
+    ask: (note) => runRole(deps, "architect", "analyze", ctx, note ? `${prompt}\n\n${note}` : prompt, dir),
   });
 }

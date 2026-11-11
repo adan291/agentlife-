@@ -7,7 +7,11 @@
   "permissions": {
     "rules": [
       { "capability": "fs_read", "match": ["**"], "effect": "allow" },
-      { "capability": "fs_read", "match": [".env", ".env.*", "**/.env", "**/.env.*", ".git/**"], "effect": "deny" },
+      {
+        "capability": "fs_read",
+        "match": [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.p12", "*.pfx", "credentials*", "secrets*", ".npmrc", ".aws/**", ".ssh/**", ".git/**", "**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/*.p12", "**/*.pfx", "**/credentials*", "**/secrets*", "**/.npmrc", "**/.aws/**", "**/.ssh/**", "**/.git/**"],
+        "effect": "deny"
+      },
       { "capability": "fs_write", "match": ["./**"], "effect": "allow" },
       {
         "capability": "fs_write",

@@ -20,6 +20,7 @@ export interface ReviewInput {
 
 /** `passed (exit code 0)` or `FAILED (exit code 1)`. Built by the engine, never from model text. */
 export function testStatusText(test: TestResult): string {
+  if (test.skipped) return "NOT RUN (this project has no supported test setup, so there are no test results)";
   const code = test.exitCode === undefined ? "" : ` (exit code ${test.exitCode})`;
   return `${test.passed ? "passed" : "FAILED"}${code}`;
 }

@@ -4,6 +4,7 @@ import type { LimitsConfig, RepoConfig } from "../config.ts";
 import type { StepContext } from "../jobs/steps.ts";
 import type { Logger } from "../log.ts";
 import type { DataPaths } from "../paths.ts";
+import type { ProjectRegistry, ResolvedProject } from "../projects/registry.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
 import { createStepTracker } from "../work.ts";
@@ -14,6 +15,8 @@ export interface PipelineDeps {
   store: Store;
   paths: DataPaths;
   repos: readonly RepoConfig[];
+  /** Registered projects. Without it only `repos` exist (the built-in fixture). */
+  projects?: ProjectRegistry;
   limits: LimitsConfig;
   /** Source paths of repos are resolved against this directory. Default: the project root. */
   projectRoot?: string;
@@ -36,9 +39,17 @@ export function findRepo(deps: PipelineDeps, repoId: string): RepoConfig {
   return repo;
 }
 
-/** `data/repos/<repoId>`, the materialised repository. */
+/** A registered project, or the built-in fixture from config/repos.json. */
+export function resolveProject(deps: PipelineDeps, repoId: string): ResolvedProject {
+  const registered = deps.projects?.get(repoId);
+  if (registered) return registered;
+  const repo = findRepo(deps, repoId);
+  return { id: repo.id, name: repo.name, stack: "node-npm", testCommand: repo.testCommand, builtin: true, registeredAt: 0, source: repo.source };
+}
+
+/** `data/repos/<repoId>`, the materialised repository (the job clone for a registered project). */
 export function repoDir(deps: PipelineDeps, repoId: string): string {
-  return path.join(deps.paths.repos, findRepo(deps, repoId).id);
+  return path.join(deps.paths.repos, resolveProject(deps, repoId).id);
 }
 
 /** `data/worktrees/<taskId>`. */

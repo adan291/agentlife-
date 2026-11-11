@@ -9,7 +9,7 @@
   - Tests: path property test, temporary-repo registration cases, path never in responses
   - _Requirements: 1.1–1.8, 2.1, 2.2, 7.1, 7.2_
 
-- [ ] 3. Engine: jobs on registered projects
+- [x] 3. Engine: jobs on registered projects
   - Clone-based materialise, report "Based on commit", per-project runner images, test step skipped for unsupported stacks, QA prompt note, extended secret-file deny rules for the three role agents
   - _Requirements: 3.2, 3.3, 4.1, 4.2, 4.3, 4.4_
 

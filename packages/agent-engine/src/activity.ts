@@ -50,7 +50,8 @@ export function createActivityEmitter(opts: ActivityEmitterOptions): ActivityEmi
  * Pass/fail line for the terminal, with counts when the log has a Vitest summary
  * (`Tests  11 passed | 1 skipped (12)` or `Tests  1 failed | 10 passed (11)`). Falls back to the exit code.
  */
-export function testResultLine(result: { passed: boolean; log: string; exitCode?: number }): string {
+export function testResultLine(result: { passed: boolean; log: string; exitCode?: number; skipped?: boolean }): string {
+  if (result.skipped) return "Tests not run (no test setup)";
   // eslint-disable-next-line no-control-regex
   const plain = result.log.replace(/\u001b\[[0-9;]*m/g, "");
   const m = /^\s*Tests\s+(.+)$/m.exec(plain);

@@ -119,7 +119,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     const models = roleModels(config);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger, activity, models })
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models })
       : createRuntimeSteps({ runtimes, store, logger, activity, models });
   }
   const ambient =
