@@ -78,6 +78,8 @@ export interface PanelHooks {
   unreadReports?(): ReadonlySet<string>;
   /** A report was opened in the viewer. */
   onReportOpened?(reportId: string): void;
+  /** Replay mode: the goal of the recorded run. The computer panel shows it read-only. */
+  lockedGoal?: string;
 }
 
 /**
@@ -96,7 +98,7 @@ export function createPanels(
   document.head.appendChild(style);
 
   const state = new PanelState();
-  const computer = createComputerPanel(document, { startJob: (repoId, goal) => send({ type: "start_job", repoId, goal }) });
+  const computer = createComputerPanel(document, { startJob: (repoId, goal) => send({ type: "start_job", repoId, goal }) }, hooks.lockedGoal);
 
   const root = document.createElement("div");
   root.className = "al-panel";

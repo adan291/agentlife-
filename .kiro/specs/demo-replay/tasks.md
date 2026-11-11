@@ -12,7 +12,7 @@
   - Implements Transport; runs WorldSim + ReplayEngine in the browser; panels fed from recorded artifacts
   - _Requirements: 1.1, 1.2, 1.3, 1.5_
 
-- [ ] 4. Replay UI
+- [x] 4. Replay UI
   - Banner with recorded date, speed buttons 1×/4×/16×, restart; hidden DOM list of agent states (`data-agent-state`)
   - _Requirements: 2.1, 2.2_
 
