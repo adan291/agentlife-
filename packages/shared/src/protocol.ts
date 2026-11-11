@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
+import { FloorStatusSchema } from "./floors.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
@@ -12,10 +13,13 @@ export { GOAL_MAX_CHARS };
 const TileSchema = z.object({ x: z.number().int(), y: z.number().int() });
 const DirSchema = z.number().int().min(0).max(7);
 
+/** `lobby`, `hr` or `project:<id>`. */
+export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9-]{0,59})$/);
+
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent ids are strings, so they never collide. */
@@ -83,6 +87,8 @@ export const ActivityLineSchema = z.object({
   taskId: z.string().min(1).optional(),
   /** Step the job was in when the line was written. */
   step: StepNameSchema.optional(),
+  /** Room (floor) the line belongs to, so the terminal can show "This floor" or "All floors". */
+  roomId: z.string().min(1).max(100).optional(),
 });
 export type ActivityLine = z.infer<typeof ActivityLineSchema>;
 
@@ -142,6 +148,13 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("remove_project"), projectId: z.string().min(1).max(100) }),
   /** Report viewer: fetch the job's branch into the user's repository. Answered with `report` (resend) or an error. */
   z.object({ type: z.literal("deliver"), taskId: TaskIdSchema }),
+  /** Elevator: go to another floor. Only accepted while the avatar stands at the elevator. Answered with a new `welcome`. */
+  z.object({ type: z.literal("go_to"), roomId: RoomIdSchema }),
+  /**
+   * Activity terminal: `floor` (default on every connection) sends only the activity of the user's floor; `all` also sends
+   * the other floors' lines as they happen, plus their buffered lines right away.
+   */
+  z.object({ type: z.literal("activity_scope"), scope: z.enum(["floor", "all"]) }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -149,6 +162,8 @@ export const WelcomeMsgSchema = z.object({
   type: z.literal("welcome"),
   protocol: z.number().int(),
   room: RoomDefSchema,
+  /** Id of the room the user is in (the same as `room.id`). */
+  roomId: z.string().min(1).max(100).optional(),
   you: z.number().int().positive(),
   avatars: z.array(AvatarSchema),
   agents: z.array(AgentStatusSchema),
@@ -190,6 +205,8 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("activity"), line: ActivityLineSchema }),
   z.object({ type: z.literal("work"), agentId: AgentIdSchema, work: AgentWorkSchema }),
   z.object({ type: z.literal("job_details"), details: JobDetailsSchema }),
+  /** Every floor with its live status. Sent after `welcome` and whenever a status changes. */
+  z.object({ type: z.literal("floors"), floors: z.array(FloorStatusSchema).max(100) }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

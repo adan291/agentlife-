@@ -13,6 +13,7 @@ import {
 } from "@agentlife/shared";
 import { testResultLine, type ActivityEmitter } from "../activity.ts";
 import type { LimitsConfig } from "../config.ts";
+import { DEFAULT_MAX_CONCURRENT_JOBS } from "../config.ts";
 import { ConflictError, DiffRejectedError, JobCancelledError, NotFoundError, StepTimeoutError } from "../errors.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
@@ -55,6 +56,12 @@ interface Active {
   data: Omit<ReportInput, "goal" | "verdict">;
   lastStep?: StepKey;
   done: Promise<void>;
+  /** True while the job holds one of the hotel's job slots. */
+  slot?: boolean;
+  /** Set while the job waits in the queue; called when a slot is given to it. */
+  grant?: () => void;
+  /** Place last announced with `task.queued`. */
+  queuePosition?: number;
 }
 
 function trunc(s: string, n: number): string {
@@ -82,8 +89,9 @@ export function fallbackReport(input: ReportInput): { title: string; markdown: s
 }
 
 /**
- * Drives one job at a time through the state machine. Steps are injected; the runner owns state
- * transitions, events, artifacts, timeouts, cancellation and approvals.
+ * Drives the jobs of the hotel through the state machine. A project has at most one job at a time; across the hotel at
+ * most `limits.maxConcurrentJobs` run at once and the others wait in a queue (`task.queued` events).
+ * Steps are injected; the runner owns state transitions, events, artifacts, timeouts, cancellation and approvals.
  */
 export class JobRunner {
   private readonly store: Store;
@@ -94,8 +102,12 @@ export class JobRunner {
   private readonly newId: () => string;
   private readonly reportTimeoutMs: number;
   private readonly activity: ActivityEmitter | undefined;
+  private readonly maxJobs: number;
   private readonly active = new Map<string, Active>();
   private readonly finished = new Map<string, Promise<void>>();
+  /** Jobs waiting for a slot, oldest first. */
+  private readonly waiting: Active[] = [];
+  private running = 0;
 
   constructor(opts: RunnerOptions) {
     this.store = opts.store;
@@ -106,15 +118,17 @@ export class JobRunner {
     this.newId = opts.newId ?? (() => `task-${randomUUID().slice(0, 8)}`);
     this.reportTimeoutMs = opts.reportTimeoutMs ?? DEFAULT_REPORT_TIMEOUT_MS;
     this.activity = opts.activity;
+    this.maxJobs = opts.limits.maxConcurrentJobs ?? DEFAULT_MAX_CONCURRENT_JOBS;
   }
 
   // ---- public API ----
 
-  /** Starts a job. Throws ConflictError("busy") when a non-terminal job exists. */
+  /**
+   * Starts a job. Throws ConflictError("busy") when the project already has a job that is not finished. When the
+   * hotel already runs its limit of jobs, the job is created and waits in the queue.
+   */
   start(repoId: string, goal: string): string {
-    if (this.store.listJobs().some((j) => !isTerminal(j.state))) {
-      throw new ConflictError("busy", "another job is still running");
-    }
+    if (this.activeJobOn(repoId)) throw new ConflictError("busy", "this project already has a job");
     const id = this.newId();
     this.store.appendEvent({ type: "task.created", taskId: id, repoId, goal });
     const a: Active = { id, ac: new AbortController(), data: {}, done: Promise.resolve() };
@@ -157,8 +171,19 @@ export class JobRunner {
     return this.finished.get(taskId) ?? Promise.resolve();
   }
 
+  /** Any job that is not finished, if there is one. */
   activeJobId(): string | undefined {
     return this.store.listJobs().find((j) => !isTerminal(j.state))?.taskId;
+  }
+
+  /** The job of this project that is not finished (running, waiting for approval or queued), if any. */
+  activeJobOn(repoId: string): string | undefined {
+    return this.store.listJobs().find((j) => j.repoId === repoId && !isTerminal(j.state))?.taskId;
+  }
+
+  /** Jobs that are waiting for a slot, in the order they will start. */
+  queuedJobs(): string[] {
+    return this.waiting.map((a) => a.id);
   }
 
   /** Requirement 5.3: jobs left non-terminal by a previous run end as failed (`engine_restarted`) with a report. */
@@ -251,6 +276,7 @@ export class JobRunner {
 
   private async drive(a: Active, repoId: string, goal: string): Promise<void> {
     try {
+      await this.acquireSlot(a);
       await this.pipeline(a, repoId, goal);
     } catch (e) {
       try {
@@ -260,7 +286,61 @@ export class JobRunner {
       }
     } finally {
       this.active.delete(a.id);
+      this.releaseSlot(a);
     }
+  }
+
+  /** Takes a job slot, or waits in the queue for one. Rejects with the cancel reason when the job is cancelled while it waits. */
+  private acquireSlot(a: Active): Promise<void> {
+    if (this.running < this.maxJobs && this.waiting.length === 0) {
+      this.running++;
+      a.slot = true;
+      return Promise.resolve();
+    }
+    this.waiting.push(a);
+    this.announceQueue();
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = (): void => {
+        const i = this.waiting.indexOf(a);
+        if (i >= 0) this.waiting.splice(i, 1);
+        delete a.grant;
+        this.announceQueue();
+        reject(a.ac.signal.reason);
+      };
+      if (a.ac.signal.aborted) return onAbort();
+      a.ac.signal.addEventListener("abort", onAbort, { once: true });
+      a.grant = () => {
+        a.ac.signal.removeEventListener("abort", onAbort);
+        delete a.grant;
+        resolve();
+      };
+    });
+  }
+
+  /** Gives the slot back and starts the jobs that can run now. */
+  private releaseSlot(a: Active): void {
+    if (a.slot) {
+      a.slot = false;
+      this.running--;
+    }
+    let granted = false;
+    while (this.running < this.maxJobs && this.waiting.length > 0) {
+      const next = this.waiting.shift()!;
+      this.running++;
+      next.slot = true;
+      granted = true;
+      next.grant?.();
+    }
+    if (granted) this.announceQueue();
+  }
+
+  /** Tells every queued job its place (1 is next), so the floors can show the queue. Only changed places are announced. */
+  private announceQueue(): void {
+    this.waiting.forEach((w, i) => {
+      if (w.queuePosition === i + 1) return;
+      w.queuePosition = i + 1;
+      this.store.appendEvent({ type: "task.queued", taskId: w.id, position: i + 1 });
+    });
   }
 
   private async handleError(a: Active, goal: string, e: unknown): Promise<void> {

@@ -83,8 +83,8 @@ export function createProjectRoutes(registry: ProjectRegistry, runner: JobRunner
           throw new NotFoundError("bad id");
         }
         if (id.length > MAX_ID_CHARS) throw new NotFoundError("unknown project");
-        const active = runner.activeJobId();
-        if (active && store.getJob(active)?.repoId === id) {
+        if (!id) throw new NotFoundError("unknown project");
+        if (runner.activeJobOn(id)) {
           throw new ConflictError("project_busy", "A job is running on this project. Wait for it to finish.");
         }
         registry.remove(id);

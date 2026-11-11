@@ -1,27 +1,26 @@
-import { RoomValidationError, WorldSim } from "@agentlife/shared";
+import { Hotel, RoomValidationError } from "@agentlife/shared";
 import { FakeEngineLink } from "./fake-engine.ts";
 import type { EngineLink } from "./engine-link.ts";
 import { startGateway } from "./gateway.ts";
 import { HttpEngineLink } from "./http-engine.ts";
-import { DEFAULT_ROOM_PATH, loadRoomFile } from "./load-room.ts";
+import { ROOMS_DIR, loadHotelRooms } from "./load-room.ts";
 import { parseAllowedOrigins } from "./origin.ts";
 
-/** Load and validate the room; exit with the invalid field path(s) when it is bad. */
-function loadRoom() {
+/** Load and validate the room files; exit with the invalid field path(s) when one is bad. */
+function loadRooms() {
   try {
-    return loadRoomFile();
+    return loadHotelRooms();
   } catch (e) {
     if (e instanceof RoomValidationError) {
-      console.error(`${DEFAULT_ROOM_PATH}\n${e.message}`);
+      console.error(`${ROOMS_DIR}\n${e.message}`);
     } else {
-      console.error(`Cannot load ${DEFAULT_ROOM_PATH}: ${e instanceof Error ? e.message : String(e)}`);
+      console.error(`Cannot load the rooms in ${ROOMS_DIR}: ${e instanceof Error ? e.message : String(e)}`);
     }
     process.exit(1);
   }
 }
 
-const room = loadRoom();
-const sim = new WorldSim(room, Date.now);
+const hotel = new Hotel({ ...loadRooms(), clock: Date.now });
 const port = Number(process.env["PORT"] ?? 8787);
 const host = process.env["HOST"] ?? "127.0.0.1";
 const allowedOrigins = parseAllowedOrigins(process.env["WORLD_ALLOWED_ORIGINS"]);
@@ -42,5 +41,5 @@ if (engineKind === "fake") {
   console.error(`ENGINE=${engineKind} is not valid; use ENGINE=fake or ENGINE=http`);
   process.exit(1);
 }
-const gateway = await startGateway({ sim, host, port, engine, allowedOrigins });
+const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins });
 console.log(`world-server listening on ws://${host}:${gateway.port} (allowed origins: ${allowedOrigins.join(", ")})`);

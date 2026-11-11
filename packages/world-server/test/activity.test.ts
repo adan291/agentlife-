@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { ACTIVITY_BUFFER_SIZE, ServerMsgSchema, WorldSim } from "@agentlife/shared";
+import { ACTIVITY_BUFFER_SIZE, ServerMsgSchema } from "@agentlife/shared";
 import type { AgentEvent, ServerMsg } from "@agentlife/shared";
 import { EventQueue } from "../src/engine-link.ts";
 import type { EngineLink } from "../src/engine-link.ts";
 import { startGateway } from "../src/gateway.ts";
 import type { Gateway } from "../src/gateway.ts";
-import { loadRoomFile } from "../src/load-room.ts";
+import { testHotel } from "./helpers.ts";
 
 const gateways: Gateway[] = [];
 const sockets: WebSocket[] = [];
@@ -32,15 +32,16 @@ function scriptedEngine() {
     ts: 1_000 + n,
     taskId: "task-1",
     type: "agent.activity",
-    agentId: n % 2 === 0 ? "developer" : "qa",
+    agentId: n % 2 === 0 ? "r:developer" : "r:qa",
     text: `line ${n}`,
   });
   return { link, queue, activity };
 }
 
+/** The user is on the floor of project `r`, where the scripted jobs run. */
 async function boot(link: EngineLink) {
-  const sim = new WorldSim(loadRoomFile(), Date.now, { msPerTile: 5 });
-  const gateway = await startGateway({ sim, engine: link, port: 0, tickMs: 5 });
+  const hotel = testHotel({ start: "project:r", projects: ["r"] });
+  const gateway = await startGateway({ hotel, engine: link, port: 0, tickMs: 5 });
   gateways.push(gateway);
   return gateway;
 }
@@ -78,7 +79,7 @@ describe("activity buffer and forwarding", () => {
     await c.waitFor(() => c.received.some((m) => m.type === "activity"));
     expect(c.received.find((m) => m.type === "activity")).toEqual({
       type: "activity",
-      line: { ts: 1_001, agentId: "qa", text: "line 1", taskId: "task-1" },
+      line: { ts: 1_001, agentId: "qa", text: "line 1", taskId: "task-1", roomId: "project:r" },
     });
   });
 

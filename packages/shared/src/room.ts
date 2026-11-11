@@ -9,6 +9,34 @@ export const AGENT_IDS = ["architect", "developer", "qa", "builder"] as const;
 export const AgentIdSchema = z.enum(AGENT_IDS);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 
+/** Roles that work for a project. The Builder is not a project agent: it lives in the lobby. */
+export const PROJECT_ROLES = ["architect", "developer", "qa"] as const;
+export type ProjectRole = (typeof PROJECT_ROLES)[number];
+
+/**
+ * Agent id as it appears in engine events: a plain id, or `<projectId>:<role>` for the team of one project
+ * (hotel-floors, requirement 3.2). The world-server maps a scoped id to the agent of the same role in that project's room.
+ */
+export type ScopedAgentId = AgentId | `${string}:${ProjectRole}`;
+
+const SCOPED_AGENT_ID = /^[a-z0-9][a-z0-9-]{0,59}:(architect|developer|qa)$/;
+
+export const ScopedAgentIdSchema = z.custom<ScopedAgentId>(
+  (v) => typeof v === "string" && ((AGENT_IDS as readonly string[]).includes(v) || SCOPED_AGENT_ID.test(v)),
+  "invalid agent id",
+);
+
+export function scopeAgentId(projectId: string, role: ProjectRole): ScopedAgentId {
+  return `${projectId}:${role}`;
+}
+
+/** Splits a scoped id into its project (absent for a plain id) and the agent of the room. */
+export function splitAgentId(id: ScopedAgentId): { projectId?: string; agentId: AgentId } {
+  const i = id.indexOf(":");
+  if (i < 0) return { agentId: id as AgentId };
+  return { projectId: id.slice(0, i), agentId: id.slice(i + 1) as AgentId };
+}
+
 /** Anchor names a room defines. `desk` anchors carry an `agent`. */
 export const AnchorNameSchema = z.enum([
   "desk",
@@ -47,18 +75,44 @@ export const PlacedFurniSchema = z.object({
   y: z.number().int(),
   /** Facing: 0 north (-y), 2 east (+x), 4 south (+y), 6 west (-x). */
   dir: z.union([z.literal(0), z.literal(2), z.literal(4), z.literal(6)]),
+  /** Target room of a `door`. */
+  to: z.string().min(1).max(100).optional(),
 });
 export type PlacedFurni = z.infer<typeof PlacedFurniSchema>;
 
+/**
+ * What a room is for. A `project` room is an office with the computer, mailbox and board and the project's team;
+ * the `lobby` holds the Reception, the elevator and the Builder; `hr` has no agents yet. A room without a kind is the
+ * single office of the first versions (all four agents).
+ */
+export const RoomKindSchema = z.enum(["project", "lobby", "hr"]);
+export type RoomKind = z.infer<typeof RoomKindSchema>;
+
 export const RoomDefSchema = z.object({
   id: z.string().min(1),
+  /** Shown on the door sign, the board and the floor list. */
   name: z.string().min(1),
+  kind: RoomKindSchema.optional(),
   heightmap: z.array(z.string().regex(/^[x0-9]+$/, "only 'x' and digits 0-9")).min(1),
   door: AnchorSchema,
   anchors: z.array(AnchorSchema),
   furni: z.array(PlacedFurniSchema),
 });
 export type RoomDef = z.infer<typeof RoomDefSchema>;
+
+/** Agents that live in a room, in display order. */
+export function roomAgents(room: Pick<RoomDef, "kind">): readonly AgentId[] {
+  switch (room.kind) {
+    case "project":
+      return PROJECT_ROLES;
+    case "lobby":
+      return ["builder"];
+    case "hr":
+      return [];
+    default:
+      return AGENT_IDS;
+  }
+}
 
 export interface RoomIssue {
   /** Dotted path of the invalid field, e.g. `furni.2.x`. */
@@ -181,15 +235,24 @@ export function checkRoom(room: RoomDef, catalog: Catalog = FURNI_CATALOG): Room
   checkAnchor(room.door, "door");
   room.anchors.forEach((a, i) => checkAnchor(a, `anchors.${i}`));
 
-  // Required anchors.
-  for (const n of ["computer", "mailbox", "board", "home_architect", "home_developer", "home_qa", "home_builder"] as const) {
+  // Required anchors: the office furniture in an office, and a home and a desk for each agent of the room.
+  const office = room.kind === undefined || room.kind === "project";
+  const agents = roomAgents(room);
+  const required: AnchorName[] = [
+    ...(office ? (["computer", "mailbox", "board"] as const) : []),
+    ...agents.map((a) => `home_${a}` as const),
+  ];
+  for (const n of required) {
     if (!room.anchors.some((a) => a.name === n)) add("anchors", `missing anchor '${n}'`);
   }
-  for (const agent of AGENT_IDS) {
+  for (const agent of agents) {
     if (!room.anchors.some((a) => a.name === "desk" && a.agent === agent)) {
       add("anchors", `missing 'desk' anchor for agent '${agent}'`);
     }
   }
+  room.anchors.forEach((a, i) => {
+    if (a.agent && !agents.includes(a.agent)) add(`anchors.${i}.agent`, `agent '${a.agent}' does not live in this room`);
+  });
   room.anchors.forEach((a, i) => {
     if (a.name === "desk" && !a.agent) add(`anchors.${i}.agent`, "'desk' anchor needs an agent");
   });
@@ -197,6 +260,8 @@ export function checkRoom(room: RoomDef, catalog: Catalog = FURNI_CATALOG): Room
   // Interactive items need a walkable use tile.
   room.furni.forEach((p, i) => {
     const def = catalog[p.defId];
+    if (def?.interaction === "door" && !p.to) add(`furni.${i}.to`, `door '${p.itemId}' needs a target room`);
+    if (def && def.interaction !== "door" && p.to) add(`furni.${i}.to`, `only a door has a target room ('${p.itemId}')`);
     if (!def?.interaction) return;
     const u = useTile(p, catalog);
     if (!walkable(u)) add(`furni.${i}.dir`, `use tile (${u.x}, ${u.y}) of '${p.itemId}' is not walkable`);

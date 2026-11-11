@@ -3,6 +3,7 @@ import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
 import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
+import { renderFloorList } from "./elevator.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
 import { UI_COLOURS } from "./theme.ts";
@@ -56,9 +57,32 @@ const CSS = `
 .al-report-item[data-unread="true"] { border-color: var(--al-accent); }
 .al-report-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-new { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s1); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; }
+.al-floor-list { list-style: none; margin: 0; padding: 0; }
+.al-floor { display: flex; align-items: center; gap: var(--al-s3); margin: var(--al-s1) 0; padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); }
+.al-floor[data-here="true"] { border-color: var(--al-accent); }
+.al-floor[data-attention="true"] { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; box-shadow: inset 4px 0 0 var(--al-accent); }
+.al-floor-tag { flex: none; min-width: 3ch; text-align: center; font-weight: bold; color: ${UI_COLOURS.accentText}; }
+.al-floor-name { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-floor-status { flex: 1; min-width: 0; color: ${UI_COLOURS.muted}; overflow-wrap: anywhere; }
+.al-floor[data-attention="true"] .al-floor-status { color: ${UI_COLOURS.accentText}; font-weight: bold; }
 `;
 
-const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job", reception: "Reception" };
+const TITLES: Record<PanelName, string> = {
+  computer: "Computer",
+  mailbox: "Mailbox",
+  board: "Job",
+  reception: "Reception",
+  elevator: "Elevator",
+  directory: "Floors",
+  door: "Door",
+};
+
+/** The door panel is never shown in practice: the server turns a door into a floor change. */
+function doorNote(doc: Document): HTMLElement {
+  const p = doc.createElement("p");
+  p.textContent = "Opening the door…";
+  return p;
+}
 
 /** How long the job card waits after a `work` message before it asks for fresh numbers. */
 export const DETAILS_REFRESH_MS = 1500;
@@ -83,6 +107,8 @@ export interface PanelHooks {
   lockedGoal?: string;
   /** Replay mode: registering and removing projects is off; the Reception panel shows this text instead of the form. */
   projectsLocked?: string;
+  /** The user picked a floor in the elevator panel. */
+  goTo?(roomId: string): void;
 }
 
 /**
@@ -163,18 +189,24 @@ export function createPanels(
                   { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
                 ),
               }
-            : {
-                body: renderJobPanel(document, state.data, state.viewing, {
-                  view: (artifactId) => {
-                    state.view(artifactId);
-                    render();
-                  },
-                  back: () => {
-                    state.back();
-                    render();
-                  },
-                }),
-              };
+            : state.open === "elevator"
+              ? { body: renderFloorList(document, state.floors, state.roomId, { go: (roomId) => hooks.goTo?.(roomId) }) }
+              : state.open === "directory"
+                ? { body: renderFloorList(document, state.floors, state.roomId) }
+                : state.open === "door"
+                  ? { body: doorNote(document) }
+                  : {
+                      body: renderJobPanel(document, state.data, state.viewing, {
+                        view: (artifactId) => {
+                          state.view(artifactId);
+                          render();
+                        },
+                        back: () => {
+                          state.back();
+                          render();
+                        },
+                      }),
+                    };
     // A refresh of the same view keeps the reading position; opening another view starts at the top.
     const viewKey = `${state.open}:${state.viewing ?? ""}`;
     const keep = !wasHidden && viewKey === lastViewKey ? body.scrollTop : 0;

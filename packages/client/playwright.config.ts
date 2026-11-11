@@ -12,7 +12,11 @@ const channel = process.env["E2E_CHANNEL"];
  */
 export default defineConfig({
   testDir: "e2e",
+  // demo.spec.ts belongs to playwright.demo.config.ts (it needs a demo build).
+  testIgnore: "demo.spec.ts",
   timeout: 30_000,
+  // The world-server serves one user at a time: a second page would replace the first.
+  workers: 1,
   reporter: "list",
   use: {
     baseURL: `http://127.0.0.1:${WEB_PORT}`,

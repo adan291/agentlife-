@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { AgentEventSchema, ServerMsgSchema, WorldSim } from "@agentlife/shared";
+import { AgentEventSchema, ServerMsgSchema } from "@agentlife/shared";
 import type { AgentEvent, ServerMsg } from "@agentlife/shared";
 import { FakeEngineLink } from "../src/fake-engine.ts";
 import { startGateway } from "../src/gateway.ts";
 import type { Gateway } from "../src/gateway.ts";
-import { loadRoomFile } from "../src/load-room.ts";
+import { testHotel } from "./helpers.ts";
 
 /** Collect events from the engine into an array until closed. */
 function collect(engine: FakeEngineLink) {
@@ -85,9 +85,10 @@ describe("gateway with the fake engine", () => {
   });
 
   async function setup() {
-    const sim = new WorldSim(loadRoomFile(), Date.now, { msPerTile: 5 });
+    // The user starts on the floor of the project the fake engine works on.
+    const hotel = testHotel({ start: "project:haunted-todo", projects: ["haunted-todo"] });
     const engine = new FakeEngineLink({ stepMs: 0 });
-    const gateway = await startGateway({ sim, engine, port: 0, tickMs: 5 });
+    const gateway = await startGateway({ hotel, engine, port: 0, tickMs: 5 });
     gateways.push(gateway);
     const ws = new WebSocket(`ws://127.0.0.1:${gateway.port}`);
     sockets.push(ws);
@@ -244,9 +245,11 @@ describe("gateway with the fake engine", () => {
     expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "bad_message" });
   });
 
-  it("replies engine_unavailable for a non-allowlisted repo", async () => {
+  it("refuses a job for another project than the floor's, and a repo the engine does not know", async () => {
     const c = await setup();
     c.send({ type: "start_job", repoId: "evil", goal: "x" });
-    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "engine_unavailable" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "bad_message" });
+    c.send({ type: "start_job", repoId: "other", goal: "x" });
+    expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "bad_message" });
   });
 });

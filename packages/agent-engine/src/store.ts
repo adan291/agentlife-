@@ -3,7 +3,16 @@ import { EventEmitter } from "node:events";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentEventSchema, type AgentEvent, type AgentId, type EngineJobView } from "@agentlife/shared";
+import {
+  AgentEventSchema,
+  PROJECT_ROLES,
+  ScopedAgentIdSchema,
+  scopeAgentId,
+  type AgentEvent,
+  type AgentId,
+  type EngineJobView,
+  type ProjectRole,
+} from "@agentlife/shared";
 import { applyEvent, foldJob } from "./jobs/fold.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -91,8 +100,23 @@ export class Store {
     }
   }
 
+  /**
+   * Events of a project's job name their agent `<projectId>:<role>` (hotel-floors, requirement 3.2), so two jobs on
+   * different projects never share an agent. Callers keep using plain roles; the job's project is known from `task.created`.
+   * A plain id stays plain when the job is unknown (Builder, `build:*` tasks) or the project id cannot be part of a scoped id.
+   */
+  private scoped(input: NewEvent): NewEvent {
+    const id = (input as { agentId?: string }).agentId;
+    if (!id || !(PROJECT_ROLES as readonly string[]).includes(id)) return input;
+    const repoId = this.views.get(input.taskId)?.repoId;
+    if (!repoId) return input;
+    const agentId = scopeAgentId(repoId, id as ProjectRole);
+    return ScopedAgentIdSchema.safeParse(agentId).success ? ({ ...input, agentId } as NewEvent) : input;
+  }
+
   /** The only write path for job state. Validates, persists, updates the cached view, then emits. */
-  appendEvent(input: NewEvent): AgentEvent {
+  appendEvent(raw: NewEvent): AgentEvent {
+    const input = this.scoped(raw);
     const ts = input.ts ?? Date.now();
     // Validate shape first (seq is a placeholder until the insert assigns it).
     const parsed = AgentEventSchema.parse({ ...input, ts, seq: 0 });

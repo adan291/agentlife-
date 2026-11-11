@@ -1,4 +1,4 @@
-import { RunExportSchema, type EngineJobView, type RunExport } from "@agentlife/shared";
+import { RunExportSchema, projectRoomId, type EngineJobView, type RunExport } from "@agentlife/shared";
 import { NotFoundError } from "../errors.ts";
 import { branchName } from "../steps/develop.ts";
 import type { Store } from "../store.ts";
@@ -50,6 +50,7 @@ export function buildExport(store: Store, taskId: string, now: () => number = Da
   return {
     version: 1,
     recordedAt: now(),
+    roomId: projectRoomId(job.repoId),
     job: withDeliverable(withBranch(withUsage(store, job)), opts),
     events: store.eventsFor(taskId),
     artifacts: store.artifactsFor(taskId).map((a) => ({ id: a.id, kind: a.kind, content: a.content })),

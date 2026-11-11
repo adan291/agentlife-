@@ -3,7 +3,7 @@ import { dirFromDelta, oppositeDir } from "../geometry/dir.ts";
 import type { Dir } from "../geometry/dir.ts";
 import { findPath } from "../geometry/pathfind.ts";
 import type { PathGrid, Tile } from "../geometry/pathfind.ts";
-import { AGENT_IDS, buildPathGrid, resolveAnchor, useTile } from "../room.ts";
+import { buildPathGrid, resolveAnchor, roomAgents, splitAgentId, useTile } from "../room.ts";
 import type { AgentId, RoomDef } from "../room.ts";
 import type { AgentEvent, AgentState } from "../events.ts";
 import { PROTOCOL_VERSION } from "../version.ts";
@@ -58,6 +58,8 @@ export class WorldSim {
   private readonly clock: () => number;
   private readonly grid: PathGrid;
   private readonly msPerTile: number;
+  /** Agents that live in this room (a project room has no Builder, the lobby only the Builder). */
+  private readonly agentIds: readonly AgentId[];
   private readonly avatars = new Map<AvatarId, AvatarState>();
   private readonly agentStates = new Map<AgentId, { state: AgentState; text?: string }>();
   private deferred: Deferred[] = [];
@@ -68,7 +70,8 @@ export class WorldSim {
     this.clock = clock;
     this.grid = buildPathGrid(room);
     this.msPerTile = options.msPerTile ?? DEFAULT_MS_PER_TILE;
-    for (const agent of AGENT_IDS) {
+    this.agentIds = roomAgents(room);
+    for (const agent of this.agentIds) {
       const home = resolveAnchor(room, "home", agent);
       const tile = home ? { x: home.x, y: home.y } : { x: room.door.x, y: room.door.y };
       this.avatars.set(agent, {
@@ -98,6 +101,23 @@ export class WorldSim {
     return { you: USER_ID, welcome: this.snapshot(USER_ID) };
   }
 
+  /** The user leaves the room (elevator, disconnect). Agents stay. */
+  leave(): void {
+    this.avatars.delete(USER_ID);
+    this.deferred = this.deferred.filter((d) => d.owner !== USER_ID);
+    this.joined = false;
+  }
+
+  /** Whether the user avatar is in this room. */
+  hasUser(): boolean {
+    return this.joined;
+  }
+
+  /** Agents of this room, in display order. */
+  agents(): readonly AgentId[] {
+    return this.agentIds;
+  }
+
   snapshot(you: number = USER_ID): WelcomeMsg {
     const now = this.now();
     const avatars: Avatar[] = [];
@@ -110,9 +130,10 @@ export class WorldSim {
       type: "welcome",
       protocol: PROTOCOL_VERSION,
       room: this.room,
+      roomId: this.room.id,
       you,
       avatars,
-      agents: AGENT_IDS.map((agentId) => {
+      agents: this.agentIds.map((agentId) => {
         const s = this.agentStates.get(agentId)!;
         return s.text === undefined ? { agentId, state: s.state } : { agentId, state: s.state, text: s.text };
       }),
@@ -138,7 +159,9 @@ export class WorldSim {
         const use = useTile(placed);
         const facing = oppositeDir(placed.dir as Dir);
         const after: ServerMsg[] = [];
-        if (def?.interaction) after.push({ type: "open_panel", panel: def.interaction });
+        if (def?.interaction) {
+          after.push({ type: "open_panel", panel: def.interaction, ...(placed.to ? { data: { to: placed.to } } : {}) });
+        }
         return this.walkTo(user, use, facing, after);
       }
       default:
@@ -148,27 +171,31 @@ export class WorldSim {
   }
 
   handleAgentEvent(ev: AgentEvent): ServerMsg[] {
+    if (!("agentId" in ev) || ev.agentId === undefined) return [];
+    // Events carry `<project>:<role>`; the room knows the agent by its role.
+    const agentId = splitAgentId(ev.agentId).agentId;
+    if (!this.agentStates.has(agentId)) return [];
     switch (ev.type) {
       case "agent.goto": {
-        const agent = this.avatars.get(ev.agentId);
-        const anchor = resolveAnchor(this.room, ev.anchor, ev.agentId);
+        const agent = this.avatars.get(agentId);
+        const anchor = resolveAnchor(this.room, ev.anchor, agentId);
         if (!agent || !anchor) return [];
         const out = this.walkTo(agent, { x: anchor.x, y: anchor.y }, anchor.dir as Dir, [], false);
         return out;
       }
       case "agent.state_changed": {
         this.agentStates.set(
-          ev.agentId,
+          agentId,
           ev.text === undefined ? { state: ev.state } : { state: ev.state, text: ev.text },
         );
         return [
           ev.text === undefined
-            ? { type: "agent_state", agentId: ev.agentId, state: ev.state }
-            : { type: "agent_state", agentId: ev.agentId, state: ev.state, text: ev.text },
+            ? { type: "agent_state", agentId, state: ev.state }
+            : { type: "agent_state", agentId, state: ev.state, text: ev.text },
         ];
       }
       case "agent.say":
-        return [{ type: "say", id: ev.agentId, text: ev.text }];
+        return [{ type: "say", id: agentId, text: ev.text }];
       default:
         return [];
     }

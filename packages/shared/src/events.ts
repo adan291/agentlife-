@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentIdSchema, SemanticAnchorSchema } from "./room.ts";
+import { ScopedAgentIdSchema, SemanticAnchorSchema } from "./room.ts";
 
 export const AgentStateSchema = z.enum([
   "idle",
@@ -61,11 +61,13 @@ const base = {
   taskId: z.string().min(1),
 };
 
-const agentBase = { ...base, agentId: AgentIdSchema };
-const optAgentBase = { ...base, agentId: AgentIdSchema.optional() };
+const agentBase = { ...base, agentId: ScopedAgentIdSchema };
+const optAgentBase = { ...base, agentId: ScopedAgentIdSchema.optional() };
 
 export const AgentEventSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("task.created"), repoId: z.string().min(1), goal: z.string().min(1).max(300) }),
+  /** The job waits for a free slot (the hotel runs a limited number of jobs at once). Sent again when its place changes. */
+  z.object({ ...base, type: z.literal("task.queued"), position: z.number().int().positive() }),
   z.object({
     ...base,
     type: z.literal("task.state_changed"),

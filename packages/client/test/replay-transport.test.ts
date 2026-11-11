@@ -3,11 +3,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { RunExportSchema, ServerMsgSchema, validateRoom } from "@agentlife/shared";
-import type { RoomDef, RunExport, ServerMsg } from "@agentlife/shared";
+import type { RunExport, ServerMsg } from "@agentlife/shared";
 import { REPLAY_REJECT_NOTE, ReplayTransport } from "../src/replay/transport.ts";
+import type { ReplayRooms } from "../src/replay/transport.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const room: RoomDef = validateRoom(JSON.parse(readFileSync(join(here, "..", "..", "world-server", "rooms", "office.json"), "utf8")));
+const roomFile = (name: string) => validateRoom(JSON.parse(readFileSync(join(here, "..", "..", "world-server", "rooms", name), "utf8")));
+const room: ReplayRooms = { lobby: roomFile("lobby.json"), hr: roomFile("hr.json"), template: roomFile("project-template.json") };
 const exp: RunExport = RunExportSchema.parse(JSON.parse(readFileSync(join(here, "..", "public", "demo", "run-001.json"), "utf8")));
 
 function setup() {
@@ -142,7 +144,8 @@ describe("ReplayTransport", () => {
     advance(5 * 60_000);
     transport.restart();
     expect(transport.started).toBe(false);
-    expect(msgs.at(-1)?.type).toBe("welcome");
+    expect(msgs.filter((m) => m.type === "welcome")).toHaveLength(2);
+    expect(msgs.at(-1)?.type).toBe("floors");
     const before = of("approval").length;
     transport.send({ type: "start_job", repoId, goal: "x" });
     advance(5 * 60_000);
@@ -165,5 +168,121 @@ describe("ReplayTransport", () => {
       globalThis.fetch = original;
     }
     expect(calls).toBe(0);
+  });
+});
+
+describe("ReplayTransport floors", () => {
+  const floorRoom = `project:${repoId}`;
+
+  /** Walks to the elevator and opens its panel. */
+  function atElevatorPanel(s: ReturnType<typeof setup>) {
+    s.transport.send({ type: "use", itemId: "elevator_1" });
+    s.advance(30_000);
+    expect(s.of("open_panel").map((p) => p.panel)).toContain("elevator");
+  }
+
+  it("starts on the recorded floor, with its room id, its team and the floor list", () => {
+    const { msgs, of } = setup();
+    const welcome = of("welcome")[0]!;
+    expect(welcome.roomId).toBe(floorRoom);
+    expect(welcome.room.name).toBe(repoId);
+    expect(welcome.agents.map((a) => a.agentId)).toEqual(["architect", "developer", "qa"]);
+    const floors = of("floors").at(-1)!.floors;
+    expect(floors.map((f) => f.roomId)).toEqual(["lobby", "hr", floorRoom]);
+    expect(floors.every((f) => f.status === "idle")).toBe(true);
+    expect(msgs.map((m) => m.type).slice(0, 2)).toEqual(["welcome", "floors"]);
+  });
+
+  it("takes the roomId of the export when it has one", () => {
+    const named: RunExport = { ...exp, roomId: "project:other-name" };
+    const t = new ReplayTransport(named, room, { now: () => 1, startTicker: () => () => {}, autoBegin: false });
+    const got: ServerMsg[] = [];
+    t.onMessage((m) => got.push(m));
+    t.begin();
+    const welcome = got.find((m) => m.type === "welcome");
+    expect(welcome?.type === "welcome" && welcome.roomId).toBe("project:other-name");
+  });
+
+  it("follows the recorded job in the floor status and marks an unread report until the mailbox is opened", () => {
+    const s = setup();
+    const status = () => s.of("floors").at(-1)!.floors.find((f) => f.roomId === floorRoom)!;
+    s.transport.send({ type: "start_job", repoId, goal: "x" });
+    expect(status().status).toBe("working");
+    s.advance(5 * 60_000);
+    expect(status().status).toBe("waiting_approval");
+    s.transport.send({ type: "approve", approvalId: s.of("approval").at(-1)!.approval.approvalId, decision: "approve" });
+    s.advance(5 * 60_000);
+    expect(status().status).toBe("report_ready");
+    s.transport.send({ type: "use", itemId: "mailbox_1" });
+    s.advance(30_000);
+    expect(status().status).toBe("idle");
+  });
+
+  it("goes to the lobby and back by the elevator; nothing of the recorded job reaches the lobby", () => {
+    const s = setup();
+    s.transport.send({ type: "start_job", repoId, goal: "x" });
+    atElevatorPanel(s);
+    s.transport.send({ type: "go_to", roomId: "lobby" });
+    const lobby = s.of("welcome").at(-1)!;
+    expect(lobby.roomId).toBe("lobby");
+    expect(lobby.agents.map((a) => a.agentId)).toEqual(["builder"]);
+    expect(lobby.activity).toBeUndefined();
+
+    const seen = s.msgs.length;
+    s.advance(5 * 60_000); // the plan is ready by now, but the user is in the lobby
+    const lobbyMsgs = s.msgs.slice(seen);
+    for (const type of ["approval", "activity", "work", "job_update", "agent_state", "say"] as const) {
+      expect(lobbyMsgs.some((m) => m.type === type), type).toBe(false);
+    }
+    expect(s.of("floors").at(-1)!.floors.find((f) => f.roomId === floorRoom)?.status).toBe("waiting_approval");
+
+    s.transport.send({ type: "use", itemId: "elevator_1" });
+    s.advance(30_000);
+    s.transport.send({ type: "go_to", roomId: floorRoom });
+    const back = s.of("welcome").at(-1)!;
+    expect(back.roomId).toBe(floorRoom);
+    // The plan that waited comes back with the floor, and so does the job.
+    const after = s.msgs.slice(s.msgs.lastIndexOf(back));
+    expect(after.some((m) => m.type === "approval" && m.approval.status === "pending")).toBe(true);
+    expect(after.some((m) => m.type === "job_update" && m.job.state === "awaiting_plan_approval")).toBe(true);
+    expect(back.activity?.length).toBeGreaterThan(0);
+  });
+
+  it("refuses the elevator away from it and an unknown floor", () => {
+    const s = setup();
+    s.transport.send({ type: "go_to", roomId: "project:nope" });
+    expect(s.of("error").at(-1)?.message).toBe("unknown floor");
+    s.transport.send({ type: "move", x: 6, y: 5 });
+    s.advance(10_000);
+    s.transport.send({ type: "go_to", roomId: "lobby" });
+    expect(s.of("error").at(-1)?.message).toBe("use the elevator first");
+    expect(s.of("welcome")).toHaveLength(1);
+  });
+
+  it("the HR door in the lobby leads to the HR office", () => {
+    const s = setup();
+    atElevatorPanel(s);
+    s.transport.send({ type: "go_to", roomId: "lobby" });
+    s.transport.send({ type: "use", itemId: "door_hr" });
+    s.advance(30_000);
+    expect(s.of("welcome").at(-1)!.roomId).toBe("hr");
+    expect(s.of("open_panel").some((p) => p.panel === "door")).toBe(false);
+  });
+
+  it("starts a job only from the recorded floor", () => {
+    const s = setup();
+    atElevatorPanel(s);
+    s.transport.send({ type: "go_to", roomId: "lobby" });
+    s.transport.send({ type: "start_job", repoId, goal: "x" });
+    expect(s.of("error").at(-1)?.message).toContain("project's floor");
+    expect(s.transport.started).toBe(false);
+  });
+
+  it("restart returns the user to the recorded floor", () => {
+    const s = setup();
+    atElevatorPanel(s);
+    s.transport.send({ type: "go_to", roomId: "lobby" });
+    s.transport.restart();
+    expect(s.of("welcome").at(-1)!.roomId).toBe(floorRoom);
   });
 });

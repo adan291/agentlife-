@@ -144,6 +144,8 @@ export function jobDetailsFromExport(exp: RunExport): JobDetails {
 export const RunExportSchema = z.object({
   version: z.literal(1),
   recordedAt: z.number().int().nonnegative(),
+  /** Floor the job ran on (`project:<id>`). Exports made before the hotel have none; the replay derives it from the repo id. */
+  roomId: z.string().min(1).max(100).optional(),
   job: EngineJobViewSchema,
   events: z.array(AgentEventSchema),
   artifacts: z.array(z.object({ id: z.string().min(1), kind: z.string().min(1), content: z.string() })),

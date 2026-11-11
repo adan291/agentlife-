@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
+import { splitAgentId } from "@agentlife/shared";
 import type { AgentEvent, JobState, Plan, Review } from "@agentlife/shared";
 import type { LimitsConfig } from "../src/config.ts";
 import { ConflictError, DiffRejectedError, NotFoundError } from "../src/errors.ts";
@@ -86,13 +87,13 @@ describe("JobRunner happy path", () => {
     const id = runner.start("haunted-todo", "fix it");
     await runner.done(id);
     const evs = store.eventsFor(id);
-    const gotos = evs.flatMap((e) => (e.type === "agent.goto" ? [`${e.agentId}:${e.anchor}`] : []));
+    const gotos = evs.flatMap((e) => (e.type === "agent.goto" ? [`${splitAgentId(e.agentId).agentId}:${e.anchor}`] : []));
     expect(gotos).toContain("architect:board");
     expect(gotos).toContain("architect:mailbox");
     expect(gotos).toContain("developer:desk");
     expect(gotos).toContain("qa:computer");
     expect(gotos).toContain("qa:desk");
-    const waiting = evs.find((e) => e.type === "agent.state_changed" && e.agentId === "architect" && e.state === "waiting_approval");
+    const waiting = evs.find((e) => e.type === "agent.state_changed" && e.agentId === "haunted-todo:architect" && e.state === "waiting_approval");
     expect(waiting).toBeDefined();
   });
 

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (project-registry tasks 1–5 done on branch feat/project-registry, not merged; task 6 is the live check with the user)
+Updated: 2026-11-12 (hotel-floors tasks 1–5 done on branch feat/hotel-floors, not merged; review and verification fixes applied, needs a new verification)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -32,6 +32,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 22:40 (IDE): user asked for a full taskmap run with agents to 100 %. Created docs/TASKMAP.md, specs job-types, night-shift, project-memory, list-mode, hr-desk task 5 (Ollama intern), agent agentlife-verifier and the conductor `pnpm conduct` (build -> review -> verify -> fix -> merge). Started with row 2 (hotel-floors).
 - 2026-11-12 (IDE): user wants to see the tasks inside the app; spec build-board added as TASKMAP row 3. Conductor bug found and fixed: kiro-cli was spawned through the Windows shell, so review and verification prompts were split into words and did nothing; hotel-floors sessions S15-S16 are done (5/5) and wait for review + verification.
 
+- 2026-11-12 00:15 (Discord): user asked for a summary of progress; Crew read STATUS and the session log and replied. No changes to the project.
+
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
 2. Publish: repo https://github.com/adan291/agentlife- (public). Push main, then enable Pages (Settings > Pages > Source: GitHub Actions); demo URL https://adan291.github.io/agentlife-/ is in the README.
@@ -61,7 +63,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
 | project-registry | 5 / 6 | main | Tasks 1-5 done, reviewed and merged; review fixes applied (no paths in clone errors, more secret denies, secrets scrubbed from test copies, length-only masks, no FETCH_HEAD). Task 6: live check with the user |
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
-| hotel-floors | 0 / 5 | — | Lobby (Reception, elevator, HR door, directory), one floor per project, elevator with live floor status, per-project jobs (max 2 at once). S15-S16 |
+| hotel-floors | 5 / 5 | feat/hotel-floors | All tasks done, not merged. Review (request changes) and verification (FAIL 1.2b) fixes applied: project name drawn over the elevator and the board (`scene/door-signs.ts`); the "stale deferred messages" blocker is not reproducible (`WorldSim.leave/join` drop them, tick discards other rooms'), covered by a new test; gateway test for a removed floor; `e2e` ignores `demo.spec.ts`. Not looked at in a browser. Lobby (Reception, elevator, HR door, directory), one floor per project, per-project jobs (max 2 at once), client elevator panel with live status, door transition, remembered floor, terminal scope, replay with floors. S15-S16 |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
 | build-board | 0 / 2 | — | Construction board in the lobby (TASKMAP row 3). S15B |
 | job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
@@ -84,6 +86,14 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- hotel-floors (tasks 1–5 done on `feat/hotel-floors`, `pnpm check` passes; decisions in the spec's design.md under "Decisions made while implementing"). What to know for review and the live check:
+  - Checked in Edge with Playwright (`$env:E2E_CHANNEL='msedge'; pnpm --filter @agentlife/client e2e`, 36 tests, now one worker because the world-server serves one user): lobby, elevator panel, door transition, floor label, remembered floor, team bar per floor. `e2e:demo` passes with the replay hotel. The user has not looked at it.
+  - Protocol additions: client `go_to { roomId }` (only accepted while the avatar stands in front of an elevator) and `activity_scope { scope: "floor" | "all" }`; server `floors`, `welcome.roomId`, `ActivityLine.roomId`, panels `elevator`, `directory`, `door`; event `task.queued`; agent ids in events may be `<projectId>:<role>`; `RunExport.roomId`.
+  - "All floors" in the terminal: the gateway sends the other floors' buffered lines when the client asks for `all` (the client asks again after every `welcome`) and their new lines from then on. Lines are tagged with the floor and sorted by time on the client.
+  - `rooms/office.json` is not deleted: shared/client tests (sim, crew, scene) still use it as the old four-agent room. Nothing in the app loads it any more.
+  - `public/demo/run-001.json` got `"roomId":"project:haunted-todo"` added by hand (recorded before floors existed; the replay would derive the same from the repo id).
+  - Not run live: the real engine with two projects at once, the queue with a real third job.
+  - A page reload that remembers a floor sends `go_to` right after the first floor list; if the user walked away from the elevator in that moment the server refuses and the user stays in the lobby (toast with the message).
 - project-registry (tasks 1–5 done; what to know for task 6 and for review):
   - Not run live: Reception in a browser, a real `kiro-cli` job on a registered project, the first per-project Docker image build, and a real delivery. Everything else is covered by tests that use real git repositories in temp folders and the real pipeline steps over scripted agents (registration rules, path property test, clone, report, delivery leaves HEAD, index, working files, config and other refs unchanged, existing branch refused).
   - Task 6 steps: start the engine (it creates `D:\AgentHotel` if missing; set `RUNTIME` unset for the real pipeline, Docker running), start the world-server with `ENGINE=http`, open the client, click the new Reception desk (north wall, left of the lamp), register a small node project that lives in `D:\AgentHotel\<name>` (git repo with a commit, `package.json` + `package-lock.json`), start a job on it from the computer, approve, open the report and press "Deliver as branch", then `git log agentlife/<task>` in the project. The first job on a project builds its test image (needs network, can take a minute or two; the test step timeout covers it, see limits.json).
