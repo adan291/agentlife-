@@ -18,9 +18,18 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 1. User looks at the new shell in the browser (collapse team bar, resize terminal, minimise/restore).
 2. Live run 3 from the room (goal: "Validate todo titles in addTodo"), then agent-pipeline task 13: export it to packages/client/public/demo/run-001.json.
 3. S11 (demo-replay 1–4), S12 (5–6 + polish, needs the GitHub repo), S13 (submission texts).
-4. User decisions: rewrite git history to remove the other account's email before the first push; create the public GitHub repo.
+4. User decisions: see Security below.
 
 Start-up for live runs: Docker Desktop, Ollama, then engine (KIRO_API_KEY from .env, LLM_BASE_URL/LLM_MODEL for ambient lines), world-server with ENGINE=http, client dev.
+
+## Security (before the first push)
+First audit: data/security/2026-11-11-first-push.md (local only). Verdict: NOT safe to publish yet; the current tree is clean, the problems are in git history.
+Decisions for the user:
+1. Rewrite history before the first push (author/committer email to a GitHub noreply address; replace the other account's email in commit 4e16788 and two fake key-shaped test literals). Recommended: yes. Backup branch first; push only main.
+2. Set a repository-local noreply author email for new commits (user runs it).
+3. Accept the `C:\Users\me` test fixtures in scripts/security-allow.json (low).
+Tasks to schedule: Origin check on the world-server WebSocket (M3, before the freeze); `permissions: contents: read` in CI (L5); scan the demo export before committing it.
+Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git pre-push hook while it reports high or medium findings. Agent: agentlife-security (read-only, recommends).
 
 ## Specs
 | Spec | Tasks done | Branch | Notes |
