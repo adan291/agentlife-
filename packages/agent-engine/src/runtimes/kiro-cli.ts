@@ -179,8 +179,10 @@ export class KiroCliRuntime implements AgentRuntime {
       where = isInside(cwd, p) ? path.relative(cwd, p) || "." : "(outside)";
     }
     const kind = u["kind"];
+    // Files outside the working directory are shown in the terminal as "(outside)" but never counted:
+    // they would all collapse into one entry and under-count the work.
     const tool: { kind: "read" | "edit"; file: string } | undefined =
-      where && (kind === "read" || kind === "edit") ? { kind: kind === "read" ? "read" : "edit", file: where } : undefined;
+      where && where !== "(outside)" && (kind === "read" || kind === "edit") ? { kind: kind === "read" ? "read" : "edit", file: where } : undefined;
     return { text: oneLine(where ? `${title}: ${where}` : title), ...(tool ? { tool } : {}) };
   }
 

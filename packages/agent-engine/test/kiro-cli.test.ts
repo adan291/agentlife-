@@ -217,7 +217,6 @@ describe("KiroCliRuntime", () => {
     expect(tools).toEqual([
       { kind: "read", file: path.join("src", "a.ts") },
       { kind: "edit", file: path.join("src", "a.ts") },
-      { kind: "read", file: "(outside)" },
     ]);
     expect(evs.flatMap((e) => (e.kind === "context" ? [e.pct] : []))).toEqual([1.1, 100, 12]);
   });

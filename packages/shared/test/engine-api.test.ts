@@ -61,3 +61,21 @@ describe("engine HTTP response schemas", () => {
     expect(ErrorResponseSchema.safeParse({ message: "no error code" }).success).toBe(false);
   });
 });
+
+describe("jobDetailsFromExport total cap (review)", () => {
+  it("never returns more than JOB_DETAILS_MAX_TOTAL_CHARS of artifact content", async () => {
+    const { jobDetailsFromExport, JOB_DETAILS_MAX_TOTAL_CHARS, ARTIFACT_VIEW_MAX_CHARS } = await import("../src/engine-api.ts");
+    const big = "x".repeat(ARTIFACT_VIEW_MAX_CHARS);
+    const exp = {
+      version: 1 as const,
+      recordedAt: 0,
+      job: { artifacts: [] } as never,
+      events: [],
+      artifacts: Array.from({ length: 10 }, (_, i) => ({ id: `a${i}`, kind: "diff", content: big })),
+    };
+    const out = jobDetailsFromExport(exp);
+    const total = out.artifacts.reduce((n, a) => n + a.content.replace(/\n\[cut: \d+ characters in total\]$/, "").length, 0);
+    expect(total).toBeLessThanOrEqual(JOB_DETAILS_MAX_TOTAL_CHARS);
+    expect(out.artifacts.at(-1)?.truncated).toBe(true);
+  });
+});

@@ -111,6 +111,9 @@ export const ArtifactViewSchema = z.object({
 });
 export type ArtifactView = z.infer<typeof ArtifactViewSchema>;
 
+/** Cap on the sum of artifact characters in one `job_details` answer. */
+export const JOB_DETAILS_MAX_TOTAL_CHARS = 1_000_000;
+
 /** `job_details` answer: the job and the (size-capped) contents of its artifacts, in creation order. */
 export const JobDetailsSchema = z.object({
   job: EngineJobViewSchema,
@@ -121,11 +124,13 @@ export type JobDetails = z.infer<typeof JobDetailsSchema>;
 /** Builds the `job_details` answer from a run export (live engine or recorded demo). Pure. */
 export function jobDetailsFromExport(exp: RunExport): JobDetails {
   const titles = new Map(exp.job.artifacts.map((a) => [a.artifactId, a.title] as const));
+  // Total budget across artifacts so one `job_details` message stays small (review: up to 8 MB before).
+  let budget = JOB_DETAILS_MAX_TOTAL_CHARS;
   const artifacts = exp.artifacts.slice(0, 40).map((a): ArtifactView => {
-    const truncated = a.content.length > ARTIFACT_VIEW_MAX_CHARS;
-    const content = truncated
-      ? `${a.content.slice(0, ARTIFACT_VIEW_MAX_CHARS)}\n[cut: ${a.content.length} characters in total]`
-      : a.content;
+    const limit = Math.max(0, Math.min(ARTIFACT_VIEW_MAX_CHARS, budget));
+    const truncated = a.content.length > limit;
+    const content = truncated ? `${a.content.slice(0, limit)}\n[cut: ${a.content.length} characters in total]` : a.content;
+    budget -= Math.min(a.content.length, limit);
     return { artifactId: a.id, kind: a.kind, title: titles.get(a.id) ?? a.kind, content, truncated };
   });
   return { job: exp.job, artifacts };
