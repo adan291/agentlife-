@@ -7,6 +7,8 @@ import { defineConfig } from "vitest/config";
 // unless a test passes its own `projectsFile`.
 export default defineConfig({
   test: {
+    // Tests that run git (project registry, delivery) take several seconds on Windows when all packages test in parallel.
+    testTimeout: 30_000,
     env: {
       RUNTIME: "fake",
       AGENTLIFE_PROJECTS_FILE: path.join(os.tmpdir(), "agentlife-vitest-no-projects.json"),

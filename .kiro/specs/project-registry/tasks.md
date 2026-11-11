@@ -13,7 +13,7 @@
   - Clone-based materialise, report "Based on commit", per-project runner images, test step skipped for unsupported stacks, QA prompt note, extended secret-file deny rules for the three role agents
   - _Requirements: 3.2, 3.3, 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 4. Engine: delivery as a branch
+- [x] 4. Engine: delivery as a branch
   - `projects/deliver.ts`, `POST /tasks/:id/deliver`, `delivery.done`; tests that the project's HEAD, index and files are unchanged and an existing branch is refused
   - _Requirements: 5.1–5.5, 7.3_
 

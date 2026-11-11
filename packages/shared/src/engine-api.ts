@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentEventSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
+import { DeliveryInfoSchema } from "./projects.ts";
 
 // The public repo view is `RepoSchema` in protocol.ts; `source` paths are never exposed.
 
@@ -96,6 +97,10 @@ export const EngineJobViewSchema = z.object({
   verdict: VerdictSchema.optional(),
   /** Git branch of the Developer's worktree. Set by the export once a develop step ran. */
   branch: z.string().min(1).max(200).optional(),
+  /** Set once the branch was delivered to the user's repository (`delivery.done`). */
+  delivery: DeliveryInfoSchema.optional(),
+  /** Set by the export: the job ran on a registered project, finished with a change and was not delivered yet. */
+  deliverable: z.boolean().optional(),
 });
 export type EngineJobView = z.infer<typeof EngineJobViewSchema>;
 

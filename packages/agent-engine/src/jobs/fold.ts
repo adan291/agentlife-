@@ -76,6 +76,9 @@ export function applyEvent(view: EngineJobView | undefined, ev: AgentEvent): Eng
       }
       return next;
     }
+    case "delivery.done":
+      next.delivery = { branch: ev.branch, commit: ev.commit };
+      return next;
     case "approval.requested":
       next.approvals.push({ approvalId: ev.approvalId, kind: ev.kind, summary: ev.summary, status: "pending" });
       return next;

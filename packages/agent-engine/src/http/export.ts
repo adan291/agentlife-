@@ -30,20 +30,33 @@ function withBranch(job: EngineJobView): EngineJobView {
   return job.steps.some((s) => s.step === "develop") ? { ...job, branch: branchName(job.taskId) } : job;
 }
 
+export interface ExportOptions {
+  /** True for ids of projects the user registered (the ones whose jobs can be delivered as a branch). */
+  isRegisteredProject?: (repoId: string) => boolean;
+}
+
+/** `deliverable`: a registered project, a finished job whose Developer step completed, not delivered yet. */
+function withDeliverable(job: EngineJobView, opts: ExportOptions): EngineJobView {
+  const finished = job.state === "report_ready" || job.state === "delivered";
+  const developed = job.steps.some((s) => s.step === "develop" && s.status === "ok");
+  const registered = opts.isRegisteredProject?.(job.repoId) ?? false;
+  return registered && finished && developed && !job.delivery ? { ...job, deliverable: true } : job;
+}
+
 /** One JSON document with the job (steps include duration, status and usage), its events and artifact contents. */
-export function buildExport(store: Store, taskId: string, now: () => number = Date.now): RunExport {
+export function buildExport(store: Store, taskId: string, now: () => number = Date.now, opts: ExportOptions = {}): RunExport {
   const job = store.getJob(taskId);
   if (!job) throw new NotFoundError("unknown task");
   return {
     version: 1,
     recordedAt: now(),
-    job: withBranch(withUsage(store, job)),
+    job: withDeliverable(withBranch(withUsage(store, job)), opts),
     events: store.eventsFor(taskId),
     artifacts: store.artifactsFor(taskId).map((a) => ({ id: a.id, kind: a.kind, content: a.content })),
   };
 }
 
-export function createExportRoute(store: Store): Route {
+export function createExportRoute(store: Store, opts: ExportOptions = {}): Route {
   return {
     method: "GET",
     pattern: /^\/tasks\/([^/]+)\/export$/,
@@ -54,7 +67,7 @@ export function createExportRoute(store: Store): Route {
       } catch {
         throw new NotFoundError("bad id");
       }
-      sendJson(res, 200, RunExportSchema, buildExport(store, id));
+      sendJson(res, 200, RunExportSchema, buildExport(store, id, Date.now, opts));
     },
   };
 }

@@ -13,7 +13,7 @@ import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import { ProjectRegistry } from "./projects/registry.ts";
-import { createProjectRoutes } from "./projects/routes.ts";
+import { createDeliverRoute, createProjectRoutes } from "./projects/routes.ts";
 import { allowedRoots } from "./projects/roots.ts";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
@@ -46,6 +46,8 @@ export interface EngineOptions {
   projectRoots?: string[];
   /** Where registered projects are stored. Default: `AGENTLIFE_PROJECTS_FILE` or `<dataDir>/projects.json`. */
   projectsFile?: string;
+  /** A ready registry (tests that build their own pipeline steps share it with the engine). */
+  projects?: ProjectRegistry;
 }
 
 export interface Engine {
@@ -102,13 +104,15 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const store =
     opts.store ?? new Store({ ...(opts.dataDir ? { runsDir: paths.runs } : {}), ...opts.storeOptions });
   let steps = opts.steps;
-  const projects = new ProjectRegistry({
-    file: opts.projectsFile ?? process.env["AGENTLIFE_PROJECTS_FILE"] ?? path.join(paths.root, "projects.json"),
-    roots: opts.projectRoots ?? allowedRoots(),
-    builtin: config.repos,
-    reposDir: paths.repos,
-    agentlifeRoot: PROJECT_ROOT,
-  });
+  const projects =
+    opts.projects ??
+    new ProjectRegistry({
+      file: opts.projectsFile ?? process.env["AGENTLIFE_PROJECTS_FILE"] ?? path.join(paths.root, "projects.json"),
+      roots: opts.projectRoots ?? allowedRoots(),
+      builtin: config.repos,
+      reposDir: paths.repos,
+      agentlifeRoot: PROJECT_ROOT,
+    });
   const activity = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
   if (!steps) {
     const real = usesRealPipeline(config);
@@ -146,9 +150,10 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     projects,
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
-      createExportRoute(store),
+      createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
       createCrewRoute(createCrewRelay({ append: (ev) => store.appendEvent(ev) })),
       ...createProjectRoutes(projects, runner, store),
+      createDeliverRoute({ registry: projects, paths, store, logger }),
       ...(opts.extraRoutes ?? []),
     ],
   });

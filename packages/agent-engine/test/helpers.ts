@@ -7,6 +7,7 @@ import { dataPaths } from "../src/paths.ts";
 import type { ProjectRegistry } from "../src/projects/registry.ts";
 import type { AgentRuntime, RuntimeEvent, RuntimeInput } from "../src/runtimes/types.ts";
 import type { PipelineDeps } from "../src/steps/deps.ts";
+import type { Steps } from "../src/jobs/steps.ts";
 import { createPipelineSteps } from "../src/steps/index.ts";
 import { Store } from "../src/store.ts";
 
@@ -78,15 +79,17 @@ export interface JobHarness {
   deps: PipelineDeps;
   runtime: ScriptedRuntime;
   dataDir: string;
+  /** The steps, for an engine that is started with `steps`. */
+  steps: Steps;
   close(): void;
 }
 
 /** The real pipeline steps over scripted agents, a memory store and a runner, rooted in `tmp/data`. */
-export function jobHarness(tmp: string, projects: ProjectRegistry): JobHarness {
+export function jobHarness(tmp: string, projects: ProjectRegistry, existingStore?: Store): JobHarness {
   const config = loadConfig();
   const dataDir = path.join(tmp, "data");
   const paths = dataPaths(dataDir);
-  const store = new Store({ dbPath: ":memory:", runsDir: paths.runs });
+  const store = existingStore ?? new Store({ dbPath: ":memory:", runsDir: paths.runs });
   const runtime = new ScriptedRuntime();
   const deps: PipelineDeps = {
     runtimes: { architect: runtime, developer: runtime, qa: runtime },
@@ -96,8 +99,9 @@ export function jobHarness(tmp: string, projects: ProjectRegistry): JobHarness {
     projects,
     limits: config.limits,
   };
-  const runner = new JobRunner({ store, steps: createPipelineSteps(deps), limits: config.limits });
-  return { store, runner, deps, runtime, dataDir, close: () => store.close() };
+  const steps = createPipelineSteps(deps);
+  const runner = new JobRunner({ store, steps, limits: config.limits });
+  return { store, runner, deps, runtime, dataDir, steps, close: () => store.close() };
 }
 
 /** Starts a job, approves its plan as soon as it asks, and resolves with the task id once the job has settled. */
