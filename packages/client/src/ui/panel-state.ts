@@ -1,7 +1,9 @@
-import type { Approval, JobDetails, JobView, PanelName, Repo, Report, ServerMsg } from "@agentlife/shared";
+import type { Approval, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
+  /** Reception: every project, the built-in one first. */
+  projects: Project[];
   job: JobView | null;
   approvals: Approval[];
   reports: Report[];
@@ -12,11 +14,13 @@ export interface PanelData {
 /** Pure state behind the panels: which one is open and the latest data from the server. */
 export class PanelState {
   open: PanelName | null = null;
-  data: PanelData = { repos: [], job: null, approvals: [], reports: [], details: null };
+  data: PanelData = { repos: [], projects: [], job: null, approvals: [], reports: [], details: null };
   /** Last engine error shown in the computer panel. */
   engineError: string | null = null;
   /** Artifact of the job card that is open in the viewer (instead of the card). */
   viewing: string | null = null;
+  /** Answer to the last `register_project`, shown in the Reception panel until it is opened again. */
+  registration: RegisterProjectResult | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -24,15 +28,24 @@ export class PanelState {
       case "welcome":
         this.open = null;
         this.viewing = null;
+        this.registration = null;
         return true;
       case "open_panel":
         this.open = msg.panel;
         this.viewing = null;
         if (msg.panel === "computer") this.engineError = null;
+        if (msg.panel === "reception") this.registration = null;
         return true;
       case "repos":
         this.data.repos = msg.repos;
         this.engineError = null;
+        return true;
+      case "projects":
+        this.data.projects = msg.projects;
+        this.engineError = null;
+        return true;
+      case "register_result":
+        this.registration = msg.result;
         return true;
       case "job_update":
         if (this.data.job && this.data.job.taskId !== msg.job.taskId) {

@@ -9,6 +9,8 @@ export interface MailboxActions {
   openReport(reportId: string): void;
   /** Back from the viewer to the list. */
   back(): void;
+  /** "Deliver as branch" in the report viewer. */
+  deliver?(taskId: string): void;
 }
 
 export interface MailboxView {

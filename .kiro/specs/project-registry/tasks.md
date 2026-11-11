@@ -17,7 +17,7 @@
   - `projects/deliver.ts`, `POST /tasks/:id/deliver`, `delivery.done`; tests that the project's HEAD, index and files are unchanged and an existing branch is refused
   - _Requirements: 5.1–5.5, 7.3_
 
-- [ ] 5. World-server and client: Reception desk, project list, delivery button
+- [x] 5. World-server and client: Reception desk, project list, delivery button
   - Reception furniture and panel (register with confirmation of findings, remove with confirmation), computer panel lists projects, Report viewer "Deliver as branch"
   - _Requirements: 3.1, 6.1, 6.2, 6.3, 5.1_
 

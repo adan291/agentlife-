@@ -118,7 +118,12 @@ function refreshToasts(): void {
 const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl, {
   unreadReports: () => mailbox.unreadIds(),
   onReportOpened: (id) => void mailbox.markRead(id),
-  ...(replay ? { lockedGoal: replay.recordedGoal } : {}),
+  ...(replay
+    ? {
+        lockedGoal: replay.recordedGoal,
+        projectsLocked: "This is a recorded run, so the Reception is read-only here. On your computer you can register your own projects.",
+      }
+    : {}),
 });
 const replayBar = replay ? createReplayBar(shell.banners, replay, replay.recordedAt) : undefined;
 const guide = createGuide(undefined, stageEl);

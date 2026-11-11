@@ -251,10 +251,10 @@ describe("job panel", () => {
     const calls: string[] = [];
     return { calls, view: (id: string) => calls.push(`view:${id}`), back: () => calls.push("back") };
   };
-  const data = (d: JobDetails | null) => ({ repos: [], job: jobView(), approvals: [], reports: [], details: d });
+  const data = (d: JobDetails | null) => ({ repos: [], projects: [], job: jobView(), approvals: [], reports: [], details: d });
 
   it("says so when there is no job", () => {
-    const root = renderJobPanel(fakeDoc(), { repos: [], job: null, approvals: [], reports: [], details: null }, null, actions());
+    const root = renderJobPanel(fakeDoc(), { repos: [], projects: [], job: null, approvals: [], reports: [], details: null }, null, actions());
     expect(textOf(root)).toContain("No job yet");
   });
 

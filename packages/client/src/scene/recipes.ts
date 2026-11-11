@@ -127,6 +127,20 @@ const mailbox: Recipe = (g) => {
   fillPoly(g, [P(-0.22, 0.28, 1.95), P(0.22, 0.28, 1.95), P(0.22, 0.28, 2.1), P(-0.22, 0.28, 2.1)], C.screenOff);
 };
 
+/** A reception counter: a dark body, a lighter top, a service bell and an open guest book. */
+const receptionDesk: Recipe = (g, c) => {
+  const body = full(c, 0.05);
+  const top = full(c, 0.02);
+  const mid = { x: (top.x0 + top.x1) / 2, y: (top.y0 + top.y1) / 2 };
+  drawBoxes(g, [
+    piece(body, 0, 1.6, C.woodDark),
+    piece(top, 1.6, 1.8, C.wood),
+    piece({ x0: mid.x - 0.1, y0: mid.y - 0.1, x1: mid.x + 0.1, y1: mid.y + 0.1 }, 1.8, 2.15, C.pumpkin),
+    piece({ x0: mid.x - 0.03, y0: mid.y - 0.03, x1: mid.x + 0.03, y1: mid.y + 0.03 }, 2.15, 2.3, C.metal),
+    piece({ x0: mid.x + 0.3, y0: mid.y - 0.14, x1: mid.x + 0.6, y1: mid.y + 0.14 }, 1.8, 1.88, C.lampShade),
+  ]);
+};
+
 const board: Recipe = (g, c) => {
   const slab = backRect(c, 0.14, 0.04);
   const legs: BoxPiece[] = [];
@@ -236,6 +250,7 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   agent_desk: desk(C.wood),
   mailbox,
   board,
+  reception_desk: receptionDesk,
   chair,
   plant,
   lamp,

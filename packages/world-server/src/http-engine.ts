@@ -1,8 +1,11 @@
 import {
   AgentEventSchema,
+  DeliveryInfoSchema,
   ErrorResponseSchema,
   HealthResponseSchema,
   jobDetailsFromExport,
+  ProjectSchema,
+  RegisterProjectResultSchema,
   RepoSchema,
   RolesConfigResponseSchema,
   RunExportSchema,
@@ -10,8 +13,12 @@ import {
   type AgentEvent,
   type AgentId,
   type ApprovalDecision,
+  type DeliveryInfo,
   type JobDetails,
   type JobView,
+  type Project,
+  type RegisterProjectBody,
+  type RegisterProjectResult,
   type Repo,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
@@ -83,6 +90,24 @@ export class HttpEngineLink implements EngineLink {
     await this.request("POST", `/approvals/${encodeURIComponent(approvalId)}`, { decision, ...(note ? { note } : {}) });
   }
 
+  async listProjects(): Promise<Project[]> {
+    return ProjectSchema.array().parse(await this.request("GET", "/projects"));
+  }
+
+  /** The engine answers 201, 200 or 400 with a `RegisterProjectResult`; all three are results, not failures. */
+  async registerProject(body: RegisterProjectBody): Promise<RegisterProjectResult> {
+    const { json } = await this.requestRaw("POST", "/projects", body);
+    return RegisterProjectResultSchema.parse(json);
+  }
+
+  async removeProject(projectId: string): Promise<void> {
+    await this.request("DELETE", `/projects/${encodeURIComponent(projectId)}`);
+  }
+
+  async deliver(taskId: string): Promise<DeliveryInfo> {
+    return DeliveryInfoSchema.parse(await this.request("POST", `/tasks/${encodeURIComponent(taskId)}/deliver`, {}));
+  }
+
   /** Builds the client-facing job view; the timeline comes from the job's state-change events. */
   async getJob(taskId: string): Promise<JobView> {
     const exp = RunExportSchema.parse(await this.request("GET", `/tasks/${encodeURIComponent(taskId)}/export`));
@@ -121,6 +146,16 @@ export class HttpEngineLink implements EngineLink {
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
+    const { ok, status, json } = await this.requestRaw(method, path, body);
+    if (!ok) {
+      const err = ErrorResponseSchema.safeParse(json);
+      throw new Error(err.success ? (err.data.message ?? err.data.error) : `engine responded ${status}`);
+    }
+    return json;
+  }
+
+  /** Like `request` but returns the answer of any status instead of throwing on a non-2xx one. */
+  private async requestRaw(method: string, path: string, body?: unknown): Promise<{ ok: boolean; status: number; json: unknown }> {
     const res = await this.fetchFn(this.base + path, {
       method,
       headers: { ...this.headers(), ...(body === undefined ? {} : { "content-type": "application/json" }) },
@@ -134,11 +169,7 @@ export class HttpEngineLink implements EngineLink {
     } catch {
       json = undefined;
     }
-    if (!res.ok) {
-      const err = ErrorResponseSchema.safeParse(json);
-      throw new Error(err.success ? (err.data.message ?? err.data.error) : `engine responded ${res.status}`);
-    }
-    return json;
+    return { ok: res.ok, status: res.status, json };
   }
 
   // ---- SSE ----

@@ -30,6 +30,7 @@
   "furni": [
     { "itemId": "cobweb_1", "defId": "cobweb", "x": 0, "y": 0, "dir": 4 },
     { "itemId": "lamp_1", "defId": "lamp", "x": 3, "y": 0, "dir": 4 },
+    { "itemId": "reception_desk_1", "defId": "reception_desk", "x": 1, "y": 0, "dir": 4 },
     { "itemId": "computer_desk_1", "defId": "computer_desk", "x": 4, "y": 0, "dir": 4 },
     { "itemId": "chair_1", "defId": "chair", "x": 5, "y": 1, "dir": 0 },
     { "itemId": "mailbox_1", "defId": "mailbox", "x": 7, "y": 0, "dir": 4 },

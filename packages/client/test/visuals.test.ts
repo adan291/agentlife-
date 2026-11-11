@@ -230,7 +230,7 @@ describe("computer panel repositories (requirement 6.4)", () => {
   const render = (repos: Repo[]) => {
     const calls: string[][] = [];
     const panel = createComputerPanel(fakeDoc(), { startJob: (r, g) => calls.push([r, g]) });
-    const content = panel({ repos, job: null, approvals: [], reports: [], details: null }, null);
+    const content = panel({ repos, projects: [], job: null, approvals: [], reports: [], details: null }, null);
     return { content, calls };
   };
 

@@ -6,6 +6,8 @@ import type {
   JobDetails,
   JobState,
   JobView,
+  Project,
+  RegisterProjectResult,
   Repo,
   StepName,
   StepRecord,
@@ -97,6 +99,22 @@ export class FakeEngineLink implements EngineLink {
 
   roleModels(): Promise<Partial<Record<AgentId, string>>> {
     return Promise.resolve({ architect: "fake", developer: "fake", qa: "fake" });
+  }
+
+  listProjects(): Promise<Project[]> {
+    return Promise.resolve([{ id: FAKE_REPO.id, name: FAKE_REPO.name, stack: "node-npm", testCommand: "npm test", builtin: true, registeredAt: 0 }]);
+  }
+
+  registerProject(): Promise<RegisterProjectResult> {
+    return Promise.resolve({
+      status: "error",
+      code: "outside_allowed_roots",
+      message: "The scripted engine cannot register projects. Start the real engine to use the Reception.",
+    });
+  }
+
+  removeProject(): Promise<void> {
+    return Promise.reject(new Error("The built-in project cannot be removed."));
   }
 
   startJob(repoId: string, goal: string): Promise<{ taskId: string }> {
