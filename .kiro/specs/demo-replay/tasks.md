@@ -24,6 +24,6 @@
   - `e2e/demo.spec.ts` against `vite preview`; run in CI
   - _Requirements: 4.2_
 
-- [ ] 7. Submission material
+- [x] 7. Submission material
   - README (English, final), `docs/kiro-usage.md`, `docs/video-script.md`
   - _Requirements: 5.1, 5.2, 5.3_
