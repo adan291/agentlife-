@@ -24,6 +24,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 17:30 (IDE): user proposed an HR agent (hire/fire, agents from the internet), ordering agents, and an elevator with floors; asked Kiro to decide. Decided plan in "Next": demo first (S11 started), then hotel-floors, hr-desk (internet agents: persona only, fixed permission tiers, security review, user approval), pipeline-editor.
 - 2026-11-11 evening (IDE): demo-replay task 7 done on feat/demo-replay: README (English, final except the demo URL placeholder), docs/kiro-usage.md, docs/video-script.md. Pending: user fills the GitHub user in the demo URL, records the video, and reviews the texts; security decisions 1-3 and the history rewrite still open.
 - 2026-11-11 20:10 (IDE): user asked Kiro to decide everything. Done: S11-S13 merged (demo-replay 7/7, demo smoke test passes); flaky http-engine tests fixed (waits on the real connection; 0/20 failures); history rewritten (noreply identity, no personal emails, no key-shaped literals), backup bundle kept, fixtures accepted, merged branches deleted; scan clean. Pending from the user: one git config line, the GitHub repo. Next: hotel-floors spec.
+- 2026-11-11 20:40 (IDE): user's GitHub account is adan291 (private email on, CLI push protection on). History rewritten again: all commits now by adan291 <14869836+adan291@users.noreply.github.com> (second backup bundle in data/backup/). User runs the git config line with that address, then creates the repo.
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
@@ -36,8 +37,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 4. Re-record the demo run with the new features, then the video. Cut order if late: step 3 extras first, never the demo.
 
 ## Security
-Decisions taken by Kiro on the user's instruction (2026-11-11): history rewritten with git filter-repo (author and committer of all 160 commits -> krallenTv@users.noreply.github.com; the other account's email and two fake key-shaped test literals replaced). Backup bundle in data/backup/ (local, git-ignored). `C:\Users\me` fixtures accepted in scripts/security-allow.json. `pnpm security:scan`: clean.
-New commits: `pnpm session` sets the noreply identity itself. The local git config still has the personal email: the user must run `git config user.email krallenTv@users.noreply.github.com` in D:\Kiroween (Kiro does not change git config). Until then the push gate blocks any new commit made with the personal email.
+Decisions taken by Kiro on the user's instruction (2026-11-11): history rewritten with git filter-repo (author and committer of all 160 commits -> 14869836+adan291@users.noreply.github.com; the other account's email and two fake key-shaped test literals replaced). Backup bundle in data/backup/ (local, git-ignored). `C:\Users\me` fixtures accepted in scripts/security-allow.json. `pnpm security:scan`: clean.
+New commits: `pnpm session` sets the noreply identity itself. The local git config still has the personal email: the user must run `git config user.email 14869836+adan291@users.noreply.github.com` in D:\Kiroween (Kiro does not change git config). Until then the push gate blocks any new commit made with the personal email.
 Still to do: `permissions: contents: read` in CI (audit L5).
 
 ## Specs

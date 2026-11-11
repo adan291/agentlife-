@@ -33,7 +33,7 @@ const RUNS = join(ROOT, "data", "sessions");
 const BUILDER = "agentlife-builder";
 const REVIEWER = "agentlife-reviewer";
 const REVIEWER_MODEL = "claude-haiku-5.5";
-const NOREPLY = "krallenTv@users.noreply.github.com";
+const NOREPLY = "14869836+adan291@users.noreply.github.com";
 
 function fail(msg: string): never {
   console.error(`\n[session] ${msg}`);
@@ -191,7 +191,7 @@ function quote(a: string): string {
  *  are denied reading .env, so the key never enters a prompt, a log or a commit. */
 function sessionEnv(): NodeJS.ProcessEnv {
   // Commits made by sessions use the public noreply identity, whatever the local git config says.
-  const env = { ...process.env, GIT_AUTHOR_NAME: "krallenTv", GIT_AUTHOR_EMAIL: NOREPLY, GIT_COMMITTER_NAME: "krallenTv", GIT_COMMITTER_EMAIL: NOREPLY };
+  const env = { ...process.env, GIT_AUTHOR_NAME: "adan291", GIT_AUTHOR_EMAIL: NOREPLY, GIT_COMMITTER_NAME: "adan291", GIT_COMMITTER_EMAIL: NOREPLY };
   const file = join(ROOT, ".env");
   if (!env.KIRO_API_KEY && existsSync(file)) {
     const line = readFileSync(file, "utf8").replace(/^\uFEFF/, "").split(/\r?\n/).find((l) => l.startsWith("KIRO_API_KEY="));
