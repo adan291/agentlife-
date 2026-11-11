@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (demo-replay tasks 1–6 done + 3 visual polish items, branch feat/demo-replay, not merged)
+Updated: 2026-11-11 (demo-replay tasks 1–7 done, submission texts written, branch feat/demo-replay, not merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -22,9 +22,10 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 15:50 (IDE): live run 3 passed and was exported for the demo (agent-pipeline 13/13). User feedback: no way to tell which work is which task, Architect and QA share a model (yes, both claude-haiku-5.5 on purpose: cheapest), unreadable colours, stepper overflow with scroll bars, ghosts show no working visual, report delivery went unnoticed. Spec job-insight written; S10F started. Security decisions still pending.
 - 2026-11-11 17:10 (IDE): S10F done; job-insight reviewed (approve), two review fixes applied, merged. Next: user looks at the room (work block, Job panel, report viewer, ghost effects); S11-S13; security decisions 1-3 still pending.
 - 2026-11-11 17:30 (IDE): user proposed an HR agent (hire/fire, agents from the internet), ordering agents, and an elevator with floors; asked Kiro to decide. Decided plan in "Next": demo first (S11 started), then hotel-floors, hr-desk (internet agents: persona only, fixed permission tiers, security review, user approval), pipeline-editor.
+- 2026-11-11 evening (IDE): demo-replay task 7 done on feat/demo-replay: README (English, final except the demo URL placeholder), docs/kiro-usage.md, docs/video-script.md. Pending: user fills the GitHub user in the demo URL, records the video, and reviews the texts; security decisions 1-3 and the history rewrite still open.
 
 ## Next (decided 2026-11-11)
-1. Demo first: S11 and S12 done (demo-replay 1-6), S13 (submission texts, task 7). Not published yet.
+1. Demo first: S11, S12 and S13 (demo-replay 1-7) done. Not published yet. Submission texts are in README.md, docs/kiro-usage.md and docs/video-script.md (English); the demo URL in the README is a placeholder `<github-user>` until the repo exists. The video is not recorded.
 2. User: security decisions 1-3, then history rewrite (applied by Kiro with a backup) and the public GitHub repo.
 3. New specs, in this order, written after S13:
    - `hotel-floors`: lobby with reception and an elevator, Engineering floor (today's office), HR floor; elevator is a furniture interaction that changes room.
@@ -54,7 +55,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
-| demo-replay | 6 / 7 | feat/demo-replay | Tasks 1–6 done (mode, ReplayEngine, ReplayTransport, replay UI, demo build check + Pages workflow, Playwright smoke test); 7 pending (S13). Decisions in the spec's design.md. Not looked at in a browser: try `pnpm --filter @agentlife/client dev` and open http://localhost:5173/?mode=demo (no world-server needed): computer, Start job, approve in the mailbox, speeds, Restart |
+| demo-replay | 7 / 7 | feat/demo-replay | Tasks 1–7 done. Task 7: README, docs/kiro-usage.md, docs/video-script.md (English). Decisions in the spec's design.md. Not looked at in a browser: try `pnpm --filter @agentlife/client dev` and open http://localhost:5173/?mode=demo (no world-server needed): computer, Start job, approve in the mailbox, speeds, Restart |
 
 ## Manual browser checks (world-room task 12, user to do)
 Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_desk_1 -> repos + open_panel computer -> start_job -> approval -> approve -> developing/testing/reviewing -> delivered + report in ~10 s) passed. Run both servers (see above) and check:
