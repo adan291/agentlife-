@@ -4,6 +4,7 @@ import {
   ServerMsgSchema,
   WorldSim,
   jobDetailsFromExport,
+  splitAgentId,
 } from "@agentlife/shared";
 import type {
   ActivityLine,
@@ -95,7 +96,9 @@ export class ReplayTransport implements Transport {
       if (role && s.model && !this.models[role]) this.models[role] = s.model;
     }
     for (const ev of exp.events) {
-      if (ev.type === "agent.work" && ev.model && !this.models[ev.agentId]) this.models[ev.agentId] = ev.model;
+      if (ev.type !== "agent.work" || !ev.model) continue;
+      const role = splitAgentId(ev.agentId).agentId;
+      if (!this.models[role]) this.models[role] = ev.model;
     }
     const startTicker = options.startTicker ?? ((tick) => {
       const h = setInterval(tick, 50);
@@ -305,14 +308,15 @@ export class ReplayTransport implements Transport {
       case "agent.activity":
         this.pushActivity({
           ts: ev.ts,
-          agentId: ev.agentId,
+          agentId: splitAgentId(ev.agentId).agentId,
           text: ev.text,
           taskId: ev.taskId,
           ...(this.currentStep ? { step: this.currentStep } : {}),
         });
         break;
       case "agent.work": {
-        const { agentId, taskId, step, title, model, contextPct, filesRead, filesEdited, startedAt } = ev;
+        const { taskId, step, title, model, contextPct, filesRead, filesEdited, startedAt } = ev;
+        const agentId = splitAgentId(ev.agentId).agentId;
         const work: AgentWork = {
           taskId,
           step,

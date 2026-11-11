@@ -58,7 +58,22 @@ const CSS = `
 .al-new { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s1); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; }
 `;
 
-const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job", reception: "Reception" };
+const TITLES: Record<PanelName, string> = {
+  computer: "Computer",
+  mailbox: "Mailbox",
+  board: "Job",
+  reception: "Reception",
+  elevator: "Elevator",
+  directory: "Floors",
+  door: "Door",
+};
+
+/** Until the floor panel exists the elevator and the directory open this note. */
+function floorsPlaceholder(doc: Document): HTMLElement {
+  const p = doc.createElement("p");
+  p.textContent = "The floor list is coming soon.";
+  return p;
+}
 
 /** How long the job card waits after a `work` message before it asks for fresh numbers. */
 export const DETAILS_REFRESH_MS = 1500;
@@ -163,7 +178,9 @@ export function createPanels(
                   { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
                 ),
               }
-            : {
+            : state.open === "elevator" || state.open === "directory" || state.open === "door"
+              ? { body: floorsPlaceholder(document) }
+              : {
                 body: renderJobPanel(document, state.data, state.viewing, {
                   view: (artifactId) => {
                     state.view(artifactId);

@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Shared: Hotel with rooms, room template and new furniture
+- [x] 1. Shared: Hotel with rooms, room template and new furniture
   - `world/hotel.ts`, room ids, `roomForProject`, lobby/hr/template room files, elevator/directory/door furniture
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 5.1_
 

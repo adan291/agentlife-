@@ -162,6 +162,45 @@ const board: Recipe = (g, c) => {
   });
 };
 
+/** A metal lift shaft: two dark doors with a gap between them and a lit floor indicator above. */
+const elevator: Recipe = (g, c) => {
+  const slab = backRect(c, 0.2, 0.02);
+  drawBoxes(g, [piece(slab, 0, 5.0, C.metal)]);
+  for (const [a, b] of [
+    [0.1, 0.48],
+    [0.52, 0.9],
+  ] as const) {
+    const door = frontFace(c, slab, a, b, 0.2, 4.0);
+    if (door) fillPoly(g, door, C.screenOff);
+  }
+  const indicator = frontFace(c, slab, 0.4, 0.6, 4.3, 4.7);
+  if (indicator) fillPoly(g, indicator, C.pumpkin);
+};
+
+/** A wall board with a list of floors: dark panel, coloured rows. */
+const directoryBoard: Recipe = (g, c) => {
+  const slab = backRect(c, 0.14, 0.04);
+  drawBoxes(g, [piece(slab, 1.0, 3.9, C.woodDark)]);
+  const panel = frontFace(c, slab, 0.05, 0.95, 1.2, 3.7);
+  if (panel) fillPoly(g, panel, C.screenOff);
+  [C.screen, C.pumpkin, C.note3].forEach((colour, k) => {
+    const row = frontFace(c, slab, 0.12, 0.88, 3.1 - k * 0.6, 3.4 - k * 0.6);
+    if (row) fillPoly(g, row, colour);
+  });
+};
+
+/** A door in the wall with a lit sign above it. */
+const door: Recipe = (g, c) => {
+  const slab = backRect(c, 0.12, 0.04);
+  drawBoxes(g, [piece(slab, 0, 5.0, C.woodDark)]);
+  const leaf = frontFace(c, slab, 0.12, 0.88, 0.1, 4.0);
+  if (leaf) fillPoly(g, leaf, C.wood);
+  const knob = frontFace(c, slab, 0.7, 0.78, 1.8, 2.0);
+  if (knob) fillPoly(g, knob, C.pumpkin);
+  const sign = frontFace(c, slab, 0.25, 0.75, 4.2, 4.7);
+  if (sign) fillPoly(g, sign, C.pumpkinFace);
+};
+
 const chair: Recipe = (g, c) => {
   drawBoxes(g, [
     piece(full(c, 0.2), 0, 0.9, C.chair),
@@ -251,6 +290,9 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   mailbox,
   board,
   reception_desk: receptionDesk,
+  elevator,
+  directory_board: directoryBoard,
+  door,
   chair,
   plant,
   lamp,

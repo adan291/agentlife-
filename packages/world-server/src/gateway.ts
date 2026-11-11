@@ -7,6 +7,7 @@ import {
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   ServerMsgSchema,
+  splitAgentId,
 } from "@agentlife/shared";
 import type { ActivityLine, AgentEvent, AgentId, AgentWork, Approval, ErrorCode, JobState, RegisterProjectBody, Report, ServerMsg, StepName, WorldSim } from "@agentlife/shared";
 import type { EngineLink } from "./engine-link.ts";
@@ -261,7 +262,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         case "agent.activity": {
           const line: ActivityLine = {
             ts: ev.ts,
-            agentId: ev.agentId,
+            agentId: splitAgentId(ev.agentId).agentId,
             text: ev.text,
             taskId: ev.taskId,
             ...(currentStep && ev.taskId === currentTaskId ? { step: currentStep } : {}),
@@ -272,7 +273,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           break;
         }
         case "agent.work": {
-          const { agentId, taskId, step, title, model, contextPct, filesRead, filesEdited, startedAt } = ev;
+          const { taskId, step, title, model, contextPct, filesRead, filesEdited, startedAt } = ev;
+          const agentId = splitAgentId(ev.agentId).agentId;
           const work: AgentWork = {
             taskId,
             step,
