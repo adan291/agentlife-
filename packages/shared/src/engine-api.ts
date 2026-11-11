@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentEventSchema, ApprovalDecisionSchema, JobStateSchema } from "./events.ts";
+import { AgentEventSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { GOAL_MAX_CHARS } from "./protocol.ts";
 
 // The public repo view is `RepoSchema` in protocol.ts; `source` paths are never exposed.
@@ -43,9 +43,6 @@ export const ReviewSchema = z.object({
 });
 export type Review = z.infer<typeof ReviewSchema>;
 
-export const StepNameSchema = z.enum(["analyze", "develop", "test", "review", "report"]);
-export type StepName = z.infer<typeof StepNameSchema>;
-
 /** `GET /config/roles`: only the runtime and model of each role, nothing else from the config. */
 export const RolesConfigResponseSchema = z.object({
   architect: z.object({ runtime: z.string().min(1), model: z.string().min(1).optional() }),
@@ -63,6 +60,11 @@ export const StepRecordSchema = z.object({
   status: z.enum(["running", "ok", "failed", "cancelled"]),
   credits: z.number().nonnegative().optional(),
   tokens: z.number().int().nonnegative().optional(),
+  /** From `agent.work`: the model that ran the step, the highest context use seen and the file counts. */
+  model: z.string().min(1).max(100).optional(),
+  contextPeak: z.number().min(0).max(100).optional(),
+  filesRead: z.number().int().nonnegative().optional(),
+  filesEdited: z.number().int().nonnegative().optional(),
 });
 export type StepRecord = z.infer<typeof StepRecordSchema>;
 

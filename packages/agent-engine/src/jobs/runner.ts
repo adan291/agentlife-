@@ -17,6 +17,7 @@ import { ConflictError, DiffRejectedError, JobCancelledError, NotFoundError, Ste
 import { noopLogger, type Logger } from "../log.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
+import { createStepTracker, defaultWorkTitle } from "../work.ts";
 import type { ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
 import { assertTransition, canTransition, isTerminal } from "./transitions.ts";
 
@@ -309,7 +310,7 @@ export class JobRunner {
     this.note(id, "architect", "Analysing the repo");
     this.others(id, ["architect"]);
     this.chatter(a, "architect", "analysing the repository");
-    const plan: Plan = PlanSchema.parse(await this.runStep(a, repoId, goal, "analyze", T.analyze, (c) => this.steps.analyze(c)));
+    const plan: Plan = PlanSchema.parse(await this.runStep(a, repoId, goal, "analyze", T.analyze, defaultWorkTitle("analyze", repoId), (c) => this.steps.analyze(c)));
     a.data.plan = plan;
     const task = plan.tasks[0];
     if (!task) throw new Error("plan has no tasks");
@@ -369,7 +370,7 @@ export class JobRunner {
       this.agent(id, "developer", "working", attempt === 1 ? "Editing files" : "Fixing review notes");
       this.note(id, "developer", attempt === 1 ? "Editing files" : `Fixing review notes (attempt ${attempt})`);
       this.chatter(a, "developer", "editing the code");
-      const { diff } = await this.runStep(a, repoId, goal, "develop", T.develop, (c) =>
+      const { diff } = await this.runStep(a, repoId, goal, "develop", T.develop, task.title, (c) =>
         this.steps.develop(c, { plan, task, attempt, feedback }),
       );
       a.data.diff = diff;
@@ -381,7 +382,7 @@ export class JobRunner {
       this.goto(id, "qa", "computer");
       this.agent(id, "qa", "working", "Running tests");
       this.note(id, "qa", "Running tests");
-      const test: TestResult = await this.runStep(a, repoId, goal, "test", T.test, (c) => this.steps.test(c, { diff }));
+      const test: TestResult = await this.runStep(a, repoId, goal, "test", T.test, task.title, (c) => this.steps.test(c, { diff }));
       a.data.test = test;
       this.note(id, "qa", testResultLine(test));
       this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "test_log", title: `Test log (attempt ${attempt})`, filename: `test_log-${attempt}.txt`, content: test.log });
@@ -392,7 +393,7 @@ export class JobRunner {
       this.note(id, "qa", "Reviewing the patch");
       this.chatter(a, "qa", "reviewing the patch");
       const review: Review = ReviewSchema.parse(
-        await this.runStep(a, repoId, goal, "review", T.review, (c) => this.steps.review(c, { plan, task, diff, test })),
+        await this.runStep(a, repoId, goal, "review", T.review, task.title, (c) => this.steps.review(c, { plan, task, diff, test })),
       );
       a.data.review = review;
       this.note(id, "qa", `Review: ${review.verdict} (risk ${review.risk})`);      this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Review (attempt ${attempt})`, filename: `review-${attempt}.json`, content: JSON.stringify(review, null, 2) });
@@ -424,6 +425,7 @@ export class JobRunner {
         goal,
         "report",
         this.reportTimeoutMs,
+        a.data.task?.title ?? `Report: ${goal}`,
         (c) => this.steps.report(c, input),
       );
     } catch (e) {
@@ -455,6 +457,7 @@ export class JobRunner {
     goal: string,
     step: StepKey,
     timeoutMs: number,
+    title: string,
     fn: (ctx: StepContext) => Promise<T>,
   ): Promise<T> {
     a.ac.signal.throwIfAborted();
@@ -468,8 +471,12 @@ export class JobRunner {
       ac.signal.addEventListener("abort", () => reject(ac.signal.reason), { once: true });
     });
     const started = Date.now();
+    // Steps without a model call announce their work here; the others do it in runRole.
+    if (step === "test" || step === "report") {
+      createStepTracker({ store: this.store, taskId: a.id, repoId, agentId: STEP_ROLE[step], step, title })?.start();
+    }
     try {
-      const result = await Promise.race([fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex }), aborted]);
+      const result = await Promise.race([fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title }), aborted]);
       this.log.info("step finished", { taskId: a.id, step, durationMs: Date.now() - started, status: "ok" });
       return result;
     } catch (e) {

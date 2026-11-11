@@ -32,6 +32,16 @@ export const FAKE_OUTPUTS: Readonly<Record<Role, string>> = {
   qa: JSON.stringify(REVIEW),
 };
 
+/**
+ * Deterministic tool use and context per role, so tests and demos have numbers to show.
+ * Architect: 2 read; Developer: 1 read + 1 edited; QA: 1 read.
+ */
+export const FAKE_WORK: Readonly<Record<Role, { reads: readonly string[]; edits: readonly string[]; contextPct: number }>> = {
+  architect: { reads: ["src/todo.js", "README.md"], edits: [], contextPct: 18.5 },
+  developer: { reads: ["src/todo.js"], edits: ["src/todo.js"], contextPct: 24 },
+  qa: { reads: ["src/todo.js"], edits: [], contextPct: 15.5 },
+};
+
 export interface FakeRuntimeOptions {
   /** Delay before each emitted event. Default 0. */
   delayMs?: number;
@@ -78,7 +88,18 @@ export class FakeRuntime implements AgentRuntime {
 
     await sleep(this.delayMs, input.signal);
     yield { kind: "progress", text: `${input.role} started` };
+    const work = FAKE_WORK[input.role];
+    const first = work.reads[0];
+    if (first) yield { kind: "progress", text: `Read File: ${first}`, tool: { kind: "read", file: first } };
+    yield { kind: "context", pct: Math.round(work.contextPct / 2) };
     await sleep(this.delayMs, input.signal);
+    for (const file of work.reads.slice(1)) {
+      yield { kind: "progress", text: `Read File: ${file}`, tool: { kind: "read", file } };
+    }
+    for (const file of work.edits) {
+      yield { kind: "progress", text: `Replace in File: ${file}`, tool: { kind: "edit", file } };
+    }
+    yield { kind: "context", pct: work.contextPct };
     yield { kind: "output", text };
     yield { kind: "usage", tokens: 0 };
   }

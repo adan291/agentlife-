@@ -3,6 +3,7 @@ import type { ActivityEmitter } from "../activity.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Logger } from "../log.ts";
 import type { Store } from "../store.ts";
+import { createStepTracker } from "../work.ts";
 import { fallbackReport } from "./runner.ts";
 import type { StepContext, Steps, TestResult } from "./steps.ts";
 
@@ -16,6 +17,8 @@ export interface RuntimeStepsOptions {
   logger?: Logger;
   /** Carries runtime progress to the activity terminal. */
   activity?: ActivityEmitter;
+  /** Model label per role, shown with the work of the agent (`agent.work`). */
+  models?: Partial<Record<Role, string>>;
 }
 
 function dataPrompt(goal: string): string {
@@ -41,24 +44,39 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
 
   async function collect(role: Role, step: string, ctx: StepContext, prompt: string): Promise<string> {
     const outputs: string[] = [];
-    for await (const ev of opts.runtimes[role].run({
-      role,
-      prompt,
-      cwd: cwdFor(ctx.repoId),
-      timeoutMs: ctx.timeoutMs,
-      signal: ctx.signal,
-    })) {
-      opts.store.appendRunLog(ctx.taskId, step, { n: ctx.stepIndex, ts: Date.now(), ...ev });
-      if (ev.kind === "output") outputs.push(ev.text);
-      if (ev.kind === "progress") opts.activity?.progress(ctx.taskId, role, ev.text);
-      if (ev.kind === "usage") {
-        opts.logger?.info("step usage", {
-          taskId: ctx.taskId,
-          step,
-          ...(ev.credits === undefined ? {} : { credits: ev.credits }),
-          ...(ev.tokens === undefined ? {} : { tokens: ev.tokens }),
-        });
+    const tracker = createStepTracker({
+      store: opts.store,
+      taskId: ctx.taskId,
+      repoId: ctx.repoId,
+      agentId: role,
+      step,
+      title: ctx.title,
+      model: opts.models?.[role],
+    });
+    tracker?.start();
+    try {
+      for await (const ev of opts.runtimes[role].run({
+        role,
+        prompt,
+        cwd: cwdFor(ctx.repoId),
+        timeoutMs: ctx.timeoutMs,
+        signal: ctx.signal,
+      })) {
+        opts.store.appendRunLog(ctx.taskId, step, { n: ctx.stepIndex, ts: Date.now(), ...ev });
+        tracker?.feed(ev);
+        if (ev.kind === "output") outputs.push(ev.text);
+        if (ev.kind === "progress") opts.activity?.progress(ctx.taskId, role, ev.text);
+        if (ev.kind === "usage") {
+          opts.logger?.info("step usage", {
+            taskId: ctx.taskId,
+            step,
+            ...(ev.credits === undefined ? {} : { credits: ev.credits }),
+            ...(ev.tokens === undefined ? {} : { tokens: ev.tokens }),
+          });
+        }
       }
+    } finally {
+      tracker?.finish();
     }
     return outputs.join("\n");
   }

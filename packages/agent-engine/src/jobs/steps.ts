@@ -10,6 +10,8 @@ export interface StepContext {
   timeoutMs: number;
   /** Ordinal of this step in the job's step list; used to key raw run logs. */
   stepIndex: number;
+  /** What the step works on, for `agent.work` (plan task title). Absent in tests; a default is used then. */
+  title?: string;
 }
 
 /** One task of a plan. */

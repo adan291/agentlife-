@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Engine: work attribution and context usage
+- [x] 1. Engine: work attribution and context usage
   - `RuntimeEvent.tool` and `context` from the kiro-cli runtime; WorkTracker in `runRole`; `agent.work` events (throttled); step records with model, context peak, file counts; FakeRuntime deterministic values
   - _Requirements: 1.1, 1.2, 2.1_
 

@@ -65,6 +65,17 @@ export function applyEvent(view: EngineJobView | undefined, ev: AgentEvent): Eng
     case "artifact.created":
       next.artifacts.push({ artifactId: ev.artifactId, kind: ev.kind, title: ev.title });
       return next;
+    case "agent.work": {
+      // The latest record of this step (a retried develop has two).
+      const rec = next.steps.findLast((s) => s.step === ev.step);
+      if (rec) {
+        if (ev.model) rec.model = ev.model;
+        if (ev.contextPct !== undefined) rec.contextPeak = Math.max(rec.contextPeak ?? 0, ev.contextPct);
+        rec.filesRead = ev.filesRead;
+        rec.filesEdited = ev.filesEdited;
+      }
+      return next;
+    }
     case "approval.requested":
       next.approvals.push({ approvalId: ev.approvalId, kind: ev.kind, summary: ev.summary, status: "pending" });
       return next;

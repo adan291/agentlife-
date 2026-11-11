@@ -183,6 +183,45 @@ describe("KiroCliRuntime", () => {
     expect(evs.at(-1)).toEqual({ kind: "output", text: "The plan is ready.\n```json\n{}\n```" });
   });
 
+  it("reports file reads and edits as tool events and the context use as a context event", async () => {
+    const call = (kind: string, p: string) => ({
+      type: "sessionUpdate",
+      data: { sessionId: "s", update: { sessionUpdate: "tool_call", toolCallId: "t", title: "T", kind, locations: [{ path: p }] } },
+    });
+    // Real shape (kiro-cli 3.1) and the older fixture shape.
+    const ctxReal = (pct: unknown) => ({
+      type: "sessionUpdate",
+      data: { sessionId: "s", update: { sessionUpdate: "session_info_update", _meta: { kiro: { contextUsage: { usagePercentage: pct, summarizationThreshold: 80 } } } } },
+    });
+    const ctxOld = { type: "sessionUpdate", data: { sessionId: "s", update: { sessionUpdate: "session_info_update", contextUsagePercentage: 12 } } };
+    const other = { type: "sessionUpdate", data: { sessionId: "s", update: { sessionUpdate: "session_info_update", _meta: { kiro: { kind: "focus_update" } } } } };
+    const rt = runtime(
+      fakeSpawn((c) => {
+        c.out(
+          line(call("read", path.join(tmp, "src", "a.ts"))) +
+            line(call("edit", path.join(tmp, "src", "a.ts"))) +
+            line(call("search", path.join(tmp, "src"))) +
+            line(call("read", path.join(os.tmpdir(), "elsewhere", "x.txt"))) +
+            line(ctxReal(1.14)) +
+            line(ctxReal(250)) +
+            line(ctxReal("lots")) +
+            line(ctxOld) +
+            line(other) +
+            line(rec.finished("ok")),
+        );
+        c.exit(0);
+      }),
+    );
+    const evs = await collect(rt, makeInput());
+    const tools = evs.flatMap((e) => (e.kind === "progress" && e.tool ? [e.tool] : []));
+    expect(tools).toEqual([
+      { kind: "read", file: path.join("src", "a.ts") },
+      { kind: "edit", file: path.join("src", "a.ts") },
+      { kind: "read", file: "(outside)" },
+    ]);
+    expect(evs.flatMap((e) => (e.kind === "context" ? [e.pct] : []))).toEqual([1.1, 100, 12]);
+  });
+
   it("handles lines split across chunks, CRLF, a last line without newline, and ignores unknown or invalid lines", async () => {
     const full = line(rec.started) + "garbage line\n" + line({ type: "future", data: 1 }) + JSON.stringify(rec.finished("final"));
     const rt = runtime(
