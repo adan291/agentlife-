@@ -60,9 +60,11 @@ function loadTaskmap(): Item[] {
 }
 
 function specDone(spec: string): boolean {
+  // Tasks are checked on the feature branch until it is merged, so read it from there when it exists.
+  const fromBranch = sh("git", ["show", `${branchOf(spec)}:.kiro/specs/${spec}/tasks.md`]);
   const f = join(ROOT, ".kiro", "specs", spec, "tasks.md");
-  if (!existsSync(f)) return false;
-  const t = readFileSync(f, "utf8");
+  if (fromBranch.code !== 0 && !existsSync(f)) return false;
+  const t = fromBranch.code === 0 ? fromBranch.out : readFileSync(f, "utf8");
   const total = (t.match(/^- \[[ x]\]/gm) ?? []).length;
   return total > 0 && (t.match(/^- \[x\]/gm) ?? []).length === total;
 }
