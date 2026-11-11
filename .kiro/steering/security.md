@@ -21,3 +21,9 @@
 - Decisions on findings (history rewrite, author email, accepting a finding in `scripts/security-allow.json`) are the user's. The `agentlife-security` agent recommends; it never changes files or git.
 - Security reports go to `data/security/` (git-ignored). Never paste secrets into chats, docs or commits; if one is pasted anywhere, revoke and rotate it.
 - Test fixtures must not contain key-shaped literals; build fake tokens at runtime.
+
+## Real projects (agent hotel)
+- Projects can be registered only inside the allowed roots (default `D:\AgentHotel`, `config/hotel.json`). Never widen them without the user.
+- The hotel never changes the user's working copy, never merges, never pushes; the only write into a user's repository is creating a new `agentlife/<task>` branch by `git fetch` when the user clicks Deliver.
+- Absolute project paths stay inside the engine (`data/projects.json`, git-ignored); clients see id and name only.
+- Role agents are denied reading secret-looking files in project clones (`.env*`, keys, credentials, `.npmrc`, `.ssh`, `.aws`, `.git`).

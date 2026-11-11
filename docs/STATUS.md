@@ -26,6 +26,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 20:10 (IDE): user asked Kiro to decide everything. Done: S11-S13 merged (demo-replay 7/7, demo smoke test passes); flaky http-engine tests fixed (waits on the real connection; 0/20 failures); history rewritten (noreply identity, no personal emails, no key-shaped literals), backup bundle kept, fixtures accepted, merged branches deleted; scan clean. Pending from the user: one git config line, the GitHub repo. Next: hotel-floors spec.
 - 2026-11-11 20:40 (IDE): user's GitHub account is adan291 (private email on, CLI push protection on). History rewritten again: all commits now by adan291 <14869836+adan291@users.noreply.github.com> (second backup bundle in data/backup/). User runs the git config line with that address, then creates the repo.
 - 2026-11-11 20:50 (IDE): user is Adan Sanchez Manzano (GitHub adan291), created https://github.com/adan291/agentlife-; git config set to the noreply identity. LICENSE holder updated, README demo URL set, CI token limited to contents: read. First push of main.
+- 2026-11-11 21:15 (IDE): user's vision: a Habbo-style agent hotel where each real project is a room with its team. Plan: A project-registry (+ delivery as branch), B hotel-floors, C hr-desk, D pipeline-editor, E re-record demo + video. Kiro chose D:\AgentHotel as the allowed projects folder. S14 started. Pages runs were queued on GitHub.
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
@@ -54,6 +55,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
+| project-registry | 0 / 6 | — | Agent hotel step 1: Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch in the user's repo. S14 (Sonnet 5.5); task 6 live with the user |
 | demo-replay | 7 / 7 | main | Done. Replay mode, Pages workflow, demo build guard, Playwright demo smoke test (passes, Edge), Kiroween polish, README/kiro-usage/video script. Not published yet |
 
 ## Manual browser checks (world-room task 12, user to do)
