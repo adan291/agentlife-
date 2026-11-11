@@ -20,3 +20,4 @@ data/
 # Playwright output
 test-results/
 playwright-report/
+dist-demo/

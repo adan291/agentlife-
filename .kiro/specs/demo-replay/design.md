@@ -39,3 +39,14 @@ Scene and panels do not know which transport is active. ReplayTransport plays th
 
 - Unit: schedule builder (property test: compressed schedule is monotonic, preserves order, and no gap exceeds 10 s / speed), approval pause/resume.
 - E2E: smoke test above, run in CI after the Pages build.
+
+## Decisions made while implementing (tasks 1-4)
+
+- Files: `src/mode.ts`; `src/replay/{schedule,engine,transport}.ts`; `src/ui/replay-bar.ts`. The client has no image or audio files (sprites are procedural), so the only static asset routed through `assetUrl()` (`import.meta.env.BASE_URL`) is `demo/run-001.json`.
+- The room for the replay is `packages/world-server/rooms/office.json`, imported dynamically in `main.ts` in demo mode only (no copy to keep in sync; the live bundle does not carry it).
+- `ReplayEngine` is driven by the host with `advance(dtMs)` (real elapsed time) instead of reading a clock itself, so tests are deterministic. Time on the schedule is "compressed ms at 1x"; speed scales the playhead. At `approval.requested` the playhead stops; `resolveApproval` jumps to the recorded `approval.resolved` and continues from there. Reject: the decision is not honoured (the recorded run was approved); the transport adds an Architect activity line `REPLAY_REJECT_NOTE`.
+- The `WorldSim` clock is the wall clock (`Date.now`), not the replay's virtual clock. The client renders walks against `Date.now`, so a virtual clock would desync the user's avatar. Agent walks therefore keep their normal speed at 4x/16x; a new `agent.goto` replaces the walk in progress, so fast speeds look like quick hops, not wrong positions. Speed only scales the event schedule.
+- Event `ts` and `agent.work.startedAt` are rebased onto the compressed timeline from the start of the replay, so the board and elapsed times agree with what is on screen. `job_details` is built from the recorded export but only shows artifacts, steps and approvals the replay has reached.
+- `ReplayTransport` duplicates the gateway's panel bookkeeping (approvals, reports, activity, work, job view). The gateway lives in world-server and cannot be imported by the client; moving it to `shared` is possible later but was not worth it for the MVP.
+- The computer panel shows the recorded goal read-only in replay mode (`PanelHooks.lockedGoal`).
+- `models` in the welcome come from `agent.work` events or step `model` fields of the export. `run-001.json` has neither (recorded before job-insight), so tooltips show no model in the demo until the run is re-recorded.

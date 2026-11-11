@@ -13,9 +13,9 @@ export interface PanelContent {
 }
 
 /** Computer panel: pick an allowlisted repo, type a goal, start a job (the button lives in the footer). Form values survive re-renders. */
-export function createComputerPanel(doc: Document, actions: ComputerActions) {
+export function createComputerPanel(doc: Document, actions: ComputerActions, lockedGoal?: string) {
   let repoId = "";
-  let goal = "";
+  let goal = lockedGoal ?? "";
 
   return function render(data: PanelData, engineError: string | null): PanelContent {
     const root = doc.createElement("div");
@@ -71,6 +71,10 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
     area.maxLength = GOAL_MAX_CHARS;
     area.placeholder = "What should the agents do?";
     area.value = goal;
+    if (lockedGoal !== undefined) {
+      area.readOnly = true;
+      area.title = "The goal of the recorded run";
+    }
     const count = doc.createElement("small");
     const updateCount = () => {
       count.textContent = `${area.value.length}/${GOAL_MAX_CHARS}`;
@@ -94,7 +98,7 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
         return;
       }
       actions.startJob(repoId, g);
-      goal = "";
+      if (lockedGoal === undefined) goal = "";
     });
 
     root.append(repoBlock, goalLabel);

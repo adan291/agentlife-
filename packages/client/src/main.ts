@@ -1,8 +1,14 @@
 import { Application } from "pixi.js";
+import { RunExportSchema, validateRoom } from "@agentlife/shared";
+import type { RoomDef, RunExport } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
+import { DEMO_RUN_PATH, assetUrl, currentMode } from "./mode.ts";
+import { ReplayTransport } from "./replay/transport.ts";
 import { ProceduralSprites } from "./scene/textures.ts";
 import { WorldView } from "./scene/world-view.ts";
 import { LiveTransport } from "./transport.ts";
+import type { Transport } from "./transport.ts";
+import { createReplayBar } from "./ui/replay-bar.ts";
 import { createHud } from "./ui/hud.ts";
 import { createPanels } from "./ui/panels.ts";
 import { createGuide } from "./ui/guide.ts";
@@ -16,7 +22,20 @@ import { createTeamBar } from "./ui/team-bar.ts";
 import { createToasts } from "./ui/toast.ts";
 import { reportVerdict } from "./ui/report-viewer.ts";
 
-const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
+/**
+ * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
+ * below (LiveTransport, the world-server URL) is removed from a demo build (checked by `pnpm check:demo-build`).
+ */
+const DEMO_BUILD = import.meta.env.VITE_MODE === "demo";
+
+/** Loads the recorded run (from the client's own static files, under any base path) and the room to play it in. */
+async function loadDemo(): Promise<[RunExport, RoomDef]> {
+  const res = await fetch(assetUrl(DEMO_RUN_PATH));
+  if (!res.ok) throw new Error(`cannot load the recorded run (${res.status})`);
+  const exp = RunExportSchema.parse(await res.json());
+  const { default: officeJson } = await import("../../world-server/rooms/office.json");
+  return [exp, validateRoom(officeJson)];
+}
 
 const theme = createTheme();
 const shell = createShell({ getLineHeight: () => Math.round(theme.size * 1.5) });
@@ -41,7 +60,30 @@ function fitCanvasToStage(): void {
 }
 new ResizeObserver(fitCanvasToStage).observe(stageEl);
 
-const transport = new LiveTransport(WORLD_URL);
+const mode = currentMode();
+/** Live connection (live mode only): the "Use here" button reconnects it. */
+let live: LiveTransport | undefined;
+/** Replay of the recorded run (demo mode only). In demo mode no `LiveTransport` is ever built. */
+let replay: ReplayTransport | undefined;
+let transport: Transport;
+if (DEMO_BUILD || mode === "demo") {
+  const [exp, room] = await loadDemo();
+  replay = new ReplayTransport(exp, room);
+  transport = replay;
+  if (new URLSearchParams(location.search).has("autostart")) {
+    // `?autostart` starts the recorded run as soon as the room is up (smoke test, screen recordings). Deferred so
+    // every listener has seen the `welcome` first.
+    const player = replay;
+    const stop = player.onMessage((m) => {
+      if (m.type !== "welcome") return;
+      stop();
+      setTimeout(() => player.send({ type: "start_job", repoId: player.recordedRepoId, goal: player.recordedGoal }), 0);
+    });
+  }
+} else {
+  live = new LiveTransport(import.meta.env.VITE_WORLD_URL ?? "ws://127.0.0.1:8787");
+  transport = live;
+}
 const sprites = new ProceduralSprites(app.renderer);
 
 const hud = createHud(
@@ -51,7 +93,7 @@ const hud = createHud(
   },
   () => guide.open(),
   theme,
-  () => transport.reconnect(),
+  () => live?.reconnect(),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
@@ -76,7 +118,9 @@ function refreshToasts(): void {
 const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl, {
   unreadReports: () => mailbox.unreadIds(),
   onReportOpened: (id) => void mailbox.markRead(id),
+  ...(replay ? { lockedGoal: replay.recordedGoal } : {}),
 });
+const replayBar = replay ? createReplayBar(shell.banners, replay, replay.recordedAt) : undefined;
 const guide = createGuide(undefined, stageEl);
 const terminal = createTerminal(shell);
 theme.onChange(() => shell.refresh());
@@ -117,6 +161,7 @@ transport.onMessage((msg) => {
   }
   panels.handle(msg);
   teamBar.handle(msg);
+  replayBar?.handle(msg);
   if (delivered) world.notifyReportDelivered();
   refreshToasts();
   if (msg.type === "welcome") {

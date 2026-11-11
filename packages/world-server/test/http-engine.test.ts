@@ -96,8 +96,17 @@ afterEach(async () => {
   for (const m of mocks.splice(0)) await m.stop();
 });
 
+/** Polls `cond` until it holds or fails after `ms` (for state that depends on timers). */
+async function waitFor(cond: () => boolean, ms = 5000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error("condition not met in time");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 /** Pulls `n` events from the link or fails after `ms`. */
-async function take(iter: AsyncIterator<AgentEvent>, n: number, ms = 2000): Promise<AgentEvent[]> {
+async function take(iter: AsyncIterator<AgentEvent>, n: number, ms = 5000): Promise<AgentEvent[]> {
   const out: AgentEvent[] = [];
   const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`only got ${out.length}/${n} events`)), ms));
   while (out.length < n) {
@@ -205,7 +214,8 @@ describe("HttpEngineLink events", () => {
     await take(it, 1);
     mock.events = []; // engine restarted with a fresh database
     mock.dropStreams();
-    await sleep(100);
+    // Wait for the link to actually reconnect: a fixed sleep raced with reconnect under load.
+    await waitFor(() => mock.clients.size > 0);
     mock.push(say(1));
     const [ev] = await take(it, 1);
     expect(ev?.seq).toBe(1);

@@ -106,6 +106,7 @@ function appendTo<T extends FakeNode>(parent: FakeNode, child: T): T {
 }
 
 export class FakeDocument {
+  readonly head = new FakeElement("head");
   createElement(tag: string): FakeElement {
     return new FakeElement(tag.toLowerCase());
   }

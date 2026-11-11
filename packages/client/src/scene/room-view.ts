@@ -28,6 +28,28 @@ function diamond(x: number, y: number, z: number): Pt[] {
 
 export type HoverKind = "floor" | "use";
 
+/** Window span along the back-right wall (x, in tiles). Shared by the window and the light it casts. */
+const WINDOW_X0 = 0.8;
+const WINDOW_X1 = 2.2;
+
+/**
+ * Moonlight on the floor under the window, as quads in tile coordinates (outer glow first, bright core second).
+ * Clipped to the room, so a small room gets a shorter patch instead of light outside the floor.
+ */
+export function moonlightQuads(w: number, l: number): [number, number][][] {
+  const reach = Math.min(3.2, l - 0.5);
+  const outer = Math.min(reach + 0.3, l - 0.5);
+  const maxX = w - 0.5;
+  const lean = 1.4;
+  const quad = (x0: number, x1: number, r: number): [number, number][] => [
+    [Math.min(maxX, x0), -0.5],
+    [Math.min(maxX, x1), -0.5],
+    [Math.min(maxX, x1 + lean * (r / 3.2)), -0.5 + r],
+    [Math.min(maxX, x0 + lean * (r / 3.2)), -0.5 + r],
+  ];
+  return [quad(WINDOW_X0 - 0.2, WINDOW_X1 + 0.2, outer), quad(WINDOW_X0 + 0.15, WINDOW_X1 - 0.15, reach)];
+}
+
 /** Floor, back walls and the hover highlight. Furniture and avatars live in separate layers above. */
 export class RoomView {
   readonly container = new Container();
@@ -41,9 +63,11 @@ export class RoomView {
     this.bounds = roomBounds(this.heightmap.w, this.heightmap.l);
     const floor = new Graphics();
     const walls = new Graphics();
+    const moonlight = new Graphics();
     this.drawWalls(walls);
     this.drawFloor(floor);
-    this.container.addChild(walls, floor, this.hover);
+    this.drawMoonlight(moonlight);
+    this.container.addChild(walls, floor, moonlight, this.hover);
   }
 
   isFloor(t: Tile): boolean {
@@ -123,10 +147,26 @@ export class RoomView {
     this.drawDoor(g);
   }
 
+  /** Pale light from the window on the floor, with the window's cross bar as a dark stripe. Static; drawn above the tiles, below furniture. */
+  private drawMoonlight(g: Graphics): void {
+    const { w, l } = this.heightmap;
+    const toScreen = (q: [number, number][]): Pt[] => q.map(([x, y]) => P(x, y, 0));
+    const [outer, core] = moonlightQuads(w, l);
+    if (outer) fillPoly(g, toScreen(outer), PALETTE.moon, 0.05);
+    if (core) fillPoly(g, toScreen(core), PALETTE.moon, 0.07);
+    if (core) {
+      const [a, b, c, d] = core as [[number, number], [number, number], [number, number], [number, number]];
+      const mid = (p: [number, number], q: [number, number]): Pt => P((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, 0);
+      const top = mid(a, b);
+      const bottom = mid(d, c);
+      g.moveTo(top[0], top[1]).lineTo(bottom[0], bottom[1]).stroke({ color: PALETTE.floorSide, width: 2, alpha: 0.18 });
+    }
+  }
+
   /** A night window on the back-right wall with a moon. */
   private drawWindow(g: Graphics): void {
-    const x0 = 0.8;
-    const x1 = 2.2;
+    const x0 = WINDOW_X0;
+    const x1 = WINDOW_X1;
     const frame = [P(x0 - 0.08, -0.5, 1.9), P(x1 + 0.08, -0.5, 1.9), P(x1 + 0.08, -0.5, 5.1), P(x0 - 0.08, -0.5, 5.1)];
     const pane = [P(x0, -0.5, 2.0), P(x1, -0.5, 2.0), P(x1, -0.5, 5.0), P(x0, -0.5, 5.0)];
     fillPoly(g, frame, PALETTE.windowFrame);
