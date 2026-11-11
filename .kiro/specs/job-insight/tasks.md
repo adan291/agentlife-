@@ -16,6 +16,6 @@
   - Toast queue (your-turn, report), Architect bubble, mailbox glow and unread, Report viewer with verdict badge
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 5. Client: stepper, working visuals, contrast
+- [x] 5. Client: stepper, working visuals, contrast
   - Stepper without scroll bars (+ Playwright check), working effects on ghosts and monitor glow with reduced-motion fallback, custom select and one-repo line, contrast test and button states
   - _Requirements: 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 6.1, 6.2, 6.3, 6.4_

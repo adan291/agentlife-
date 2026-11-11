@@ -25,6 +25,11 @@ const VOID = new Set(["br", "hr", "img", "input"]);
 
 export class FakeElement extends FakeNode {
   className = "";
+  id = "";
+  value = "";
+  rows = 0;
+  maxLength = 0;
+  placeholder = "";
   hidden = false;
   disabled = false;
   type = "";
@@ -48,6 +53,10 @@ export class FakeElement extends FakeNode {
   getAttribute(name: string): string | null {
     return this.attributes.get(name) ?? null;
   }
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+  focus(): void {}
 
   appendChild<T extends FakeNode>(child: T): T {
     return appendTo(this, child);

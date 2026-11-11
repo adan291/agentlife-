@@ -161,9 +161,9 @@ const CSS = `
 .al-team-work { display: block; margin-top: var(--al-s1); padding-top: var(--al-s1); border-top: 1px dashed var(--al-border); }
 .al-team-work[hidden] { display: none; }
 .al-work-title { color: ${UI_COLOURS.text}; font-weight: bold; }
-.al-work-line { display: flex; justify-content: space-between; align-items: center; gap: var(--al-s2); color: ${UI_COLOURS.muted}; }
-.al-work-step { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.al-work-ctx { display: inline-flex; align-items: center; gap: var(--al-s1); flex: none; }
+.al-work-line { display: block; color: ${UI_COLOURS.muted}; }
+.al-work-step { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-work-ctx { display: flex; align-items: center; gap: var(--al-s1); color: ${UI_COLOURS.muted}; }
 .al-meter { display: inline-block; width: 40px; height: 6px; box-sizing: border-box; background: ${UI_COLOURS.inputBg}; border: 1px solid var(--al-border); border-radius: var(--al-s1); overflow: hidden; }
 .al-meter > span { display: block; height: 100%; width: var(--al-pct, 0%); background: ${UI_COLOURS.accent}; }
 .al-meter[data-high="true"] > span { background: ${UI_COLOURS.error}; }
@@ -269,10 +269,10 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     workMeter.appendChild(document.createElement("span"));
     const workCtxText = document.createElement("span");
     workCtx.append(workMeter, workCtxText);
-    workLine.append(workStep, workCtx);
+    workLine.append(workStep);
     const workFiles = document.createElement("span");
     workFiles.className = "al-team-sub";
-    work.append(workTitle, workLine, workFiles);
+    work.append(workTitle, workLine, workCtx, workFiles);
     text.append(top, state, modelEl, activity, work);
     button.append(ghost, text);
     button.addEventListener("click", () => onFocus(id));

@@ -17,6 +17,8 @@ const CSS = `
 .al-panel h3, .al-panel h4, .al-panel h5, .al-panel h6 { margin: var(--al-s2) 0 var(--al-s1); color: ${UI_COLOURS.accentText}; }
 .al-panel h3 { margin: 0; }
 .al-panel label { display: block; margin: var(--al-s2) 0; }
+.al-field { margin: var(--al-s2) 0; }
+.al-repo-line { margin: var(--al-s2) 0; }
 .al-input { display: block; width: 100%; box-sizing: border-box; margin-top: var(--al-s1); padding: var(--al-s1); }
 .al-row { display: flex; gap: var(--al-s2); margin-top: var(--al-s2); }
 .al-card { border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s2); margin: var(--al-s2) 0; }

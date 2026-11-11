@@ -1,6 +1,6 @@
 import type { Graphics } from "pixi.js";
 import type { AgentState } from "@agentlife/shared";
-import { HAIR_COLOURS, PALETTE, ROLE_COLOURS, STATE_COLOURS, shade } from "../palette.ts";
+import { HAIR_COLOURS, PALETTE, ROLE_COLOURS, STATE_COLOURS, glyphColourOn, shade } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 
 /**
@@ -154,10 +154,9 @@ function drawGuest(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1): v
   }
 }
 
-const GLYPH = 0xffffff;
-
 /** Draw the 16x16 status icon for an agent state, centred on (0, 0). Each state has its own glyph and colour. */
 export function drawBadge(g: Graphics, state: AgentState): void {
+  const GLYPH = glyphColourOn(STATE_COLOURS[state]);
   g.circle(0, 0, 7.5).fill(STATE_COLOURS[state]).stroke({ color: PALETTE.tagBg, width: 1 });
   switch (state) {
     case "idle": {

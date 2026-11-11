@@ -82,19 +82,38 @@ function frontFace(c: RecipeCtx, s: Rect, u0: number, u1: number, z0: number, z1
 function desk(colour: number): Recipe {
   return (g, c) => {
     const top = full(c, 0.06);
-    const monitor = shrinkLong(backRect(c, 0.14, 0.14), 0.3);
+    const monitor = deskMonitor(c);
     const keyboard = shrinkLong(frontRect(c, 0.2, 0.14), 0.3);
     drawBoxes(g, [
       piece(top, 0, 1.7, colour),
       piece(monitor, 1.7, 3.0, C.screenOff),
       piece(keyboard, 1.7, 1.8, C.metal),
     ]);
-    const face = frontFace(c, monitor, 0.08, 0.92, 1.85, 2.9);
+    const face = deskMonitorFace(c);
     if (face) fillPoly(g, face, C.screen);
     // Small glow on the desk top in front of the monitor.
     const [gx, gy] = P((monitor.x0 + monitor.x1) / 2, (monitor.y0 + monitor.y1) / 2, 1.72);
     g.ellipse(gx, gy, 18, 8).fill({ color: C.screen, alpha: 0.12 });
   };
+}
+
+/** The monitor block on the back of a desk. */
+function deskMonitor(c: RecipeCtx): Rect {
+  return shrinkLong(backRect(c, 0.14, 0.14), 0.3);
+}
+
+/**
+ * The lit face of a desk monitor as four screen points (bottom left, bottom right, top right, top left), relative to the
+ * item's origin, or null when the monitor faces away from the camera. The live monitor effect draws on the same quad.
+ */
+export function deskMonitorFace(c: RecipeCtx): Pt[] | null {
+  return frontFace(c, deskMonitor(c), 0.08, 0.92, 1.85, 2.9);
+}
+
+/** Centre of the desk top in front of the monitor, relative to the item's origin (where the baked glow sits). */
+export function deskGlowCentre(c: RecipeCtx): Pt {
+  const m = deskMonitor(c);
+  return P((m.x0 + m.x1) / 2, (m.y0 + m.y1) / 2, 1.72);
 }
 
 const mailbox: Recipe = (g) => {

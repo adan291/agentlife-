@@ -95,6 +95,7 @@ function openMailbox(): void {
   panels.open("mailbox");
 }
 const stepper = createStepper(openMailbox, shell.topCentre, () => panels.open("board"));
+theme.onChange(() => stepper.refresh());
 const toasts = createToasts(
   {
     openMailbox,
