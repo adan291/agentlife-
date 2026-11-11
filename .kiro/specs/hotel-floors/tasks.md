@@ -8,7 +8,7 @@
   - One active job per project, global limit 2 with a queue, `<projectId>:<role>` agent ids, floor status data
   - _Requirements: 3.1, 3.2, 5.2_
 
-- [ ] 3. World-server: routing by room, go_to, floors
+- [x] 3. World-server: routing by room, go_to, floors
   - Messages scoped to the user's room, `go_to`, `floors` pushes, rooms created/removed with projects, Builder in the lobby
   - _Requirements: 1.2, 1.4, 2.4, 3.2, 3.3, 5.2, 5.3_
 

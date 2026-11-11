@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { WorldSim } from "@agentlife/shared";
 import { startGateway, type Gateway } from "../src/gateway.ts";
-import { loadRoomFile } from "../src/load-room.ts";
+import { testHotel } from "./helpers.ts";
 import { checkOrigin, DEFAULT_ALLOWED_ORIGINS, isLoopbackHost, normalizeOrigin, parseAllowedOrigins } from "../src/origin.ts";
 
 describe("parseAllowedOrigins", () => {
@@ -59,7 +58,8 @@ describe("gateway Origin check (audit M3)", () => {
   });
 
   async function start(extra: { host?: string; allowedOrigins?: string[] } = {}): Promise<Gateway> {
-    const g = await startGateway({ sim: new WorldSim(loadRoomFile(), Date.now), port: 0, ...extra });
+    const hotel = testHotel();
+    const g = await startGateway({ hotel, port: 0, ...extra });
     gateways.push(g);
     return g;
   }

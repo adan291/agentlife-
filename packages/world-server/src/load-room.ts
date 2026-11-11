@@ -6,11 +6,9 @@ import type { RoomDef } from "@agentlife/shared";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const ROOMS_DIR = join(here, "..", "rooms");
-/** The single office of the first versions; the gateway serves it until the world-server hosts the hotel (hotel-floors task 3). */
-export const DEFAULT_ROOM_PATH = join(ROOMS_DIR, "office.json");
 
 /** Read and validate a room file. Throws RoomValidationError (with field paths) or a read/parse error. */
-export function loadRoomFile(path: string = DEFAULT_ROOM_PATH): RoomDef {
+export function loadRoomFile(path: string): RoomDef {
   return validateRoom(JSON.parse(readFileSync(path, "utf8")));
 }
 

@@ -3,14 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { PROTOCOL_VERSION, RoomValidationError, ServerMsgSchema, WorldSim } from "@agentlife/shared";
-import type { ServerMsg } from "@agentlife/shared";
+import { PROTOCOL_VERSION, RoomValidationError, ServerMsgSchema } from "@agentlife/shared";
+import type { RoomId, ServerMsg } from "@agentlife/shared";
 import { startGateway } from "../src/gateway.ts";
 import { FakeEngineLink } from "../src/fake-engine.ts";
 import type { Gateway } from "../src/gateway.ts";
-import { loadRoomFile } from "../src/load-room.ts";
+import { ROOMS_DIR, loadRoomFile } from "../src/load-room.ts";
+import { testHotel } from "./helpers.ts";
 
-const room = loadRoomFile();
+const template = loadRoomFile(join(ROOMS_DIR, "project-template.json"));
 const opened: Gateway[] = [];
 const sockets: WebSocket[] = [];
 
@@ -19,9 +20,10 @@ afterEach(async () => {
   for (const g of opened.splice(0)) await g.close();
 });
 
-async function setup() {
-  const sim = new WorldSim(room, Date.now, { msPerTile: 5 });
-  const gateway = await startGateway({ sim, port: 0, tickMs: 5 });
+/** The user starts on the floor of `haunted-todo` (the office with the computer, mailbox and board) unless told otherwise. */
+async function setup(start: RoomId = "project:haunted-todo") {
+  const hotel = testHotel({ start, projects: ["haunted-todo"] });
+  const gateway = await startGateway({ hotel, port: 0, tickMs: 5 });
   opened.push(gateway);
   return gateway;
 }
@@ -55,21 +57,39 @@ function connect(port: number) {
 }
 
 describe("gateway", () => {
-  it("sends welcome on connect with the protocol version and room snapshot", async () => {
-    const g = await setup();
+  it("sends welcome on connect with the protocol version and the lobby, then the floor list", async () => {
+    const g = await setup("lobby");
     const c = connect(g.port);
     const welcome = await c.next((m) => m.type === "welcome");
     if (welcome.type !== "welcome") throw new Error("unreachable");
     expect(welcome.protocol).toBe(PROTOCOL_VERSION);
-    expect(welcome.room.id).toBe(room.id);
-    expect(welcome.avatars).toHaveLength(5);
-    expect(welcome.agents).toHaveLength(4);
+    expect(welcome.room.id).toBe("lobby");
+    expect(welcome.roomId).toBe("lobby");
+    expect(welcome.avatars).toHaveLength(2); // the user and the Builder
+    expect(welcome.agents.map((a) => a.agentId)).toEqual(["builder"]);
+    expect(await c.next((m) => m.type === "floors")).toMatchObject({
+      floors: [
+        { roomId: "lobby", kind: "lobby", status: "idle" },
+        { roomId: "hr", kind: "hr", status: "idle" },
+        { roomId: "project:haunted-todo", kind: "project", name: "haunted-todo", status: "idle" },
+      ],
+    });
+  });
+
+  it("a project floor holds the user and the project's three agents", async () => {
+    const g = await setup();
+    const c = connect(g.port);
+    const welcome = await c.next((m) => m.type === "welcome");
+    if (welcome.type !== "welcome") throw new Error("unreachable");
+    expect(welcome.room.id).toBe("project:haunted-todo");
+    expect(welcome.avatars).toHaveLength(4);
+    expect(welcome.agents.map((a) => a.agentId)).toEqual(["architect", "developer", "qa"]);
   });
 
   it("includes the engine's role models in the welcome (from the second connection at the latest)", async () => {
-    const sim = new WorldSim(room, Date.now, { msPerTile: 5 });
+    const hotel = testHotel({ start: "project:haunted-todo", projects: ["haunted-todo"] });
     const engine = new FakeEngineLink({ stepMs: 0 });
-    const g = await startGateway({ sim, port: 0, tickMs: 5, engine });
+    const g = await startGateway({ hotel, port: 0, tickMs: 5, engine });
     opened.push(g);
     await new Promise((r) => setTimeout(r, 30));
     const c = connect(g.port);
@@ -157,7 +177,7 @@ describe("loadRoomFile", () => {
     const dir = mkdtempSync(join(tmpdir(), "room-"));
     try {
       const bad = join(dir, "bad.json");
-      const broken = { ...room, furni: room.furni.map((f, i) => (i === 1 ? { ...f, x: 99 } : f)) };
+      const broken = { ...template, furni: template.furni.map((f, i) => (i === 1 ? { ...f, x: 99 } : f)) };
       writeFileSync(bad, JSON.stringify(broken));
       let err: unknown;
       try {

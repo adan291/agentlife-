@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { ServerMsgSchema, WorldSim } from "@agentlife/shared";
-import type { AgentEvent, ClientMsg, DeliveryInfo, JobDetails, Project, RegisterProjectBody, RegisterProjectResult, ServerMsg } from "@agentlife/shared";
+import { ServerMsgSchema } from "@agentlife/shared";
+import type { AgentEvent, ClientMsg, DeliveryInfo, JobDetails, Project, RegisterProjectBody, RegisterProjectResult, RoomId, ServerMsg } from "@agentlife/shared";
 import { EventQueue } from "../src/engine-link.ts";
 import type { EngineLink } from "../src/engine-link.ts";
 import { startGateway } from "../src/gateway.ts";
 import type { Gateway } from "../src/gateway.ts";
 import { HttpEngineLink } from "../src/http-engine.ts";
-import { loadRoomFile } from "../src/load-room.ts";
+import { testHotel } from "./helpers.ts";
 
 const gateways: Gateway[] = [];
 const sockets: WebSocket[] = [];
@@ -27,11 +27,11 @@ function details(over: { deliverable?: boolean; delivery?: DeliveryInfo }): JobD
 }
 
 /** An engine whose Reception and delivery calls are recorded and answered from the test. */
-function receptionEngine(opts: { register?: RegisterProjectResult; remove?: Error; deliver?: DeliveryInfo | Error; job?: JobDetails } = {}) {
+function receptionEngine(opts: { register?: RegisterProjectResult; remove?: Error; deliver?: DeliveryInfo | Error; job?: JobDetails; projects?: Project[] } = {}) {
   const queue = new EventQueue<AgentEvent>();
   const calls: string[] = [];
   const registered: RegisterProjectBody[] = [];
-  let projects = [builtin];
+  let projects = opts.projects ?? [builtin];
   const link: EngineLink = {
     listRepos: () => Promise.resolve(projects.map((p) => ({ id: p.id, name: p.name }))),
     startJob: () => Promise.reject(new Error("not used")),
@@ -62,9 +62,10 @@ function receptionEngine(opts: { register?: RegisterProjectResult; remove?: Erro
   return { link, queue, calls, registered };
 }
 
-async function boot(link: EngineLink) {
-  const sim = new WorldSim(loadRoomFile(), Date.now, { msPerTile: 5 });
-  const gateway = await startGateway({ sim, engine: link, port: 0, tickMs: 5 });
+/** The user starts in the lobby (the Reception) unless a floor is given; `my-app` already has its floor. */
+async function boot(link: EngineLink, start?: RoomId) {
+  const hotel = testHotel({ projects: ["my-app"], ...(start ? { start } : {}) });
+  const gateway = await startGateway({ hotel, engine: link, port: 0, tickMs: 5 });
   gateways.push(gateway);
   return gateway;
 }
@@ -188,8 +189,8 @@ describe("delivery through the gateway", () => {
   ];
 
   it("marks a report as deliverable when the engine says so, and delivers on request", async () => {
-    const { link, queue, calls } = receptionEngine({ job: details({ deliverable: true }) });
-    const c = connect((await boot(link)).port);
+    const { link, queue, calls } = receptionEngine({ job: details({ deliverable: true }), projects: [builtin, mine] });
+    const c = connect((await boot(link, "project:my-app")).port);
     await c.waitFor(() => has(c, "welcome"));
     for (const ev of reportEvents()) queue.push(ev);
     await c.waitFor(() => has(c, "report"));
@@ -206,8 +207,8 @@ describe("delivery through the gateway", () => {
   });
 
   it("shows a delivered job as delivered after a reload, and a built-in job without any delivery", async () => {
-    const delivered = receptionEngine({ job: details({ delivery: { branch: "agentlife/task-1", commit: "abc1234" } }) });
-    const c = connect((await boot(delivered.link)).port);
+    const delivered = receptionEngine({ job: details({ delivery: { branch: "agentlife/task-1", commit: "abc1234" } }), projects: [builtin, mine] });
+    const c = connect((await boot(delivered.link, "project:my-app")).port);
     await c.waitFor(() => has(c, "welcome"));
     for (const ev of reportEvents()) delivered.queue.push(ev);
     await c.waitFor(() => has(c, "report"));
@@ -220,8 +221,8 @@ describe("delivery through the gateway", () => {
       report: { delivery: { state: "done", branch: "agentlife/task-1" } },
     });
 
-    const plain = receptionEngine({ job: details({}) });
-    const e = connect((await boot(plain.link)).port);
+    const plain = receptionEngine({ job: details({}), projects: [builtin, mine] });
+    const e = connect((await boot(plain.link, "project:my-app")).port);
     await e.waitFor(() => has(e, "welcome"));
     for (const ev of reportEvents()) plain.queue.push(ev);
     await e.waitFor(() => has(e, "report"));
@@ -231,8 +232,8 @@ describe("delivery through the gateway", () => {
   });
 
   it("still delivers the report when the engine cannot describe the job", async () => {
-    const { link, queue } = receptionEngine();
-    const c = connect((await boot(link)).port);
+    const { link, queue } = receptionEngine({ projects: [builtin, mine] });
+    const c = connect((await boot(link, "project:my-app")).port);
     await c.waitFor(() => has(c, "welcome"));
     for (const ev of reportEvents()) queue.push(ev);
     await c.waitFor(() => has(c, "report"));
@@ -242,8 +243,8 @@ describe("delivery through the gateway", () => {
 
   it("reports why a delivery was refused and keeps the button state", async () => {
     const refusal = new Error("The branch agentlife/task-1 already exists in your repository. Nothing was changed.");
-    const { link, queue } = receptionEngine({ job: details({ deliverable: true }), deliver: refusal });
-    const c = connect((await boot(link)).port);
+    const { link, queue } = receptionEngine({ job: details({ deliverable: true }), deliver: refusal, projects: [builtin, mine] });
+    const c = connect((await boot(link, "project:my-app")).port);
     await c.waitFor(() => has(c, "welcome"));
     for (const ev of reportEvents()) queue.push(ev);
     await c.waitFor(() => has(c, "report"));
