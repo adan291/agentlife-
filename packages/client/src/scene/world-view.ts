@@ -16,6 +16,7 @@ import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
 import { WorkModel } from "../ui/work.ts";
 import { MonitorFx } from "./monitor-fx.ts";
+import { FlameFx, MoteLayer, isFlameItem } from "./ambient-fx.ts";
 import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
 import type { Point } from "./camera.ts";
 import { prefersReducedMotion } from "./glow.ts";
@@ -73,6 +74,10 @@ export class WorldView {
   private readonly work = new WorkModel();
   /** Desk monitors that light up while the agent at the desk works. */
   private readonly monitors = new Map<AgentId, MonitorFx>();
+  /** Flickering halos on the lamps. */
+  private flames: FlameFx[] = [];
+  /** Slow wisps drifting through the room. */
+  private motes: MoteLayer | null = null;
 
   constructor(
     private readonly app: Application,
@@ -195,6 +200,8 @@ export class WorldView {
     }
     this.badge?.update(now, this.reducedMotion, this.mailboxAttentionSince);
     for (const m of this.monitors.values()) m.update(now, this.reducedMotion);
+    for (const f of this.flames) f.update(now, this.reducedMotion);
+    this.motes?.update(now, this.reducedMotion);
     for (const { view, overlay } of this.avatars.values()) {
       view.update(now);
       overlay.update(now, view.feetX, view.feetY);
@@ -208,6 +215,8 @@ export class WorldView {
     const room = new RoomView(msg.room);
     this.room = room;
     this.root.addChildAt(room.container, 0);
+    this.motes = new MoteLayer(room.bounds);
+    this.root.addChildAt(this.motes.container, 2);
 
     for (const placed of msg.room.furni) {
       const z = room.heightmap.height(placed.x, placed.y) ?? 0;
@@ -215,6 +224,11 @@ export class WorldView {
       this.furni.push(fv);
       this.objects.addChild(fv.sprite);
       if (fv.glow) this.objects.addChild(fv.glow);
+      if (isFlameItem(placed.defId)) {
+        const flame = new FlameFx(placed, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
+        this.objects.addChild(flame.container);
+        this.flames.push(flame);
+      }
       const desk = /^desk_(architect|developer|qa|builder)$/.exec(placed.itemId);
       if (desk) {
         // The monitor of an agent's desk lights up while the agent works; it sits just above the desk sprite.
@@ -276,6 +290,9 @@ export class WorldView {
     for (const c of this.objects.removeChildren()) c.destroy();
     this.furni = [];
     this.monitors.clear();
+    this.flames = []; // their containers were destroyed with the objects layer
+    this.motes?.destroy();
+    this.motes = null;
     this.room?.destroy();
     this.room = null;
   }

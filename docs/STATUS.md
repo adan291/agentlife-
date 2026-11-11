@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (demo-replay tasks 1–4 done, branch feat/demo-replay, not merged)
+Updated: 2026-11-11 (demo-replay tasks 1–6 done + 3 visual polish items, branch feat/demo-replay, not merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -24,7 +24,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 17:30 (IDE): user proposed an HR agent (hire/fire, agents from the internet), ordering agents, and an elevator with floors; asked Kiro to decide. Decided plan in "Next": demo first (S11 started), then hotel-floors, hr-desk (internet agents: persona only, fixed permission tiers, security review, user approval), pipeline-editor.
 
 ## Next (decided 2026-11-11)
-1. Demo first: S11 (demo-replay 1-4), S12 (5-6), S13 (submission texts). Not published yet.
+1. Demo first: S11 and S12 done (demo-replay 1-6), S13 (submission texts, task 7). Not published yet.
 2. User: security decisions 1-3, then history rewrite (applied by Kiro with a backup) and the public GitHub repo.
 3. New specs, in this order, written after S13:
    - `hotel-floors`: lobby with reception and an elevator, Engineering floor (today's office), HR floor; elevator is a furniture interaction that changes room.
@@ -54,7 +54,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
-| demo-replay | 4 / 7 | feat/demo-replay | Tasks 1–4 done (mode, ReplayEngine, ReplayTransport, replay UI + `main.ts` wiring); 5–7 pending (S12, S13). Decisions in the spec's design.md. Not looked at in a browser: try `pnpm --filter @agentlife/client dev` and open http://localhost:5173/?mode=demo (no world-server needed): computer, Start job, approve in the mailbox, speeds, Restart |
+| demo-replay | 6 / 7 | feat/demo-replay | Tasks 1–6 done (mode, ReplayEngine, ReplayTransport, replay UI, demo build check + Pages workflow, Playwright smoke test); 7 pending (S13). Decisions in the spec's design.md. Not looked at in a browser: try `pnpm --filter @agentlife/client dev` and open http://localhost:5173/?mode=demo (no world-server needed): computer, Start job, approve in the mailbox, speeds, Restart |
 
 ## Manual browser checks (world-room task 12, user to do)
 Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_desk_1 -> repos + open_panel computer -> start_job -> approval -> approve -> developing/testing/reviewing -> delivered + report in ~10 s) passed. Run both servers (see above) and check:
@@ -70,6 +70,22 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- demo-replay S12 (tasks 5–6 done, `pnpm check` passes, `e2e:demo` passes with Edge). What exists:
+  - `pnpm --filter @agentlife/client check:demo-build` builds with `VITE_MODE=demo` into a temp folder and fails if the output holds `ws://`, port 8787/8788, 127.0.0.1, localhost, `VITE_WORLD_URL`, `LiveTransport` or `new WebSocket(` (`packages/client/tools/demo-guard.ts`, unit tested). To make that pass, `main.ts` now tests `import.meta.env.VITE_MODE === "demo"` (dotted access, so Vite folds it) and the live branch is removed from a demo build. A demo build ignores `?mode=live`. It runs in CI (`ci.yml`) and in `pages.yml`.
+  - `.github/workflows/pages.yml` (push to main or manual): check, demo-build check, demo build with `--base=/<repo name>/`, Playwright smoke test, upload and deploy. Untested on GitHub (no repo yet): the repo needs Pages set to "GitHub Actions" in its settings.
+  - `pnpm --filter @agentlife/client e2e:demo` (`playwright.demo.config.ts`, port 5198, builds into `packages/client/dist-demo`, git-ignored; `E2E_CHANNEL=msedge` for Edge) opens the demo under `/agentlife/`, starts the run, approves the plan in the mailbox, waits for the Developer to leave idle and asserts no WebSocket and no page errors. To start the run it uses a new `?autostart` query (demo mode only; also useful to record the video). The CI Pages job installs Chromium for it.
+  - Not looked at in a browser by the user: the whole demo (`?mode=demo`), see the spec table.
+- Visual polish list for the Kiroween look (decided 2026-11-11, ordered by value for the cost; top 3 done, scene-only, nothing looked at in a browser):
+  1. DONE Moonlight on the floor under the window (static light patch plus the cross-bar shadow), `moonlightQuads` in `scene/room-view.ts`.
+  2. DONE Candle flicker: a moving halo on the lamp and the jack-o'-lantern (`FlameFx`, `flicker` in `scene/ambient-fx.ts`); steady under reduced motion.
+  3. DONE Wisps: 14 slow teal/purple/pumpkin motes drifting up through the room (`MoteLayer`, `moteAt`); hidden under reduced motion.
+  4. Window: a few stars and a slow cloud crossing the moon; lightning flash now and then (reduced motion: none).
+  5. Ghost look for the three agents: translucent lower body that waves, soft halo in the role colour, a slight float while idle.
+  6. Vignette: darker corners over the stage (CSS radial gradient on `.al-stage`, no canvas cost).
+  7. More props: bats on the wall that flap when a job is delivered, a candle on the mailbox, hanging cobweb in a second corner.
+  8. Sound (opt-in, off by default): creaks, a bell when the report arrives; needs CC0 files listed in ASSETS.md.
+  9. Title treatment: logo in the top bar with a flicker, spooky font only if its licence is OK (MIT/OFL, in ASSETS.md).
+  Check in the browser: the wisps must not distract from labels (they sit under the overlays), the moonlight must not look like a rug, the flicker must not be too fast. Tune `flicker`, `MOTE_COUNT` and the alphas.
 - demo-replay (S11 done: tasks 1–4). `pnpm check` passes (289 client tests); `vite build` with `VITE_MODE=demo --base=/agentlife/` works (output went to the git-ignored `data/tmp-demo-dist`; the session could not delete it, remove it by hand). Known: `run-001.json` has no model names (recorded before job-insight), so agent tooltips show no model in the demo until the run is re-recorded; agents walk at normal speed at 4x/16x (WorldSim uses the wall clock). The flaky `pnpm check` in world-server (`http-engine.test.ts` "keeps retrying while the engine is down") failed once more under load and passed on rerun.
 - `pnpm check` failed twice on 2026-11-11 while the engine/world-server were being restarted and passed on every rerun: likely a test that collides with a port or file used by the running services. Investigate before the freeze.
 - ui-shell (merged to main, tasks 1–5 done, one commit each; `pnpm check` and `vite build` pass). What exists, in `packages/client/src/ui/shell.ts`: `shellTemplate(prefs, viewport)` (pure, tested) gives side width, dock height and the collapsed/compact modes; `createShell()` builds the grid (`.al-top` with slots `topLeft`/`topCentre`/`topRight`, `.al-side`, `.al-stage` with a `banners` column, `.al-dock`), sets `--side-w`/`--dock-h` and `data-side-collapsed|dock-collapsed|compact` on `.al-shell`. User choices (side, dock, dock body px) are stored under `agentlife-side-collapsed`, `agentlife-dock-collapsed`, `agentlife-dock-px`; with no choice the breakpoints decide (side <900 px wide, dock and compact stepper <640 px wide, dock <560 px high). A stored choice wins over the breakpoints. `main.ts` resizes the Pixi renderer from a ResizeObserver on the stage; `scene/viewport.ts` and the `--al-terminal-h` variable are gone. Components take their host: `createHud({left,right,banners,stage}, ...)` (controls order is now zoom, A−, A+, ?), `createStepper(cb, host)`, `createYourTurnToast(cb, host)`, `createGuide(storage, host)`, `createPanels(send, onChange, host)`, `createTooltip(host)` (positions are stage-relative, world-view passes `e.global`), `createTeamBar(onFocus, shell)`, `createTerminal(shell)` (no `refresh()` any more; `theme.onChange` calls `shell.refresh()`). Tokens and button states are in `ui/theme.ts` (`themeCss()`, `--al-s1..s5`, `--al-radius`, `--al-border`, `--al-shadow`, `--al-focus`); `test/theme-tokens.test.ts` fails if a component other than the shell uses `position: fixed` or a literal radius. Panels have header, scrollable body and footer; the Computer panel's Start job button is in the footer (`PanelContent` in `computer.ts`). The dock grip is focusable (arrow keys resize 24 px).
