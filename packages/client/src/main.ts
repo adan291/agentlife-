@@ -78,7 +78,7 @@ function openMailbox(): void {
   }
   panels.open("mailbox");
 }
-const stepper = createStepper(openMailbox, shell.topCentre);
+const stepper = createStepper(openMailbox, shell.topCentre, () => panels.open("board"));
 const turn = createYourTurnToast(openMailbox, shell.banners);
 
 transport.onStatus((s) => hud.setStatus(s));

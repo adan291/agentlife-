@@ -14,6 +14,7 @@ import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
+import { WorkModel } from "../ui/work.ts";
 import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
 import type { Point } from "./camera.ts";
 import { prefersReducedMotion } from "./glow.ts";
@@ -62,6 +63,8 @@ export class WorldView {
   private focusUntil = 0;
   private rootTarget: Point = { x: 0, y: 0 };
   private readonly agentStatus = new Map<AgentId, { state?: AgentState; text?: string | undefined }>();
+  /** What each agent works on, for the tooltip (the team bar keeps its own copy). */
+  private readonly work = new WorkModel();
 
   constructor(
     private readonly app: Application,
@@ -110,7 +113,7 @@ export class WorldView {
 
   private agentTip(agent: AgentId) {
     const s = this.agentStatus.get(agent);
-    return agentTooltip(agent, s?.state, s?.text, this.models[agent]);
+    return agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
   }
 
   setZoom(z: Zoom): void {
@@ -126,6 +129,7 @@ export class WorldView {
   }
 
   handle(msg: ServerMsg, now = Date.now()): void {
+    this.work.apply(msg);
     switch (msg.type) {
       case "welcome":
         this.hooks.tooltip?.hide();

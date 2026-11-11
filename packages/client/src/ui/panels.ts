@@ -1,7 +1,7 @@
 import type { ClientMsg, PanelName, ServerMsg } from "@agentlife/shared";
-import { renderBoard } from "./board.ts";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
+import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { PanelState } from "./panel-state.ts";
 import { UI_COLOURS } from "./theme.ts";
@@ -30,9 +30,25 @@ const CSS = `
 .al-muted { color: ${UI_COLOURS.muted}; }
 .al-error { color: ${UI_COLOURS.error}; }
 .al-timeline { padding-left: var(--al-s5); white-space: pre-wrap; }
+.al-panel[data-wide="true"] { width: min(960px, calc(100% - var(--al-s4))); }
+.al-wrap { flex-wrap: wrap; }
+.al-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--al-s1) var(--al-s3); margin: 0 0 var(--al-s2); }
+.al-facts dt { color: ${UI_COLOURS.muted}; }
+.al-facts dd { margin: 0; overflow-wrap: anywhere; }
+.al-table-wrap { overflow-x: auto; }
+.al-table { width: 100%; border-collapse: collapse; }
+.al-table th, .al-table td { text-align: left; padding: var(--al-s1) var(--al-s2); border-bottom: 1px solid var(--al-border); white-space: nowrap; }
+.al-table th { color: ${UI_COLOURS.accentText}; }
+.al-plain { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: var(--al-s2); margin: var(--al-s2) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.al-plain code, .al-diff code { font: inherit; }
+.al-diff { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: var(--al-s2); margin: var(--al-s2) 0; }
+.al-credits { margin-top: var(--al-s3); }
 `;
 
-const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job board" };
+const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job" };
+
+/** How long the job card waits after a `work` message before it asks for fresh numbers. */
+export const DETAILS_REFRESH_MS = 1500;
 
 export interface Panels {
   /** Feed every server message; opens panels and refreshes the open one. */
@@ -78,6 +94,7 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
   root.append(header, body, footer);
   host.appendChild(root);
 
+  let lastViewKey = "";
   const render = () => {
     if (!state.open) {
       root.hidden = true;
@@ -88,21 +105,53 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
+    root.dataset["wide"] = String(state.open === "board");
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
         : state.open === "mailbox"
           ? { body: renderMailbox(document, state.data, { decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }) }) }
-          : { body: renderBoard(document, state.data) };
+          : {
+              body: renderJobPanel(document, state.data, state.viewing, {
+                view: (artifactId) => {
+                  state.view(artifactId);
+                  render();
+                },
+                back: () => {
+                  state.back();
+                  render();
+                },
+              }),
+            };
+    // A refresh of the same view keeps the reading position; opening another view starts at the top.
+    const viewKey = `${state.open}:${state.viewing ?? ""}`;
+    const keep = !wasHidden && viewKey === lastViewKey ? body.scrollTop : 0;
+    lastViewKey = viewKey;
     body.replaceChildren(content.body);
+    body.scrollTop = keep;
     footer.replaceChildren(...(content.footer ? [content.footer] : []));
     footer.hidden = !content.footer;
     if (wasHidden) closeBtn.focus();
     onChange();
   };
 
+  const requestDetails = () => {
+    const job = state.data.job;
+    if (job) send({ type: "job_details", taskId: job.taskId });
+  };
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleRefresh = () => {
+    if (refreshTimer !== undefined) return;
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      if (state.open === "board") requestDetails();
+    }, DETAILS_REFRESH_MS);
+  };
+
   const close = () => {
     state.close();
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
     render();
   };
   closeBtn.addEventListener("click", close);
@@ -115,9 +164,15 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     close,
     open(panel) {
       if (state.apply({ type: "open_panel", panel })) render();
+      if (panel === "board") requestDetails();
     },
     handle(msg) {
-      if (state.apply(msg)) render();
+      const changed = state.apply(msg);
+      if (state.open === "board") {
+        if (msg.type === "open_panel" || msg.type === "job_update") requestDetails();
+        else if (msg.type === "work") scheduleRefresh();
+      }
+      if (changed) render();
     },
   };
 }

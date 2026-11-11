@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema } from "./events.ts";
+import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { JobDetailsSchema } from "./engine-api.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
@@ -78,6 +78,10 @@ export const ActivityLineSchema = z.object({
   ts: z.number().int().nonnegative(),
   agentId: AgentIdSchema,
   text: z.string().min(1).max(ACTIVITY_TEXT_MAX),
+  /** Job the line belongs to, so lines of different jobs can be told apart. Absent for Builder lines. */
+  taskId: z.string().min(1).optional(),
+  /** Step the job was in when the line was written. */
+  step: StepNameSchema.optional(),
 });
 export type ActivityLine = z.infer<typeof ActivityLineSchema>;
 

@@ -131,23 +131,26 @@ const CSS = `
 .al-stepper-compact { display: none; padding: var(--al-s1) var(--al-s2); border: 1px solid transparent; border-radius: var(--al-radius); background: none; font: var(--al-font, 14px)/1.4 monospace; color: var(--al-step-colour, ${UI_COLOURS.text}); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
 .al-stepper-compact[data-status="current"] { font-weight: bold; border-color: var(--al-step-colour); }
 .al-stepper-compact[data-status="failed"] { color: ${UI_COLOURS.error}; border-color: ${UI_COLOURS.error}; }
-button.al-stepper-compact { cursor: pointer; background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; border-color: ${UI_COLOURS.accent}; }
+button.al-stepper-compact { cursor: pointer; }
+.al-stepper-compact[data-turn="true"] { background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; border-color: ${UI_COLOURS.accent}; }
 .al-shell[data-compact="true"] .al-stepper { display: none; }
 .al-shell[data-compact="true"] .al-stepper-compact { display: block; }
 .al-step { padding: var(--al-s1) var(--al-s2); border: 1px solid transparent; border-radius: var(--al-radius); background: none; color: ${UI_COLOURS.muted}; font: inherit; white-space: nowrap; }
 .al-step[data-status="done"] { color: ${UI_COLOURS.text}; }
 .al-step[data-status="current"] { color: var(--al-step-colour); font-weight: bold; border-color: var(--al-step-colour); }
 .al-step[data-status="failed"] { color: ${UI_COLOURS.error}; border-color: ${UI_COLOURS.error}; }
-button.al-step { cursor: pointer; background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; border-color: ${UI_COLOURS.accent}; }
-button.al-step:hover, button.al-stepper-compact:hover { background: ${UI_COLOURS.accentText}; }
+button.al-step { cursor: pointer; }
+.al-step[data-turn="true"], .al-stepper-compact[data-turn="true"] { background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; border-color: ${UI_COLOURS.accent}; }
+button.al-step:hover, button.al-stepper-compact:hover { border-color: var(--al-accent); }
+.al-step[data-turn="true"]:hover, .al-stepper-compact[data-turn="true"]:hover { background: ${UI_COLOURS.accentText}; }
 `;
 
 export interface Stepper {
   update(job: JobView | null): void;
 }
 
-/** Progress strip in the top bar. The "Your turn" step is a button that calls `onYourTurn`. In narrow windows (shell `data-compact`) only the current step shows. */
-export function createStepper(onYourTurn: () => void, host: HTMLElement = document.body): Stepper {
+/** Progress strip in the top bar. The "Your turn" step is a button that calls `onYourTurn`; every other step opens the job card (`onOpenJob`). In narrow windows (shell `data-compact`) only the current step shows. */
+export function createStepper(onYourTurn: () => void, host: HTMLElement = document.body, onOpenJob: () => void = () => {}): Stepper {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -167,17 +170,16 @@ export function createStepper(onYourTurn: () => void, host: HTMLElement = docume
       wrap.hidden = steps.length === 0;
       const items = steps.map((s) => {
         const li = document.createElement("li");
-        const el = document.createElement(s.yourTurn ? "button" : "span");
+        const el = document.createElement("button");
+        el.type = "button";
         el.className = "al-step";
         el.dataset["status"] = s.status;
+        el.dataset["turn"] = String(s.yourTurn);
         el.style.setProperty("--al-step-colour", cssHex(ROLE_COLOURS[s.agentId]));
         el.textContent = stepLabel(s);
-        el.title = `${ROLE_INFO[s.agentId].name}${s.yourTurn ? ": open the mailbox to approve the plan" : ""}`;
+        el.title = `${ROLE_INFO[s.agentId].name}: ${s.yourTurn ? "open the mailbox to approve the plan" : "open the job card"}`;
         if (s.status === "current") el.setAttribute("aria-current", "step");
-        if (el instanceof HTMLButtonElement) {
-          el.type = "button";
-          el.addEventListener("click", onYourTurn);
-        }
+        el.addEventListener("click", s.yourTurn ? onYourTurn : onOpenJob);
         li.appendChild(el);
         return li;
       });
@@ -186,17 +188,16 @@ export function createStepper(onYourTurn: () => void, host: HTMLElement = docume
       wrap.querySelector(".al-stepper-compact")?.remove();
       const compact = compactStep(steps);
       if (compact) {
-        const el = document.createElement(compact.yourTurn ? "button" : "span");
+        const el = document.createElement("button");
+        el.type = "button";
         el.className = "al-stepper-compact";
         el.dataset["status"] = compact.status;
+        el.dataset["turn"] = String(compact.yourTurn);
         const active = steps.find((s) => s.status === "current" || s.status === "failed");
         if (active) el.style.setProperty("--al-step-colour", cssHex(ROLE_COLOURS[active.agentId]));
         el.textContent = compact.text;
-        el.title = compact.text;
-        if (el instanceof HTMLButtonElement) {
-          el.type = "button";
-          el.addEventListener("click", onYourTurn);
-        }
+        el.title = compact.yourTurn ? `${compact.text}: open the mailbox` : `${compact.text}: open the job card`;
+        el.addEventListener("click", compact.yourTurn ? onYourTurn : onOpenJob);
         wrap.appendChild(el);
       }
     },

@@ -8,9 +8,17 @@ import {
   PROTOCOL_VERSION,
   ServerMsgSchema,
 } from "@agentlife/shared";
-import type { ActivityLine, AgentEvent, AgentId, AgentWork, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
+import type { ActivityLine, AgentEvent, AgentId, AgentWork, Approval, ErrorCode, JobState, Report, ServerMsg, StepName, WorldSim } from "@agentlife/shared";
 import type { EngineLink } from "./engine-link.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
+
+const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
+  analyzing: "analyze",
+  developing: "develop",
+  testing: "test",
+  reviewing: "review",
+  report_ready: "report",
+};
 
 export interface GatewayOptions {
   sim: WorldSim;
@@ -89,6 +97,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const activity: ActivityLine[] = [];
   /** What each agent works on now (latest `agent.work`), sent in `welcome` so a reload keeps the team bar block. */
   const works = new Map<AgentId, AgentWork>();
+  /** Step of the current job, from its latest state change. Tags activity lines (`awaiting_plan_approval` and the end states have none). */
+  let currentStep: StepName | undefined;
   let currentTaskId: string | null = null;
   let jobActive = false;
 
@@ -153,9 +163,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           approvals.clear();
           reports.clear();
           works.clear();
+          currentStep = undefined;
           if (ws) await jobUpdate(ws);
           break;
         case "task.state_changed":
+          if (ev.taskId === currentTaskId) currentStep = STEP_OF_STATE[ev.state];
           if (ev.state === "cancelled" || ev.state === "delivered" || ev.state === "failed") {
             dropPendingApprovals(ev.taskId);
             if (ev.taskId === currentTaskId) works.clear();
@@ -198,7 +210,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           break;
         }
         case "agent.activity": {
-          const line: ActivityLine = { ts: ev.ts, agentId: ev.agentId, text: ev.text };
+          const line: ActivityLine = {
+            ts: ev.ts,
+            agentId: ev.agentId,
+            text: ev.text,
+            taskId: ev.taskId,
+            ...(currentStep && ev.taskId === currentTaskId ? { step: currentStep } : {}),
+          };
           activity.push(line);
           if (activity.length > ACTIVITY_BUFFER_SIZE) activity.splice(0, activity.length - ACTIVITY_BUFFER_SIZE);
           if (ws) send(ws, { type: "activity", line });

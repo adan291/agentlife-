@@ -2,6 +2,7 @@ import { ROLE_INFO } from "@agentlife/shared";
 import type { ActivityLine, AgentId } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import { formatTime } from "./board.ts";
+import { lineTag } from "./work.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
 import { DOCK_HEADER_PX } from "./shell.ts";
 import type { Shell } from "./shell.ts";
@@ -50,16 +51,16 @@ export class TerminalModel {
   }
 }
 
-/** One terminal row as plain parts: `HH:MM:SS  Role  text`. */
-export function formatLine(line: ActivityLine): { time: string; role: string; text: string } {
-  return { time: formatTime(line.ts), role: ROLE_INFO[line.agentId].name, text: line.text };
+/** One terminal row as plain parts: `HH:MM:SS  Role  #d232 develop  text`. `tag` is empty for lines that belong to no job. */
+export function formatLine(line: ActivityLine): { time: string; role: string; tag: string; text: string } {
+  return { time: formatTime(line.ts), role: ROLE_INFO[line.agentId].name, tag: lineTag(line), text: line.text };
 }
 
 /** Text of the collapsed dock header: the newest line, or a hint while there is none. */
 export function collapsedSummary(line: ActivityLine | undefined): string {
   if (!line) return "No activity yet";
   const f = formatLine(line);
-  return `${f.time}  ${f.role}  ${f.text}`;
+  return `${f.time}  ${f.role}  ${f.tag ? `${f.tag}  ` : ""}${f.text}`;
 }
 
 /** "3 new" for the unread badge; empty for none. */
@@ -95,6 +96,7 @@ const CSS = `
 .al-term-row { white-space: pre-wrap; overflow-wrap: anywhere; }
 .al-term-time { color: ${UI_COLOURS.muted}; margin-right: 1.5ch; }
 .al-term-role { font-weight: bold; margin-right: 1.5ch; }
+.al-term-tag { color: ${UI_COLOURS.accentText}; margin-right: 1.5ch; }
 .al-term-empty { color: ${UI_COLOURS.muted}; }
 `;
 
@@ -199,7 +201,15 @@ export function createTerminal(shell: Shell): Terminal {
       role.className = "al-term-role";
       role.style.color = cssHex(ROLE_COLOURS[line.agentId]);
       role.textContent = f.role;
-      row.append(time, role, document.createTextNode(f.text));
+      if (f.tag) {
+        const tag = document.createElement("span");
+        tag.className = "al-term-tag";
+        tag.textContent = f.tag;
+        tag.title = "Job and step of this line";
+        row.append(time, role, tag, document.createTextNode(f.text));
+      } else {
+        row.append(time, role, document.createTextNode(f.text));
+      }
       return row;
     });
     if (rows.length === 0) {

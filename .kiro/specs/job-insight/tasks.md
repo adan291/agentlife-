@@ -8,7 +8,7 @@
   - `work` message and `welcome` field; `job_details` request proxied to the engine (size caps); `verifyClient` Origin allowlist with tests
   - _Requirements: 1.3, 2.1, 2.2, 7.1, 7.2, 7.3_
 
-- [ ] 3. Client: team bar work block, tooltip, terminal tags, Job panel
+- [x] 3. Client: team bar work block, tooltip, terminal tags, Job panel
   - Task title, step, elapsed, context meter, file counts; `#tag` and step in terminal lines; Job panel with steps table, artifact links and the credits line
   - _Requirements: 1.3, 1.4, 1.5, 2.1, 2.2, 2.3_
 
