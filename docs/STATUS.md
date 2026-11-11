@@ -42,7 +42,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 |---|---|---|---|
 | world-room | 12 / 12 | main | Done. Browser check by the user on 2026-11-10: job, approval and report worked |
 | agent-engine | 10 / 10 | main | Merged. Two-process e2e verified by script |
-| agent-pipeline | 11 / 13 | main | Live run 1 OK (~70 s per job: analyze 29 s, develop 17 s, tests 1.5 s, review 19 s). Run 2 waiting for approval. Next: run 3, then task 13 (export demo run) |
+| agent-pipeline | 13 / 13 | main | Done. 3 live runs passed (~70-80 s each). Run 3 (task-d232d369, 'Validate todo titles in addTodo': analyze 32 s, develop 22 s, tests 6 s, review 19 s, PASS) exported to packages/client/public/demo/run-001.json, scanned clean |
 | build-crew | 5 / 5 | main | Done. Seen by the user during S10D: Builder bubbles and terminal lines followed the session (git add, commits) |
 | room-hints | 5 / 5 | main | Done and merged (tooltips, glow, mailbox badge, HUD line, guide, step durations). Browser look pending (user) |
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |

@@ -51,10 +51,10 @@
   - `config/agents.json` set to kiro-cli for the three roles; FakeRuntime stays the CI default (`RUNTIME=fake`, set by `packages/agent-engine/vitest.config.ts`)
   - _Requirements: 9.1_
 
-- [ ] 12. Live runs
+- [x] 12. Live runs
   - Three consecutive end-to-end runs from the room; record durations, credits and issues in docs/STATUS.md
   - _Requirements: 9.1, 9.2_
 
-- [ ] 13. Export a demo run
+- [x] 13. Export a demo run
   - Export the best run with `GET /tasks/:id/export` to `packages/client/public/demo/run-001.json` (input for demo-replay)
   - _Requirements: 8.2, 9.2_
