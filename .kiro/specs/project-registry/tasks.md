@@ -4,7 +4,7 @@
   - Move the scanning core of scripts/security-scan.ts to `packages/shared/src/leaks.ts` (the script keeps working); `projects.ts` schemas and `delivery.done` event
   - _Requirements: 1.1, 1.4, 5.4_
 
-- [ ] 2. Engine: allowed roots, inspection and registry
+- [x] 2. Engine: allowed roots, inspection and registry
   - `projects/roots.ts`, `inspect.ts`, `registry.ts`; routes `GET/POST/DELETE /projects`; built-in fixture merged; paths kept inside the engine
   - Tests: path property test, temporary-repo registration cases, path never in responses
   - _Requirements: 1.1–1.8, 2.1, 2.2, 7.1, 7.2_

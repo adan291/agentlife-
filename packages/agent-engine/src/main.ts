@@ -1,5 +1,6 @@
 import { startEngine } from "./engine.ts";
 import { collectSecrets, createJsonLogger, createRedactor } from "./log.ts";
+import { allowedRoots, ensureRoots } from "./projects/roots.ts";
 
 // Secrets from the environment never reach logs, events, artifacts, run logs or exports.
 const redact = createRedactor(collectSecrets());
@@ -14,7 +15,12 @@ try {
   if (!LOOPBACK.has(host) && !token) {
     throw new Error(`refusing to listen on ${host} without ENGINE_TOKEN; the engine can start jobs and approve plans`);
   }
+  const roots = allowedRoots();
+  // The default root (D:\AgentHotel) is created empty so the user can drop projects into it. Only the real
+  // process does this, never the tests.
+  ensureRoots(roots);
   const engine = await startEngine({
+    projectRoots: roots,
     logger,
     storeOptions: { redact },
     host,

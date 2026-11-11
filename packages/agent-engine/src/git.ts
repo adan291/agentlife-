@@ -80,3 +80,23 @@ export function git(cwd: string, args: readonly string[], opts: GitOptions = {})
     if (opts.input !== undefined) child.stdin?.end(opts.input);
   });
 }
+
+const RAW_MAX_BUFFER = 256 * 1024 * 1024;
+
+/** Like `git()` but returns stdout as bytes, for `cat-file --batch`. `input` is written to stdin. */
+export function gitRaw(cwd: string, args: readonly string[], input?: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      "git",
+      [...args],
+      { cwd, env: gitEnv(), encoding: "buffer", maxBuffer: RAW_MAX_BUFFER, windowsHide: true },
+      (err, stdout, stderr) => {
+        if (!err) return resolve(stdout);
+        const code = typeof (err as { code?: unknown }).code === "number" ? (err as { code: number }).code : undefined;
+        const tail = String(stderr.length ? stderr.toString("utf8") : err.message).trim().split(/\r?\n/).slice(-5).join("\n");
+        reject(new GitError(`git ${args[0] ?? ""} failed${code === undefined ? "" : ` (exit ${code})`}: ${tail}`, args, code));
+      },
+    );
+    if (input !== undefined) child.stdin?.end(input);
+  });
+}

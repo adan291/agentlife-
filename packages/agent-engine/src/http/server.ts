@@ -18,6 +18,7 @@ import type { EngineConfig } from "../config.ts";
 import { ConflictError, NotFoundError } from "../errors.ts";
 import type { JobRunner } from "../jobs/runner.ts";
 import { noopLogger, type Logger } from "../log.ts";
+import { repoView, type ProjectRegistry } from "../projects/registry.ts";
 import type { Store } from "../store.ts";
 
 export const DEFAULT_HOST = "127.0.0.1";
@@ -35,6 +36,8 @@ export interface EngineServerDeps {
   token?: string | undefined;
   /** Extra routes (SSE, export) registered by later modules. */
   extraRoutes?: Route[];
+  /** Registered projects. Without it only the repos of config/repos.json exist. */
+  projects?: ProjectRegistry;
 }
 
 export interface RouteContext {
@@ -128,7 +131,12 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
       method: "GET",
       pattern: /^\/repos$/,
       handle: ({ res }) =>
-        sendJson(res, 200, z.array(RepoSchema), config.repos.map((r) => ({ id: r.id, name: r.name }))),
+        sendJson(
+          res,
+          200,
+          z.array(RepoSchema),
+          deps.projects ? deps.projects.list().map(repoView) : config.repos.map((r) => ({ id: r.id, name: r.name })),
+        ),
     },
     {
       method: "GET",
@@ -150,7 +158,8 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
       pattern: /^\/tasks$/,
       handle: async ({ req, res }) => {
         const body = await parseBody(req, StartJobBodySchema);
-        if (!config.repos.some((r) => r.id === body.repoId)) {
+        const known = deps.projects ? deps.projects.has(body.repoId) : config.repos.some((r) => r.id === body.repoId);
+        if (!known) {
           throw new BadRequestError("unknown_repo", "repository is not allowlisted", [
             { path: "repoId", message: "not in the allowlist" },
           ]);
