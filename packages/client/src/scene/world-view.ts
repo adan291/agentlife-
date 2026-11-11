@@ -12,8 +12,6 @@ import { pickFurni } from "./pick.ts";
 import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
-import { freeViewport, getInsets, onInsetsChange } from "./viewport.ts";
-import type { FreeViewport } from "./viewport.ts";
 import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
 import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
@@ -22,12 +20,15 @@ import { prefersReducedMotion } from "./glow.ts";
 import { MailboxBadge } from "./mailbox-badge.ts";
 import type { HoverSink } from "../ui/tooltip.ts";
 
+/** Free space kept around the room when choosing the zoom (per side). */
+const FIT_MARGIN_PX = 16;
+
 export interface WorldViewHooks {
   /** Server `error` messages (no_path, rate_limited, ...). */
   onError?(code: ErrorCode, message: string): void;
   /** Receives hover targets for tooltips. */
   tooltip?: HoverSink;
-  /** The automatic zoom changed (free viewport resized). */
+  /** The automatic zoom changed (stage resized). */
   onZoomChange?(zoom: Zoom): void;
 }
 
@@ -79,7 +80,6 @@ export class WorldView {
     app.stage.on("pointertap", (e) => this.onPointerTap(e));
     app.stage.on("pointerleave", () => this.clearHover());
     app.renderer.on("resize", () => this.relayout());
-    onInsetsChange(() => this.relayout());
   }
 
   get zoom(): Zoom {
@@ -103,8 +103,8 @@ export class WorldView {
     this.focus = { x: entry.view.feetX, y: entry.view.feetY - 40 };
     this.focusUntil = now + FOCUS_MS;
     this.layout(false);
-    const v = this.freeArea();
-    this.hooks.tooltip?.pin(`agent:${id}`, v.x + v.w / 2 + 24, v.y + v.h / 2 - 30, () => this.agentTip(id), 2000);
+    const { width, height } = this.app.screen;
+    this.hooks.tooltip?.pin(`agent:${id}`, width / 2 + 24, height / 2 - 30, () => this.agentTip(id), 2000);
     return true;
   }
 
@@ -221,19 +221,15 @@ export class WorldView {
     this.tick(Date.now());
   }
 
-  private freeArea(): FreeViewport {
-    return freeViewport(this.app.screen.width, this.app.screen.height, getInsets());
-  }
-
-  /** Picks 1x or 2x from the free viewport (only used while the user has not chosen a zoom). */
+  /** Picks 1x or 2x from the stage size (only used while the user has not chosen a zoom). */
   private chooseAutoZoom(): void {
     if (!this.room) return;
     const b = this.room.bounds;
-    const v = this.freeArea();
-    this.zoomLevel = chooseZoom(b.maxX - b.minX, b.maxY - b.minY, v.w, v.h, 0);
+    const { width, height } = this.app.screen;
+    this.zoomLevel = chooseZoom(b.maxX - b.minX, b.maxY - b.minY, width, height, FIT_MARGIN_PX);
   }
 
-  /** The free viewport changed (team bar, terminal or window): recompute zoom if automatic, then centre. */
+  /** The stage changed size (window, side bar or dock): recompute zoom if automatic, then centre. */
   private relayout(): void {
     const before = this.zoomLevel;
     if (!this.zoomChosen) this.chooseAutoZoom();
@@ -253,14 +249,14 @@ export class WorldView {
     this.room = null;
   }
 
-  /** Centre the room (or the focused agent) in the window at the current zoom. `instant` skips the pan animation. */
+  /** Centre the room (or the focused agent) in the stage at the current zoom. `instant` skips the pan animation. */
   private layout(instant = true): void {
     this.root.scale.set(this.zoomLevel);
     if (!this.room) return;
     const b = this.room.bounds;
-    const v = this.freeArea();
+    const { width, height } = this.app.screen;
     const centre = this.focus ?? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
-    this.rootTarget = rootPositionFor(centre, this.zoomLevel, v.w, v.h, v.x, v.y);
+    this.rootTarget = rootPositionFor(centre, this.zoomLevel, width, height);
     if (instant || this.reducedMotion) this.root.position.set(this.rootTarget.x, this.rootTarget.y);
   }
 
@@ -281,7 +277,7 @@ export class WorldView {
     if (agent) {
       this.app.canvas.style.cursor = "default";
       h.room.setHover(null);
-      this.hooks.tooltip?.hover(`agent:${agent}`, e.clientX, e.clientY, () => this.agentTip(agent));
+      this.hooks.tooltip?.hover(`agent:${agent}`, e.global.x, e.global.y, () => this.agentTip(agent));
       return;
     }
     if (h.item) {
@@ -292,7 +288,7 @@ export class WorldView {
         if (def.interaction) this.hoveredItem = h.item.itemId;
         if (def.interaction && def.hint) {
           const hint = def.hint;
-          this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.clientX, e.clientY, () => ({ title: def.name, lines: [hint] }));
+          this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.global.x, e.global.y, () => ({ title: def.name, lines: [hint] }));
         } else {
           this.hooks.tooltip?.hide();
         }

@@ -14,14 +14,14 @@ export interface TooltipContent {
 
 /** What the world view needs from a tooltip; the DOM implementation is `createTooltip`. */
 export interface HoverSink {
-  /** Pointer rests on `key` at viewport position (x, y). The tooltip shows after the dwell time. */
+  /** Pointer rests on `key` at stage position (x, y). The tooltip shows after the dwell time. */
   hover(key: string, x: number, y: number, content: () => TooltipContent): void;
   /** Shows the tooltip at once and hides it after `ms` (team bar click). Any `hide()` or `hover()` of another target cancels it. */
   pin(key: string, x: number, y: number, content: () => TooltipContent, ms: number): void;
   hide(): void;
 }
 
-/** Top-left position for a tooltip of size w×h near the pointer, kept inside the viewport. */
+/** Top-left position for a tooltip of size w×h near the pointer, kept inside the host (vw×vh). */
 export function clampTooltip(x: number, y: number, w: number, h: number, vw: number, vh: number): { left: number; top: number } {
   let left = x + OFFSET;
   let top = y + OFFSET;
@@ -42,14 +42,14 @@ export function agentTooltip(id: AgentId, state: AgentState | undefined, text: s
 }
 
 const CSS = `
-.al-tooltip { position: fixed; z-index: 30; max-width: min(340px, 90vw); pointer-events: none; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 6px 10px; font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
+.al-tooltip { position: absolute; z-index: 30; max-width: min(340px, calc(100% - var(--al-s4))); pointer-events: none; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); padding: var(--al-s2) var(--al-s3); font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-tooltip[hidden] { display: none; }
 .al-tooltip b { display: block; color: ${UI_COLOURS.accentText}; margin-bottom: 2px; }
 .al-tooltip span { display: block; overflow-wrap: anywhere; }
 `;
 
-/** One DOM element that follows the pointer. Text is set with textContent only. */
-export function createTooltip(): HoverSink {
+/** One DOM element that follows the pointer inside `host` (the stage). Positions are host-relative. Text is set with textContent only. */
+export function createTooltip(host: HTMLElement = document.body): HoverSink {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -57,7 +57,7 @@ export function createTooltip(): HoverSink {
   el.className = "al-tooltip";
   el.setAttribute("role", "tooltip");
   el.hidden = true;
-  document.body.appendChild(el);
+  host.appendChild(el);
 
   let key: string | null = null;
   let shown = false;
@@ -67,7 +67,7 @@ export function createTooltip(): HoverSink {
   let content: (() => TooltipContent) | null = null;
 
   const place = () => {
-    const { left, top } = clampTooltip(pos.x, pos.y, el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight);
+    const { left, top } = clampTooltip(pos.x, pos.y, el.offsetWidth, el.offsetHeight, host.clientWidth, host.clientHeight);
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
   };

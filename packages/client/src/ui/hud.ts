@@ -2,16 +2,14 @@ import type { ConnectionStatus } from "../transport.ts";
 import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
-.al-hud { position: fixed; z-index: 10; font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; }
-.al-hud-top { top: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
-.al-btn { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
-.al-btn:hover { border-color: ${UI_COLOURS.accent}; }
-.al-status { top: 10px; left: 10px; background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.border}; border-radius: 4px; padding: 4px 10px; }
-.al-status[data-status="open"] { display: none; }
-.al-status[data-status="reconnecting"] { border-color: ${UI_COLOURS.accent}; color: ${UI_COLOURS.accentText}; }
-.al-notice { top: 52px; left: 50%; transform: translateX(-50%); background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 4px 12px; color: ${UI_COLOURS.accentText}; }
+.al-hud { font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; }
+.al-status { display: flex; align-items: center; min-width: 0; background: ${UI_COLOURS.inputBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); white-space: nowrap; }
+.al-status[hidden] { display: none; }
+.al-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.al-status[data-status="reconnecting"] { border-color: var(--al-accent); color: ${UI_COLOURS.accentText}; }
+.al-notice { background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); }
 .al-notice[hidden] { display: none; }
-.al-toast { bottom: calc(var(--al-terminal-h, 0px) + 16px); left: 50%; transform: translateX(-50%); background: ${UI_COLOURS.panelBg}; border: 1px solid ${UI_COLOURS.accent}; border-radius: 4px; padding: 6px 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
 `;
 
@@ -21,75 +19,92 @@ export interface FontControls {
   bigger(): void;
 }
 
+/** Where the HUD parts live: the top bar slots and the stage. */
+export interface HudMounts {
+  /** Connection status goes here, after the title. */
+  left: HTMLElement;
+  /** Zoom, text size and help buttons. */
+  right: HTMLElement;
+  /** Persistent notice (below the top bar) and transient toast (bottom). */
+  banners: HTMLElement;
+  stage: HTMLElement;
+}
+
 export interface Hud {
   setStatus(status: ConnectionStatus): void;
   setZoomLabel(zoom: number): void;
   toast(text: string, ms?: number): void;
-  /** Persistent line at the top (null hides it). */
+  /** Persistent line at the top of the stage (null hides it). */
   setNotice(text: string | null): void;
 }
 
-/** Small DOM overlay: zoom button, text size, connection banner and transient messages. */
-export function createHud(onZoom: () => void, onHelp: () => void = () => {}, font?: FontControls, onUseHere: () => void = () => {}): Hud {
+/** Top bar controls and stage messages: zoom button, text size, help, connection status, notice and toast. */
+export function createHud(
+  mounts: HudMounts,
+  onZoom: () => void,
+  onHelp: () => void = () => {},
+  font?: FontControls,
+  onUseHere: () => void = () => {},
+): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
 
-  const top = document.createElement("div");
-  top.className = "al-hud al-hud-top";
-  const zoom = document.createElement("button");
-  zoom.className = "al-btn";
-  zoom.type = "button";
+  const button = (text: string, label?: string): HTMLButtonElement => {
+    const b = document.createElement("button");
+    b.className = "al-btn";
+    b.type = "button";
+    b.textContent = text;
+    if (label) {
+      b.title = label;
+      b.setAttribute("aria-label", label);
+    }
+    return b;
+  };
+
+  const zoom = button("");
   zoom.title = "Toggle zoom (Z)";
   zoom.addEventListener("click", onZoom);
-  top.appendChild(zoom);
-  const help = document.createElement("button");
-  help.className = "al-btn";
-  help.type = "button";
-  help.textContent = "?";
-  help.title = "How it works";
-  help.setAttribute("aria-label", "How it works");
-  help.addEventListener("click", onHelp);
-  top.appendChild(help);
+  mounts.right.appendChild(zoom);
   if (font) {
     for (const [text, label, act] of [
       ["A−", "Smaller text", font.smaller],
       ["A+", "Larger text", font.bigger],
     ] as const) {
-      const b = document.createElement("button");
-      b.className = "al-btn";
-      b.type = "button";
-      b.textContent = text;
-      b.title = label;
-      b.setAttribute("aria-label", label);
+      const b = button(text, label);
       b.addEventListener("click", act);
-      top.appendChild(b);
+      mounts.right.appendChild(b);
     }
   }
+  const help = button("?", "How it works");
+  help.title = "How it works";
+  help.addEventListener("click", onHelp);
+  mounts.right.appendChild(help);
 
   const status = document.createElement("div");
   status.className = "al-hud al-status";
   status.setAttribute("role", "status");
+  status.hidden = true;
   const statusText = document.createElement("span");
-  const useHere = document.createElement("button");
-  useHere.className = "al-btn";
-  useHere.type = "button";
-  useHere.textContent = "Use here";
+  const useHere = button("Use here");
   useHere.hidden = true;
-  useHere.style.marginLeft = "10px";
+  useHere.style.marginLeft = "var(--al-s3)";
   useHere.addEventListener("click", onUseHere);
   status.append(statusText, useHere);
+  mounts.left.appendChild(status);
+
   const notice = document.createElement("div");
   notice.className = "al-hud al-notice";
   notice.setAttribute("role", "status");
   notice.hidden = true;
+  mounts.banners.appendChild(notice);
 
   const toast = document.createElement("div");
   toast.className = "al-hud al-toast";
   toast.setAttribute("role", "status");
   toast.setAttribute("aria-live", "polite");
+  mounts.stage.appendChild(toast);
 
-  document.body.append(top, status, notice, toast);
   window.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
@@ -102,6 +117,7 @@ export function createHud(onZoom: () => void, onHelp: () => void = () => {}, fon
       status.dataset["status"] = s;
       statusText.textContent =
         s === "reconnecting" ? "Reconnecting…" : s === "connecting" ? "Connecting…" : s === "replaced" ? "AGENT LIFE is open in another tab" : "";
+      status.hidden = s === "open";
       useHere.hidden = s !== "replaced";
     },
     setZoomLabel(z) {
