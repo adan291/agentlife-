@@ -23,10 +23,11 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 17:10 (IDE): S10F done; job-insight reviewed (approve), two review fixes applied, merged. Next: user looks at the room (work block, Job panel, report viewer, ghost effects); S11-S13; security decisions 1-3 still pending.
 - 2026-11-11 17:30 (IDE): user proposed an HR agent (hire/fire, agents from the internet), ordering agents, and an elevator with floors; asked Kiro to decide. Decided plan in "Next": demo first (S11 started), then hotel-floors, hr-desk (internet agents: persona only, fixed permission tiers, security review, user approval), pipeline-editor.
 - 2026-11-11 evening (IDE): demo-replay task 7 done on feat/demo-replay: README (English, final except the demo URL placeholder), docs/kiro-usage.md, docs/video-script.md. Pending: user fills the GitHub user in the demo URL, records the video, and reviews the texts; security decisions 1-3 and the history rewrite still open.
+- 2026-11-11 20:10 (IDE): user asked Kiro to decide everything. Done: S11-S13 merged (demo-replay 7/7, demo smoke test passes); flaky http-engine tests fixed (waits on the real connection; 0/20 failures); history rewritten (noreply identity, no personal emails, no key-shaped literals), backup bundle kept, fixtures accepted, merged branches deleted; scan clean. Pending from the user: one git config line, the GitHub repo. Next: hotel-floors spec.
 
 ## Next (decided 2026-11-11)
-1. Demo first: S11, S12 and S13 (demo-replay 1-7) done. Not published yet. Submission texts are in README.md, docs/kiro-usage.md and docs/video-script.md (English); the demo URL in the README is a placeholder `<github-user>` until the repo exists. The video is not recorded.
-2. User: security decisions 1-3, then history rewrite (applied by Kiro with a backup) and the public GitHub repo.
+1. Done: demo (S11-S13) and the security clean-up.
+2. Publish: create the public GitHub repo (user, or install `gh` and Kiro does it), push main, enable Pages, put the demo URL in the README (now a `<github-user>` placeholder).
 3. New specs, in this order, written after S13:
    - `hotel-floors`: lobby with reception and an elevator, Engineering floor (today's office), HR floor; elevator is a furniture interaction that changes room.
    - `hr-desk`: HR agent and desk; local catalogue of agent templates; hire, fire and rename; permissions only from fixed tiers (read-only, developer-in-worktree), never from imported files; internet import limited to allowlisted sources, persona and description only, reviewed by agentlife-security and approved by the user.
@@ -34,14 +35,10 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
    - Then, if time allows: Codex as an independent reviewer, a second approval on the final diff, per-job time and context budget, Kiroween ambience (sound, elevator, flicker), two more fixture repos.
 4. Re-record the demo run with the new features, then the video. Cut order if late: step 3 extras first, never the demo.
 
-## Security (before the first push)
-First audit: data/security/2026-11-11-first-push.md (local only). Verdict: NOT safe to publish yet; the current tree is clean, the problems are in git history.
-Decisions for the user:
-1. Rewrite history before the first push (author/committer email to a GitHub noreply address; replace the other account's email in commit 4e16788 and two fake key-shaped test literals). Recommended: yes. Backup branch first; push only main.
-2. Set a repository-local noreply author email for new commits (user runs it).
-3. Accept the `C:\Users\me` test fixtures in scripts/security-allow.json (low).
-Tasks to schedule: Origin check on the world-server WebSocket (M3, before the freeze); `permissions: contents: read` in CI (L5); scan the demo export before committing it.
-Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git pre-push hook while it reports high or medium findings. Agent: agentlife-security (read-only, recommends).
+## Security
+Decisions taken by Kiro on the user's instruction (2026-11-11): history rewritten with git filter-repo (author and committer of all 160 commits -> krallenTv@users.noreply.github.com; the other account's email and two fake key-shaped test literals replaced). Backup bundle in data/backup/ (local, git-ignored). `C:\Users\me` fixtures accepted in scripts/security-allow.json. `pnpm security:scan`: clean.
+New commits: `pnpm session` sets the noreply identity itself. The local git config still has the personal email: the user must run `git config user.email krallenTv@users.noreply.github.com` in D:\Kiroween (Kiro does not change git config). Until then the push gate blocks any new commit made with the personal email.
+Still to do: `permissions: contents: read` in CI (audit L5).
 
 ## Specs
 | Spec | Tasks done | Branch | Notes |
@@ -55,7 +52,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
-| demo-replay | 7 / 7 | feat/demo-replay | Tasks 1–7 done. Task 7: README, docs/kiro-usage.md, docs/video-script.md (English). Decisions in the spec's design.md. Not looked at in a browser: try `pnpm --filter @agentlife/client dev` and open http://localhost:5173/?mode=demo (no world-server needed): computer, Start job, approve in the mailbox, speeds, Restart |
+| demo-replay | 7 / 7 | main | Done. Replay mode, Pages workflow, demo build guard, Playwright demo smoke test (passes, Edge), Kiroween polish, README/kiro-usage/video script. Not published yet |
 
 ## Manual browser checks (world-room task 12, user to do)
 Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_desk_1 -> repos + open_panel computer -> start_job -> approval -> approve -> developing/testing/reviewing -> delivered + report in ~10 s) passed. Run both servers (see above) and check:
