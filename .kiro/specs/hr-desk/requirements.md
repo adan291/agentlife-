@@ -55,3 +55,12 @@ Depends on project-registry and hotel-floors (HR office room, per-project teams)
 1. Property test: for any template content (random fields, nested objects, long strings), the generated agent file's permissions equal the tier's.
 2. Import: non-allowlisted URL refused; dangerous fields dropped; approval invalidated by a content change.
 3. Team rules: last architect/developer cannot be fired; working agent cannot be fired.
+
+### Requirement 6: Local intern (free model)
+
+**User Story:** As the user, I want a cheap helper for small tasks, so that simple work does not spend Kiro credits.
+
+#### Acceptance Criteria
+1. THE catalogue SHALL include a "Night intern" template (role `researcher`, tier `read-only`) whose runtime is the local Ollama endpoint (`LlmRuntime`, `qwen3.5:4b` by default) instead of kiro-cli.
+2. THE intern SHALL be usable only for read-only steps that need no tools: summaries, morning overviews, memory proposals, classification; the engine SHALL refuse to assign it to plan, develop or review steps.
+3. WHEN Ollama is not running, steps assigned to the intern SHALL fall back to `claude-haiku-5.5` and the report SHALL say so.

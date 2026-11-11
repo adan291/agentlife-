@@ -29,6 +29,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 21:15 (IDE): user's vision: a Habbo-style agent hotel where each real project is a room with its team. Plan: A project-registry (+ delivery as branch), B hotel-floors, C hr-desk, D pipeline-editor, E re-record demo + video. Kiro chose D:\AgentHotel as the allowed projects folder. S14 started. Pages runs were queued on GitHub.
 - 2026-11-11 21:25 (IDE): user asked for the HR rooms and the functional hotel, not only a demo. Specs hotel-floors, hr-desk, pipeline-editor written and queued as S15-S19 after S14 (project-registry).
 - 2026-11-11 22:00 (IDE): S14 done and merged after review. GitHub: Linux CI green, Windows CI failed on GitHub (passes in a clean local clone; the log needs a signed-in GitHub, gh not installed); Pages build still queued. Next: live check of project-registry with a small project in D:\AgentHotel, then S15.
+- 2026-11-11 22:40 (IDE): user asked for a full taskmap run with agents to 100 %. Created docs/TASKMAP.md, specs job-types, night-shift, project-memory, list-mode, hr-desk task 5 (Ollama intern), agent agentlife-verifier and the conductor `pnpm conduct` (build -> review -> verify -> fix -> merge). Started with row 2 (hotel-floors).
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
@@ -61,6 +62,10 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
 | hotel-floors | 0 / 5 | — | Lobby (Reception, elevator, HR door, directory), one floor per project, elevator with live floor status, per-project jobs (max 2 at once). S15-S16 |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
+| job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
+| night-shift | 0 / 4 | — | Night jobs, morning summary (row 4) |
+| project-memory | 0 / 3 | — | The Library (row 6) |
+| list-mode | 0 / 3 | — | List view and command palette (row 7) |
 | demo-replay | 7 / 7 | main | Done. Replay mode, Pages workflow, demo build guard, Playwright demo smoke test (passes, Edge), Kiroween polish, README/kiro-usage/video script. Not published yet |
 
 ## Manual browser checks (world-room task 12, user to do)

@@ -2,6 +2,8 @@
 
 This project is built across many Kiro sessions. A new session has no memory of previous ones, so the repository is the memory.
 
+Plan of record: docs/TASKMAP.md (run with `pnpm conduct`).
+
 ## Start of session
 1. Read the current status below (docs/STATUS.md) and the spec named in the user's request.
 2. Work only on the tasks the user asked for, in order. Do not start the next spec on your own.

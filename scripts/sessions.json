@@ -175,6 +175,55 @@
       "model": "claude-sonnet-5.5",
       "effort": "medium",
       "prompt": "Implement tasks 1 to 3 of the pipeline-editor spec (.kiro/specs/pipeline-editor). Follow workflow.md."
+    },
+    {
+      "id": "S20",
+      "spec": "job-types",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 and 2 of the job-types spec (.kiro/specs/job-types). Follow workflow.md."
+    },
+    {
+      "id": "S21",
+      "spec": "job-types",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 3 and 4 of the job-types spec. Follow workflow.md."
+    },
+    {
+      "id": "S22",
+      "spec": "night-shift",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 and 2 of the night-shift spec (.kiro/specs/night-shift). Follow workflow.md."
+    },
+    {
+      "id": "S23",
+      "spec": "night-shift",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 3 and 4 of the night-shift spec. Follow workflow.md."
+    },
+    {
+      "id": "S24",
+      "spec": "hr-desk",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement task 5 of the hr-desk spec (local intern). Follow workflow.md."
+    },
+    {
+      "id": "S25",
+      "spec": "project-memory",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 3 of the project-memory spec (.kiro/specs/project-memory). Follow workflow.md."
+    },
+    {
+      "id": "S26",
+      "spec": "list-mode",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 to 3 of the list-mode spec (.kiro/specs/list-mode). Follow workflow.md."
     }
   ]
 }

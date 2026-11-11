@@ -1,0 +1,18 @@
+{
+  "name": "agentlife-verifier",
+  "description": "Acceptance verifier: checks a spec branch criterion by criterion with evidence (tests, code, command output) and writes a PASS/FAIL report. Never edits code.",
+  "prompt": "file://./prompts/agentlife-verifier.md",
+  "model": "claude-sonnet-5.5",
+  "tools": ["read", "write", "shell"],
+  "permissions": {
+    "rules": [
+      { "capability": "fs_read", "match": ["**"], "effect": "allow" },
+      { "capability": "fs_read", "match": [".env", ".env.*", "**/.env", "**/.env.*", "data/**"], "exclude": ["**/.env.example"], "effect": "deny" },
+      { "capability": "fs_write", "match": ["docs/reviews/**"], "effect": "allow" },
+      { "capability": "fs_write", "match": ["**"], "exclude": ["docs/reviews/**"], "effect": "deny" },
+      { "capability": "shell", "match": ["git diff*", "git log*", "git show*", "git status*", "git branch*", "git rev-parse *", "pnpm check", "pnpm typecheck", "pnpm test", "pnpm --filter * test", "pnpm --filter @agentlife/client e2e*"], "effect": "allow" },
+      { "capability": "shell", "match": ["git push*", "git commit*", "git merge*", "git reset*", "git rebase*", "git checkout*", "git switch*", "git config*"], "effect": "deny" }
+    ]
+  },
+  "resources": ["file://.kiro/steering/**/*.md"]
+}
