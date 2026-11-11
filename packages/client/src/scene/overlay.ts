@@ -4,6 +4,8 @@ import { PALETTE } from "../palette.ts";
 import { bubbleTextStyle, labelStyle } from "./label-style.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { bubbleDurationMs, shortStatus } from "./timing.ts";
+import { prefersReducedMotion } from "./glow.ts";
+import { WorkingFx } from "./working-fx.ts";
 
 function label(text: string, size: number, fill: number): Text {
   return new Text({ text, style: labelStyle(size, fill), resolution: 2 });
@@ -20,6 +22,9 @@ export class AvatarOverlay {
   private readonly tag = new Container();
   private bubbleUntil = 0;
   private state: AgentState | null = null;
+  /** Sign of the state above the ghost (thought cloud, candle, envelope, ...). Only agents have one. */
+  private readonly fx: WorkingFx | null;
+  private readonly reducedMotion = prefersReducedMotion();
 
   constructor(
     private name: string,
@@ -29,6 +34,8 @@ export class AvatarOverlay {
   ) {
     this.container.addChild(this.tag);
     this.drawTag();
+    this.fx = hasStatus ? new WorkingFx() : null;
+    if (this.fx) this.container.addChild(this.fx.container);
 
     if (hasStatus) {
       this.badgeRow.position.set(0, -84);
@@ -65,6 +72,7 @@ export class AvatarOverlay {
   /** Update the badge icon and short text. Takes effect on the next frame at the latest. */
   setState(state: AgentState, text?: string): void {
     this.state = state;
+    this.fx?.setState(state, Date.now());
     const frame = this.sprites.badge(state);
     this.badgeSprite.texture = frame.texture;
     this.badgeSprite.anchor.set(frame.anchor.x, frame.anchor.y);
@@ -107,6 +115,7 @@ export class AvatarOverlay {
 
   update(now: number, feetX: number, feetY: number): void {
     this.container.position.set(Math.round(feetX), Math.round(feetY));
+    this.fx?.update(now, this.reducedMotion);
     if (this.bubble.visible && now >= this.bubbleUntil) this.bubble.visible = false;
   }
 

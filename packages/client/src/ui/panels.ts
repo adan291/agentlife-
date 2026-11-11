@@ -1,7 +1,7 @@
 import type { ClientMsg, PanelName, ServerMsg } from "@agentlife/shared";
-import { renderBoard } from "./board.ts";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
+import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { PanelState } from "./panel-state.ts";
 import { UI_COLOURS } from "./theme.ts";
@@ -17,6 +17,8 @@ const CSS = `
 .al-panel h3, .al-panel h4, .al-panel h5, .al-panel h6 { margin: var(--al-s2) 0 var(--al-s1); color: ${UI_COLOURS.accentText}; }
 .al-panel h3 { margin: 0; }
 .al-panel label { display: block; margin: var(--al-s2) 0; }
+.al-field { margin: var(--al-s2) 0; }
+.al-repo-line { margin: var(--al-s2) 0; }
 .al-input { display: block; width: 100%; box-sizing: border-box; margin-top: var(--al-s1); padding: var(--al-s1); }
 .al-row { display: flex; gap: var(--al-s2); margin-top: var(--al-s2); }
 .al-card { border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s2); margin: var(--al-s2) 0; }
@@ -30,9 +32,35 @@ const CSS = `
 .al-muted { color: ${UI_COLOURS.muted}; }
 .al-error { color: ${UI_COLOURS.error}; }
 .al-timeline { padding-left: var(--al-s5); white-space: pre-wrap; }
+.al-panel[data-wide="true"] { width: min(960px, calc(100% - var(--al-s4))); }
+.al-wrap { flex-wrap: wrap; }
+.al-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--al-s1) var(--al-s3); margin: 0 0 var(--al-s2); }
+.al-facts dt { color: ${UI_COLOURS.muted}; }
+.al-facts dd { margin: 0; overflow-wrap: anywhere; }
+.al-table-wrap { overflow-x: auto; }
+.al-table { width: 100%; border-collapse: collapse; }
+.al-table th, .al-table td { text-align: left; padding: var(--al-s1) var(--al-s2); border-bottom: 1px solid var(--al-border); white-space: nowrap; }
+.al-table th { color: ${UI_COLOURS.accentText}; }
+.al-plain { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: var(--al-s2); margin: var(--al-s2) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.al-plain code, .al-diff code { font: inherit; }
+.al-diff { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: var(--al-s2); margin: var(--al-s2) 0; }
+.al-credits { margin-top: var(--al-s3); }
+.al-badge { display: inline-block; flex: none; padding: 0 var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-s1); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.muted}; }
+.al-badge[data-verdict="pass"] { color: ${UI_COLOURS.add}; background: ${UI_COLOURS.addBg}; border-color: ${UI_COLOURS.add}; }
+.al-badge[data-verdict="fail"] { color: ${UI_COLOURS.del}; background: ${UI_COLOURS.delBg}; border-color: ${UI_COLOURS.del}; }
+.al-report-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--al-s3); margin: var(--al-s3) 0 var(--al-s2); }
+.al-report-facts { margin: 0 0 var(--al-s2); padding-left: var(--al-s5); }
+.al-report-item { display: flex; align-items: center; gap: var(--al-s3); width: 100%; margin: var(--al-s1) 0; padding: var(--al-s2); text-align: left; background: none; color: inherit; font: inherit; cursor: pointer; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-sizing: border-box; }
+.al-report-item:hover { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
+.al-report-item[data-unread="true"] { border-color: var(--al-accent); }
+.al-report-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-new { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s1); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; }
 `;
 
-const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job board" };
+const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job" };
+
+/** How long the job card waits after a `work` message before it asks for fresh numbers. */
+export const DETAILS_REFRESH_MS = 1500;
 
 export interface Panels {
   /** Feed every server message; opens panels and refreshes the open one. */
@@ -40,7 +68,16 @@ export interface Panels {
   close(): void;
   /** Opens a panel with the data already on the client, without walking to the furniture. */
   open(panel: PanelName): void;
+  /** Opens the mailbox with this report in the viewer (toast "Open report"). */
+  openReport(reportId: string): void;
   readonly state: PanelState;
+}
+
+export interface PanelHooks {
+  /** Reports that were delivered and not opened yet; the mailbox marks them. */
+  unreadReports?(): ReadonlySet<string>;
+  /** A report was opened in the viewer. */
+  onReportOpened?(reportId: string): void;
 }
 
 /**
@@ -48,7 +85,12 @@ export interface Panels {
  * a scrollable body and an optional footer for actions. Hidden panels take no space and never block the canvas.
  * `onChange` runs after every re-render (open, close, refresh).
  */
-export function createPanels(send: (msg: ClientMsg) => void, onChange: () => void = () => {}, host: HTMLElement = document.body): Panels {
+export function createPanels(
+  send: (msg: ClientMsg) => void,
+  onChange: () => void = () => {},
+  host: HTMLElement = document.body,
+  hooks: PanelHooks = {},
+): Panels {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -78,6 +120,7 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
   root.append(header, body, footer);
   host.appendChild(root);
 
+  let lastViewKey = "";
   const render = () => {
     if (!state.open) {
       root.hidden = true;
@@ -88,21 +131,74 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
+    root.dataset["wide"] = String(state.open === "board" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
         : state.open === "mailbox"
-          ? { body: renderMailbox(document, state.data, { decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }) }) }
-          : { body: renderBoard(document, state.data) };
+          ? {
+              body: renderMailbox(
+                document,
+                state.data,
+                {
+                  decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }),
+                  openReport: (reportId) => openReport(reportId),
+                  back: () => {
+                    state.back();
+                    render();
+                  },
+                },
+                { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
+              ),
+            }
+          : {
+              body: renderJobPanel(document, state.data, state.viewing, {
+                view: (artifactId) => {
+                  state.view(artifactId);
+                  render();
+                },
+                back: () => {
+                  state.back();
+                  render();
+                },
+              }),
+            };
+    // A refresh of the same view keeps the reading position; opening another view starts at the top.
+    const viewKey = `${state.open}:${state.viewing ?? ""}`;
+    const keep = !wasHidden && viewKey === lastViewKey ? body.scrollTop : 0;
+    lastViewKey = viewKey;
     body.replaceChildren(content.body);
+    body.scrollTop = keep;
     footer.replaceChildren(...(content.footer ? [content.footer] : []));
     footer.hidden = !content.footer;
     if (wasHidden) closeBtn.focus();
     onChange();
   };
 
+  const openReport = (reportId: string) => {
+    if (state.open !== "mailbox") state.apply({ type: "open_panel", panel: "mailbox" });
+    state.view(reportId);
+    hooks.onReportOpened?.(reportId);
+    render();
+  };
+
+  const requestDetails = () => {
+    const job = state.data.job;
+    if (job) send({ type: "job_details", taskId: job.taskId });
+  };
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleRefresh = () => {
+    if (refreshTimer !== undefined) return;
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      if (state.open === "board") requestDetails();
+    }, DETAILS_REFRESH_MS);
+  };
+
   const close = () => {
     state.close();
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
     render();
   };
   closeBtn.addEventListener("click", close);
@@ -115,9 +211,16 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     close,
     open(panel) {
       if (state.apply({ type: "open_panel", panel })) render();
+      if (panel === "board") requestDetails();
     },
+    openReport,
     handle(msg) {
-      if (state.apply(msg)) render();
+      const changed = state.apply(msg);
+      if (state.open === "board") {
+        if (msg.type === "open_panel" || msg.type === "job_update") requestDetails();
+        else if (msg.type === "work") scheduleRefresh();
+      }
+      if (changed) render();
     },
   };
 }

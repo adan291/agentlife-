@@ -110,3 +110,25 @@ export function shade(colour: number, factor: number): number {
   const b = Math.min(255, Math.round((colour & 0xff) * factor));
   return (r << 16) | (g << 8) | b;
 }
+
+function linear(v: number): number {
+  const s = v / 255;
+  return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+/** WCAG relative luminance of a 0xRRGGBB colour. */
+export function luminanceOf(colour: number): number {
+  return 0.2126 * linear((colour >> 16) & 0xff) + 0.7152 * linear((colour >> 8) & 0xff) + 0.0722 * linear(colour & 0xff);
+}
+
+/** WCAG contrast ratio of two 0xRRGGBB colours, 1 to 21. */
+export function contrastOf(a: number, b: number): number {
+  const la = luminanceOf(a);
+  const lb = luminanceOf(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** White or the dark tag colour, whichever reads better on `background` (status icons sit on bright and on dark discs). */
+export function glyphColourOn(background: number): number {
+  return contrastOf(0xffffff, background) >= contrastOf(PALETTE.tagBg, background) ? 0xffffff : PALETTE.tagBg;
+}

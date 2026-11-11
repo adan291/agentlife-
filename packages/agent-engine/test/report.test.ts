@@ -221,3 +221,18 @@ describe("reportStep", () => {
     expect(collectFacts(deps, "nope")).toEqual([]);
   });
 });
+
+describe("Run facts with work numbers", () => {
+  it("shows the model, the context peak and the file counts of a step, and leaves out what is unknown", () => {
+    const facts: StepFact[] = [
+      { step: "develop", status: "ok", durationMs: 22_000, model: "claude-test", contextPeak: 24.4, filesRead: 2, filesEdited: 1 },
+      { step: "test", status: "ok", durationMs: 6_000 },
+      { step: "review", status: "ok", model: "bad`model", filesRead: 3 },
+    ];
+    const md = buildReport(PASSING, facts).markdown;
+    expect(md).toContain("- **develop:** ok, 22.0 s, `claude-test`, context 24%, 2 read, 1 edited");
+    expect(md).toContain("- **test:** ok, 6.0 s\n");
+    // A model name is untrusted text: it goes into a code span and cannot close it.
+    expect(md).toContain("- **review:** ok, `bad'model`, 3 read, 0 edited");
+  });
+});

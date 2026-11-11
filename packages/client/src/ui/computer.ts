@@ -1,5 +1,6 @@
 import { GOAL_MAX_CHARS } from "@agentlife/shared";
 import type { PanelData } from "./panel-state.ts";
+import { createSelect } from "./select.ts";
 
 export interface ComputerActions {
   startJob(repoId: string, goal: string): void;
@@ -36,22 +37,32 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
     }
     if (!data.repos.some((r) => r.id === repoId)) repoId = data.repos[0]!.id;
 
-    const repoLabel = doc.createElement("label");
-    repoLabel.textContent = "Repository";
-    const select = doc.createElement("select");
-    select.className = "al-input";
-    for (const r of data.repos) {
-      const o = doc.createElement("option");
-      o.value = r.id;
-      o.textContent = r.description ? `${r.name} - ${r.description}` : r.name;
-      o.selected = r.id === repoId;
-      select.appendChild(o);
+    // One repository: say so, instead of a one-item dropdown that looks as if there were more to choose from.
+    const repoBlock = doc.createElement("div");
+    const only = data.repos.length === 1 ? data.repos[0] : undefined;
+    if (only) {
+      const line = doc.createElement("p");
+      line.className = "al-repo-line";
+      line.textContent = `Allowed repositories: 1 (${only.name})`;
+      if (only.description) line.title = only.description;
+      repoBlock.appendChild(line);
+    } else {
+      // A div, not a label: a label would forward clicks on its text to the button and toggle the list.
+      const repoLabel = doc.createElement("div");
+      repoLabel.className = "al-field";
+      repoLabel.append(doc.createTextNode("Repository"));
+      repoLabel.appendChild(
+        createSelect(doc, {
+          label: "Repository",
+          value: repoId,
+          options: data.repos.map((r) => ({ value: r.id, label: r.description ? `${r.name} - ${r.description}` : r.name })),
+          onChange: (v) => {
+            repoId = v;
+          },
+        }),
+      );
+      repoBlock.appendChild(repoLabel);
     }
-    select.addEventListener("change", () => {
-      repoId = select.value;
-    });
-    repoLabel.appendChild(select);
-
     const goalLabel = doc.createElement("label");
     goalLabel.textContent = "Goal";
     const area = doc.createElement("textarea");
@@ -82,11 +93,11 @@ export function createComputerPanel(doc: Document, actions: ComputerActions) {
         area.focus();
         return;
       }
-      actions.startJob(select.value, g);
+      actions.startJob(repoId, g);
       goal = "";
     });
 
-    root.append(repoLabel, goalLabel);
+    root.append(repoBlock, goalLabel);
     return { body: root, footer: btn };
   };
 }

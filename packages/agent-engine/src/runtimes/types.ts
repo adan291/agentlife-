@@ -14,9 +14,12 @@ export interface RuntimeInput {
 }
 
 export type RuntimeEvent =
-  | { kind: "progress"; text: string }
+  /** `tool` is set for file reads and edits, so counting does not parse the text. `file` is relative to the cwd. */
+  | { kind: "progress"; text: string; tool?: { kind: "read" | "edit"; file: string } }
   | { kind: "output"; text: string }
-  | { kind: "usage"; credits?: number; tokens?: number };
+  | { kind: "usage"; credits?: number; tokens?: number }
+  /** Context window use of the agent session, 0 to 100. */
+  | { kind: "context"; pct: number };
 
 export interface AgentRuntime {
   readonly id: string;

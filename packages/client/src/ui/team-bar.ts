@@ -1,9 +1,10 @@
 import { AGENT_IDS, ROLE_INFO } from "@agentlife/shared";
-import type { AgentId, AgentState, ServerMsg } from "@agentlife/shared";
+import type { AgentId, AgentState, AgentWork, ServerMsg } from "@agentlife/shared";
 import { ROLE_COLOURS, STATE_COLOURS } from "../palette.ts";
 import { formatDuration } from "./duration.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
 import type { Shell } from "./shell.ts";
+import { WorkModel, workView, workVisible } from "./work.ts";
 
 export interface TeamRow {
   agentId: AgentId;
@@ -48,6 +49,7 @@ export function parseBuilderStarted(text: string | undefined): string | null {
 /** Rows of the team bar and what feeds them. Pure: the DOM layer renders `rows()`. */
 export class TeamModel {
   private readonly byId = new Map<AgentId, TeamRow>();
+  private readonly work = new WorkModel();
 
   constructor(now = Date.now()) {
     for (const id of AGENT_IDS) this.byId.set(id, { agentId: id, state: "idle", since: now });
@@ -63,8 +65,21 @@ export class TeamModel {
     return this.byId.get(id)!;
   }
 
+  /** What the agent works on, or undefined when it is not busy (see `workVisible`). */
+  workOf(id: AgentId): AgentWork | undefined {
+    const row = this.byId.get(id);
+    return row && workVisible(row.state) ? this.work.get(id) : undefined;
+  }
+
   /** Feed every server message. Returns true when a row changed. */
   apply(msg: ServerMsg, now = Date.now()): boolean {
+    // Both parts always run: `||` on the calls would skip the second one.
+    const rowChanged = this.applyRow(msg, now);
+    const workChanged = this.work.apply(msg);
+    return rowChanged || workChanged;
+  }
+
+  private applyRow(msg: ServerMsg, now: number): boolean {
     switch (msg.type) {
       case "welcome": {
         for (const id of AGENT_IDS) this.byId.set(id, { agentId: id, state: "idle", since: now });
@@ -143,6 +158,16 @@ const CSS = `
 .al-team-sub { display: block; color: ${UI_COLOURS.muted}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-team-sub[hidden] { display: none; }
 .al-team-state::before { content: "\\25CF"; color: var(--al-row-colour); margin-right: 0.5ch; }
+.al-team-work { display: block; margin-top: var(--al-s1); padding-top: var(--al-s1); border-top: 1px dashed var(--al-border); }
+.al-team-work[hidden] { display: none; }
+.al-work-title { color: ${UI_COLOURS.text}; font-weight: bold; }
+.al-work-line { display: block; color: ${UI_COLOURS.muted}; }
+.al-work-step { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-work-ctx { display: flex; align-items: center; gap: var(--al-s1); color: ${UI_COLOURS.muted}; }
+.al-meter { display: inline-block; width: 40px; height: 6px; box-sizing: border-box; background: ${UI_COLOURS.inputBg}; border: 1px solid var(--al-border); border-radius: var(--al-s1); overflow: hidden; }
+.al-meter > span { display: block; height: 100%; width: var(--al-pct, 0%); background: ${UI_COLOURS.accent}; }
+.al-meter[data-high="true"] > span { background: ${UI_COLOURS.error}; }
+.al-meter[hidden] { display: none; }
 `;
 
 export interface TeamBar {
@@ -156,7 +181,16 @@ interface RowEls {
   model: HTMLElement;
   activity: HTMLElement;
   elapsed: HTMLElement;
+  work: HTMLElement;
+  workTitle: HTMLElement;
+  workStep: HTMLElement;
+  workCtxText: HTMLElement;
+  workMeter: HTMLElement;
+  workFiles: HTMLElement;
 }
+
+/** The context meter turns red at the point where kiro-cli starts to summarise (80 %). */
+export const CONTEXT_HIGH_PCT = 80;
 
 /** Agent list in the side bar with state, model, last activity and time in state. Click a row to focus the agent. */
 export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): TeamBar {
@@ -215,13 +249,58 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     modelEl.className = "al-team-sub";
     const activity = document.createElement("span");
     activity.className = "al-team-sub";
-    text.append(top, state, modelEl, activity);
+    const work = document.createElement("span");
+    work.className = "al-team-work";
+    work.hidden = true;
+    const workTitle = document.createElement("span");
+    workTitle.className = "al-team-sub al-work-title";
+    const workLine = document.createElement("span");
+    workLine.className = "al-work-line";
+    const workStep = document.createElement("span");
+    workStep.className = "al-work-step";
+    const workCtx = document.createElement("span");
+    workCtx.className = "al-work-ctx";
+    const workMeter = document.createElement("span");
+    workMeter.className = "al-meter";
+    workMeter.setAttribute("role", "meter");
+    workMeter.setAttribute("aria-label", "Context used");
+    workMeter.setAttribute("aria-valuemin", "0");
+    workMeter.setAttribute("aria-valuemax", "100");
+    workMeter.appendChild(document.createElement("span"));
+    const workCtxText = document.createElement("span");
+    workCtx.append(workMeter, workCtxText);
+    workLine.append(workStep);
+    const workFiles = document.createElement("span");
+    workFiles.className = "al-team-sub";
+    work.append(workTitle, workLine, workCtx, workFiles);
+    text.append(top, state, modelEl, activity, work);
     button.append(ghost, text);
     button.addEventListener("click", () => onFocus(id));
     root.appendChild(button);
-    els.set(id, { button, state, model: modelEl, activity, elapsed });
+    els.set(id, { button, state, model: modelEl, activity, elapsed, work, workTitle, workStep, workCtxText, workMeter, workFiles });
   }
   shell.side.appendChild(root);
+
+  /** Fills the work block of a busy agent, or hides it. */
+  const paintWork = (id: AgentId, now: number) => {
+    const e = els.get(id)!;
+    const w = model.workOf(id);
+    e.work.hidden = !w;
+    if (!w) return;
+    const v = workView(w, now);
+    e.workTitle.textContent = v.title;
+    e.workTitle.title = v.title;
+    e.workStep.textContent = `${v.step} · ${v.elapsed}`;
+    e.workCtxText.textContent = `ctx ${v.contextText}`;
+    e.workMeter.hidden = v.context === undefined;
+    if (v.context !== undefined) {
+      e.workMeter.style.setProperty("--al-pct", `${Math.round(v.context)}%`);
+      e.workMeter.dataset["high"] = String(v.context >= CONTEXT_HIGH_PCT);
+      e.workMeter.setAttribute("aria-valuenow", String(Math.round(v.context)));
+    }
+    e.workFiles.textContent = v.files;
+    e.work.title = `${v.title}\nStep: ${v.step}, ${v.elapsed}\nContext: ${v.contextText}\nFiles: ${v.files}`;
+  };
 
   const paint = (row: TeamRow, now: number) => {
     const e = els.get(row.agentId)!;
@@ -240,6 +319,7 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     e.activity.title = row.activity ?? "";
     e.activity.hidden = !row.activity;
     e.elapsed.textContent = elapsedText(row, now);
+    paintWork(row.agentId, now);
     const full = `${ROLE_INFO[row.agentId].name}: ${stateText}`;
     e.button.title = `${full}. Click to find it in the room.`;
     e.button.setAttribute("aria-label", full);
@@ -252,7 +332,10 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
   // Only the elapsed times change between events.
   setInterval(() => {
     const now = Date.now();
-    for (const row of model.rows()) els.get(row.agentId)!.elapsed.textContent = elapsedText(row, now);
+    for (const row of model.rows()) {
+      els.get(row.agentId)!.elapsed.textContent = elapsedText(row, now);
+      if (model.workOf(row.agentId)) paintWork(row.agentId, now);
+    }
   }, 1000);
 
   return {

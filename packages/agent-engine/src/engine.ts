@@ -60,6 +60,16 @@ function usesRealPipeline(config: EngineConfig): boolean {
   return !forceFake() && ROLES.some((r) => config.agents[r].runtime === "kiro-cli");
 }
 
+/** Model label per role as shown to users: "fake" under RUNTIME=fake, else the configured model (if any). */
+export function roleModels(config: EngineConfig): Partial<Record<Role, string>> {
+  const out: Partial<Record<Role, string>> = {};
+  for (const role of ROLES) {
+    const label = forceFake() ? "fake" : config.agents[role].model;
+    if (label) out[role] = label;
+  }
+  return out;
+}
+
 export function buildRuntimes(config: EngineConfig, fakeDelayMs: number, kiroHome: string): Record<Role, AgentRuntime> {
   const out = {} as Record<Role, AgentRuntime>;
   const models: Partial<Record<Role, string>> = {};
@@ -91,9 +101,10 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       logger.info("role agents installed", { dir: installed.dir, agents: installed.installed });
     }
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
+    const models = roleModels(config);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger, activity })
-      : createRuntimeSteps({ runtimes, store, logger, activity });
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger, activity, models })
+      : createRuntimeSteps({ runtimes, store, logger, activity, models });
   }
   const ambient =
     opts.ambient ??

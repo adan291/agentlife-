@@ -112,6 +112,21 @@ function oneLine(text: string): string {
   return t.length > MAX_PROGRESS_CHARS ? `${t.slice(0, MAX_PROGRESS_CHARS - 1)}…` : t;
 }
 
+/**
+ * Context use of the session, from a `session_info_update` record. kiro-cli 3.1 puts it in
+ * `_meta.kiro.contextUsage.usagePercentage` (seen in real runs); `contextUsagePercentage` is the shape
+ * of the older test fixtures. Anything that is not a finite number gives undefined.
+ */
+export function contextPctOf(record: KiroRecord): number | undefined {
+  if (record.type !== "sessionUpdate") return undefined;
+  const u = record.data.update;
+  if (u.sessionUpdate !== "session_info_update") return undefined;
+  const meta = u["_meta"] as { kiro?: { contextUsage?: { usagePercentage?: unknown } } } | undefined;
+  const raw = meta?.kiro?.contextUsage?.usagePercentage ?? u["contextUsagePercentage"];
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  return Math.round(Math.min(100, Math.max(0, raw)) * 10) / 10;
+}
+
 function abortReason(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : new Error("aborted");
 }
@@ -150,8 +165,8 @@ export class KiroCliRuntime implements AgentRuntime {
     ];
   }
 
-  private progressFor(record: KiroRecord, cwd: string): string | undefined {
-    if (record.type === "runStarted") return "started";
+  private progressFor(record: KiroRecord, cwd: string): { text: string; tool?: { kind: "read" | "edit"; file: string } } | undefined {
+    if (record.type === "runStarted") return { text: "started" };
     if (record.type !== "sessionUpdate") return undefined;
     const u = record.data.update;
     if (u.sessionUpdate !== "tool_call") return undefined;
@@ -163,7 +178,12 @@ export class KiroCliRuntime implements AgentRuntime {
       // Relative to the working directory when inside it; never print an absolute path outside it.
       where = isInside(cwd, p) ? path.relative(cwd, p) || "." : "(outside)";
     }
-    return oneLine(where ? `${title}: ${where}` : title);
+    const kind = u["kind"];
+    // Files outside the working directory are shown in the terminal as "(outside)" but never counted:
+    // they would all collapse into one entry and under-count the work.
+    const tool: { kind: "read" | "edit"; file: string } | undefined =
+      where && where !== "(outside)" && (kind === "read" || kind === "edit") ? { kind: kind === "read" ? "read" : "edit", file: where } : undefined;
+    return { text: oneLine(where ? `${title}: ${where}` : title), ...(tool ? { tool } : {}) };
   }
 
   async *run(input: RuntimeInput): AsyncIterable<RuntimeEvent> {
@@ -204,7 +224,9 @@ export class KiroCliRuntime implements AgentRuntime {
       if (parsed.kind !== "record") return;
       const rec = parsed.record;
       const progress = this.progressFor(rec, input.cwd);
-      if (progress) channel.push({ kind: "progress", text: progress });
+      if (progress) channel.push({ kind: "progress", ...progress });
+      const pct = contextPctOf(rec);
+      if (pct !== undefined) channel.push({ kind: "context", pct });
       if (rec.type === "sessionUpdate") {
         const u = rec.data.update;
         if (u.sessionUpdate === "agent_message_chunk") {

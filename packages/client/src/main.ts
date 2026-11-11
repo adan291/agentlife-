@@ -13,7 +13,8 @@ import { createTooltip } from "./ui/tooltip.ts";
 import { createShell } from "./ui/shell.ts";
 import { createStepper } from "./ui/stepper.ts";
 import { createTeamBar } from "./ui/team-bar.ts";
-import { createYourTurnToast } from "./ui/toast.ts";
+import { createToasts } from "./ui/toast.ts";
+import { reportVerdict } from "./ui/report-viewer.ts";
 
 const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
 
@@ -61,35 +62,63 @@ hud.setZoomLabel(world.zoom);
 
 const mailbox = new MailboxState();
 
-const panels = createPanels(
-  (msg) => transport.send(msg),
-  () => turn.update(mailbox.pendingCount, panels.state.open),
-  stageEl,
-);
+/** Toasts follow the pending approvals, the unread reports and the open panel; call after any of them changes. */
+function refreshToasts(): void {
+  const id = mailbox.latestUnread();
+  const report = id ? panels.state.data.reports.find((r) => r.reportId === id) : undefined;
+  toasts.update({
+    pending: mailbox.pendingCount,
+    openPanel: panels.state.open,
+    unreadReport: report ? { reportId: report.reportId, verdict: reportVerdict(report) } : undefined,
+  });
+}
+
+const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl, {
+  unreadReports: () => mailbox.unreadIds(),
+  onReportOpened: (id) => void mailbox.markRead(id),
+});
 const guide = createGuide(undefined, stageEl);
 const terminal = createTerminal(shell);
 theme.onChange(() => shell.refresh());
 const teamBar = createTeamBar((id) => world.focusAgent(id), shell);
 
-/** Opens the mailbox from the toast or the stepper: no walking, the client already holds the data. */
-function openMailbox(): void {
+/** Clears the mailbox dot: the user is looking at the mailbox now. */
+function seeMailbox(): void {
   if (mailbox.apply({ type: "open_panel", panel: "mailbox" }, panels.state.open)) {
     world.setMailboxBadge(mailbox.pendingCount, mailbox.unseenReport);
   }
+}
+
+/** Opens the mailbox from the toast or the stepper: no walking, the client already holds the data. */
+function openMailbox(): void {
+  seeMailbox();
   panels.open("mailbox");
 }
-const stepper = createStepper(openMailbox, shell.topCentre);
-const turn = createYourTurnToast(openMailbox, shell.banners);
+const stepper = createStepper(openMailbox, shell.topCentre, () => panels.open("board"));
+theme.onChange(() => stepper.refresh());
+const toasts = createToasts(
+  {
+    openMailbox,
+    openReport: (id) => {
+      seeMailbox();
+      panels.openReport(id);
+    },
+  },
+  shell.banners,
+);
 
 transport.onStatus((s) => hud.setStatus(s));
 transport.onMessage((msg) => {
+  // Before the mailbox state sees it: a report that arrives now is news, a re-sent one is not.
+  const delivered = msg.type === "report" && mailbox.isFresh(msg);
   world.handle(msg);
   if (mailbox.apply(msg, panels.state.open)) {
     world.setMailboxBadge(mailbox.pendingCount, mailbox.unseenReport);
   }
   panels.handle(msg);
   teamBar.handle(msg);
-  turn.update(mailbox.pendingCount, panels.state.open);
+  if (delivered) world.notifyReportDelivered();
+  refreshToasts();
   if (msg.type === "welcome") {
     hud.setZoomLabel(world.zoom);
     terminal.seed(msg.activity ?? []);

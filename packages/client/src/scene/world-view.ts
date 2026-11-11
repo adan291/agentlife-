@@ -14,6 +14,8 @@ import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
+import { WorkModel } from "../ui/work.ts";
+import { MonitorFx } from "./monitor-fx.ts";
 import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
 import type { Point } from "./camera.ts";
 import { prefersReducedMotion } from "./glow.ts";
@@ -22,6 +24,9 @@ import type { HoverSink } from "../ui/tooltip.ts";
 
 /** Free space kept around the room when choosing the zoom (per side). */
 const FIT_MARGIN_PX = 16;
+
+/** What the Architect says when a report arrives. */
+export const REPORT_DELIVERED_TEXT = "Report delivered";
 
 export interface WorldViewHooks {
   /** Server `error` messages (no_path, rate_limited, ...). */
@@ -56,12 +61,18 @@ export class WorldView {
   private badge: MailboxBadge | null = null;
   private badgeCount = 0;
   private badgeDot = false;
+  /** When the last report arrived; the mailbox calls for attention for a few seconds from then. */
+  private mailboxAttentionSince: number | null = null;
   private reducedMotion = prefersReducedMotion();
   /** Scene point the camera is held on after a team bar click; null: room centre. */
   private focus: Point | null = null;
   private focusUntil = 0;
   private rootTarget: Point = { x: 0, y: 0 };
   private readonly agentStatus = new Map<AgentId, { state?: AgentState; text?: string | undefined }>();
+  /** What each agent works on, for the tooltip (the team bar keeps its own copy). */
+  private readonly work = new WorkModel();
+  /** Desk monitors that light up while the agent at the desk works. */
+  private readonly monitors = new Map<AgentId, MonitorFx>();
 
   constructor(
     private readonly app: Application,
@@ -93,6 +104,12 @@ export class WorldView {
     this.badge?.set(count, dot);
   }
 
+  /** A report was delivered: the Architect says so, and the mailbox glows brightly and bounces for a few seconds. */
+  notifyReportDelivered(now = Date.now()): void {
+    this.mailboxAttentionSince = now;
+    this.avatars.get("architect")?.overlay.say(REPORT_DELIVERED_TEXT, now);
+  }
+
   /**
    * Pans the camera to an agent and pins its tooltip for 2 s (team bar click). The camera returns to
    * the room centre after `FOCUS_MS`. Returns false when the agent is not in the room.
@@ -110,7 +127,7 @@ export class WorldView {
 
   private agentTip(agent: AgentId) {
     const s = this.agentStatus.get(agent);
-    return agentTooltip(agent, s?.state, s?.text, this.models[agent]);
+    return agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
   }
 
   setZoom(z: Zoom): void {
@@ -126,6 +143,7 @@ export class WorldView {
   }
 
   handle(msg: ServerMsg, now = Date.now()): void {
+    this.work.apply(msg);
     switch (msg.type) {
       case "welcome":
         this.hooks.tooltip?.hide();
@@ -142,6 +160,7 @@ export class WorldView {
         break;
       case "agent_state":
         this.agentStatus.set(msg.agentId, { state: msg.state, text: msg.text });
+        this.monitors.get(msg.agentId)?.setActive(msg.state === "working");
         this.avatars.get(msg.agentId)?.overlay.setState(msg.state, msg.text);
         if (msg.agentId === "builder" && msg.state === "idle") this.avatars.get("builder")?.overlay.setName(builderTagName("Builder", null));
         break;
@@ -171,8 +190,11 @@ export class WorldView {
       const p = easeToward({ x: this.root.x, y: this.root.y }, this.rootTarget);
       this.root.position.set(p.x, p.y);
     }
-    for (const f of this.furni) f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion);
-    this.badge?.update(now, this.reducedMotion);
+    for (const f of this.furni) {
+      f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion, f.def.interaction === "mailbox" ? this.mailboxAttentionSince : null);
+    }
+    this.badge?.update(now, this.reducedMotion, this.mailboxAttentionSince);
+    for (const m of this.monitors.values()) m.update(now, this.reducedMotion);
     for (const { view, overlay } of this.avatars.values()) {
       view.update(now);
       overlay.update(now, view.feetX, view.feetY);
@@ -193,6 +215,13 @@ export class WorldView {
       this.furni.push(fv);
       this.objects.addChild(fv.sprite);
       if (fv.glow) this.objects.addChild(fv.glow);
+      const desk = /^desk_(architect|developer|qa|builder)$/.exec(placed.itemId);
+      if (desk) {
+        // The monitor of an agent's desk lights up while the agent works; it sits just above the desk sprite.
+        const mfx = new MonitorFx(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
+        this.objects.addChild(mfx.container);
+        this.monitors.set(desk[1] as AgentId, mfx);
+      }
       if (fv.def.interaction === "mailbox") {
         const p = tileToScreen({ x: placed.x, y: placed.y, z });
         this.badge = new MailboxBadge(p.sx, p.sy - fv.def.height * HEIGHT_UNIT - 16);
@@ -204,6 +233,7 @@ export class WorldView {
     this.models = msg.models ?? {};
     this.agentStatus.clear();
     for (const a of msg.agents) this.agentStatus.set(a.agentId, { state: a.state, text: a.text });
+    for (const a of msg.agents) this.monitors.get(a.agentId)?.setActive(a.state === "working");
     const status = new Map(msg.agents.map((a) => [a.agentId, a]));
     for (const a of msg.avatars) {
       const role: RoleKey = typeof a.id === "string" ? a.id : "user";
@@ -245,6 +275,7 @@ export class WorldView {
     this.avatars.clear();
     for (const c of this.objects.removeChildren()) c.destroy();
     this.furni = [];
+    this.monitors.clear();
     this.room?.destroy();
     this.room = null;
   }

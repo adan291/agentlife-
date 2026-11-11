@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { PALETTE } from "../palette.ts";
-import { bounceOffset } from "./glow.ts";
+import { attentionLift, bounceOffset } from "./glow.ts";
 
 /** Round badge above the mailbox: pending approvals as a number, an unread report as a dot. */
 export class MailboxBadge {
@@ -44,9 +44,9 @@ export class MailboxBadge {
     this.container.visible = count > 0 || dot;
   }
 
-  update(now: number, reduced: boolean): void {
+  update(now: number, reduced: boolean, attentionSince: number | null = null): void {
     if (!this.container.visible) return;
-    this.container.y = this.baseY + (this.count > 0 ? bounceOffset(now, reduced) : 0);
+    this.container.y = this.baseY + (this.count > 0 ? bounceOffset(now, reduced) : 0) + attentionLift(now, attentionSince, reduced);
   }
 
   destroy(): void {

@@ -8,8 +8,17 @@ import {
   PROTOCOL_VERSION,
   ServerMsgSchema,
 } from "@agentlife/shared";
-import type { ActivityLine, AgentEvent, AgentId, Approval, ErrorCode, Report, ServerMsg, WorldSim } from "@agentlife/shared";
+import type { ActivityLine, AgentEvent, AgentId, AgentWork, Approval, ErrorCode, JobState, Report, ServerMsg, StepName, WorldSim } from "@agentlife/shared";
 import type { EngineLink } from "./engine-link.ts";
+import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
+
+const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
+  analyzing: "analyze",
+  developing: "develop",
+  testing: "test",
+  reviewing: "review",
+  report_ready: "report",
+};
 
 export interface GatewayOptions {
   sim: WorldSim;
@@ -18,6 +27,11 @@ export interface GatewayOptions {
   host?: string;
   /** 0 picks an ephemeral port. */
   port?: number;
+  /**
+   * Origins allowed to open a WebSocket (security audit M3). Default: the Vite dev server on localhost and
+   * 127.0.0.1, port 5173. A request without Origin is accepted only when `host` is a loopback address.
+   */
+  allowedOrigins?: readonly string[];
   /** Milliseconds between checks for deferred sim messages. */
   tickMs?: number;
   /** Clock for the rate limiter. */
@@ -55,10 +69,16 @@ export class TokenBucket {
 export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const { sim } = options;
   const clock = options.clock ?? Date.now;
+  const bindHost = options.host ?? "127.0.0.1";
+  const allowedOrigins = (options.allowedOrigins ?? parseAllowedOrigins(undefined)).map(normalizeOrigin);
   const wss = new WebSocketServer({
-    host: options.host ?? "127.0.0.1",
+    host: bindHost,
     port: options.port ?? 8787,
     maxPayload: MAX_MESSAGE_BYTES,
+    verifyClient: (info, done) => {
+      if (checkOrigin(info.req.headers.origin, { allowed: allowedOrigins, bindHost })) return done(true);
+      done(false, 403, "Forbidden");
+    },
   });
 
   let current: { ws: WebSocket; userId: number } | null = null;
@@ -75,6 +95,12 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const reports = new Map<string, Report>();
   /** Last activity lines, newest last. Sent in `welcome` so a reload does not start with an empty terminal. */
   const activity: ActivityLine[] = [];
+  /** What each agent works on now (latest `agent.work`), sent in `welcome` so a reload keeps the team bar block. */
+  const works = new Map<AgentId, AgentWork>();
+  /** Step of the current job, from its latest state change. Tags activity lines (`awaiting_plan_approval` and the end states have none). */
+  let currentStep: StepName | undefined;
+  /** QA verdict per job, from the `verdict:pass|fail` reason of the transition into `report_ready`. Only the current job is kept. */
+  const verdicts = new Map<string, "pass" | "fail">();
   let currentTaskId: string | null = null;
   let jobActive = false;
 
@@ -103,7 +129,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       }
     } else if (panel === "mailbox") {
       for (const a of approvals.values()) send(ws, { type: "approval", approval: a });
-      for (const r of reports.values()) send(ws, { type: "report", report: r });
+      for (const r of reports.values()) send(ws, { type: "report", report: r, resend: true });
     } else if (panel === "board") {
       await jobUpdate(ws);
     }
@@ -138,10 +164,21 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           jobActive = true;
           approvals.clear();
           reports.clear();
+          works.clear();
+          currentStep = undefined;
+          verdicts.clear();
           if (ws) await jobUpdate(ws);
           break;
         case "task.state_changed":
-          if (ev.state === "cancelled" || ev.state === "delivered" || ev.state === "failed") dropPendingApprovals(ev.taskId);
+          if (ev.taskId === currentTaskId) currentStep = STEP_OF_STATE[ev.state];
+          if (ev.state === "report_ready" && ev.reason?.startsWith("verdict:")) {
+            const v = ev.reason.slice("verdict:".length);
+            if (v === "pass" || v === "fail") verdicts.set(ev.taskId, v);
+          }
+          if (ev.state === "cancelled" || ev.state === "delivered" || ev.state === "failed") {
+            dropPendingApprovals(ev.taskId);
+            if (ev.taskId === currentTaskId) works.clear();
+          }
           // The engine ends a rejected or cancelled job with `cancelled` only (no task.failed/completed).
           if ((ev.state === "cancelled" || ev.state === "delivered") && ev.taskId === currentTaskId) jobActive = false;
           if (ws && ev.taskId === currentTaskId) await jobUpdate(ws);
@@ -174,16 +211,45 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           break;
         }
         case "report.ready": {
-          const r: Report = { reportId: ev.reportId, taskId: ev.taskId, title: ev.title, markdown: ev.markdown };
+          const r: Report = {
+            reportId: ev.reportId,
+            taskId: ev.taskId,
+            title: ev.title,
+            markdown: ev.markdown,
+            ts: ev.ts,
+            ...(verdicts.has(ev.taskId) ? { verdict: verdicts.get(ev.taskId)! } : {}),
+          };
           reports.set(r.reportId, r);
           if (ws) send(ws, { type: "report", report: r });
           break;
         }
         case "agent.activity": {
-          const line: ActivityLine = { ts: ev.ts, agentId: ev.agentId, text: ev.text };
+          const line: ActivityLine = {
+            ts: ev.ts,
+            agentId: ev.agentId,
+            text: ev.text,
+            taskId: ev.taskId,
+            ...(currentStep && ev.taskId === currentTaskId ? { step: currentStep } : {}),
+          };
           activity.push(line);
           if (activity.length > ACTIVITY_BUFFER_SIZE) activity.splice(0, activity.length - ACTIVITY_BUFFER_SIZE);
           if (ws) send(ws, { type: "activity", line });
+          break;
+        }
+        case "agent.work": {
+          const { agentId, taskId, step, title, model, contextPct, filesRead, filesEdited, startedAt } = ev;
+          const work: AgentWork = {
+            taskId,
+            step,
+            title,
+            ...(model ? { model } : {}),
+            ...(contextPct === undefined ? {} : { contextPct }),
+            filesRead,
+            filesEdited,
+            startedAt,
+          };
+          works.set(agentId, work);
+          if (ws) send(ws, { type: "work", agentId, work });
           break;
         }
         default:
@@ -213,6 +279,15 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     } catch (e) {
       jobActive = false;
       sendError(ws, "engine_unavailable", e instanceof Error ? e.message.slice(0, 200) : "cannot start job");
+    }
+  };
+
+  const sendJobDetails = async (ws: WebSocket, taskId: string) => {
+    if (!engine?.getJobDetails) return sendError(ws, "engine_unavailable", "no engine connected");
+    try {
+      send(ws, { type: "job_details", details: await engine.getJobDetails(taskId) });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot read job details");
     }
   };
 
@@ -248,7 +323,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (current) current.ws.close(4000, "replaced by a newer connection");
     const { you, welcome } = sim.join();
     current = { ws, userId: you };
-    send(ws, { ...welcome, ...(models ? { models } : {}), ...(activity.length > 0 ? { activity: [...activity] } : {}) });
+    const agents = welcome.agents.map((a) => {
+      const work = works.get(a.agentId);
+      return work ? { ...a, work } : a;
+    });
+    send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(activity.length > 0 ? { activity: [...activity] } : {}) });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of approvals.values()) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     // The progress stepper of a reloaded client needs the running job.
@@ -278,6 +357,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void startJob(ws, msg.repoId, msg.goal);
       } else if (msg.type === "approve") {
         void resolveApproval(ws, msg.approvalId, msg.decision, msg.note);
+      } else if (msg.type === "job_details") {
+        void sendJobDetails(ws, msg.taskId);
       } else {
         deliver(sim.handleIntent(current.userId, msg));
       }

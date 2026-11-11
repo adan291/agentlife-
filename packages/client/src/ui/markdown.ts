@@ -129,6 +129,21 @@ function appendInline(doc: Document, parent: HTMLElement, xs: Inline[]): void {
   }
 }
 
+/** A unified diff as one block element per line, coloured by `diffLineKind`. Text only: the content is never interpreted as HTML. */
+export function renderDiffBlock(doc: Document, text: string): HTMLElement {
+  const pre = doc.createElement("pre");
+  pre.className = "al-diff";
+  const code = doc.createElement("code");
+  for (const line of text.split("\n")) {
+    const row = doc.createElement("span");
+    row.className = `al-diff-line al-diff-${diffLineKind(line)}`;
+    row.textContent = line === "" ? " " : line;
+    code.appendChild(row);
+  }
+  pre.appendChild(code);
+  return pre;
+}
+
 /** Build DOM nodes for the Markdown. Never uses innerHTML. */
 export function renderMarkdown(doc: Document, src: string): DocumentFragment {
   const frag = doc.createDocumentFragment();
@@ -149,21 +164,12 @@ export function renderMarkdown(doc: Document, src: string): DocumentFragment {
         el.appendChild(li);
       }
       frag.appendChild(el);
+    } else if (b.lang === "diff") {
+      frag.appendChild(renderDiffBlock(doc, b.text));
     } else {
       const pre = doc.createElement("pre");
       const code = doc.createElement("code");
-      if (b.lang === "diff") {
-        pre.className = "al-diff";
-        for (const line of b.text.split("\n")) {
-          // One block element per line; text only, so the diff content is never interpreted as HTML.
-          const row = doc.createElement("span");
-          row.className = `al-diff-line al-diff-${diffLineKind(line)}`;
-          row.textContent = line === "" ? " " : line;
-          code.appendChild(row);
-        }
-      } else {
-        code.textContent = b.text;
-      }
+      code.textContent = b.text;
       pre.appendChild(code);
       frag.appendChild(pre);
     }

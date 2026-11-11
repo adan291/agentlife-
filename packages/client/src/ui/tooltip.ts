@@ -1,6 +1,7 @@
 import { ROLE_INFO } from "@agentlife/shared";
-import type { AgentId, AgentState } from "@agentlife/shared";
+import type { AgentId, AgentState, AgentWork } from "@agentlife/shared";
 import { UI_COLOURS } from "./theme.ts";
+import { workTooltipLines, workVisible } from "./work.ts";
 
 export const DWELL_MS = 300;
 const MARGIN = 8;
@@ -32,12 +33,23 @@ export function clampTooltip(x: number, y: number, w: number, h: number, vw: num
   return { left, top };
 }
 
-/** Lines of an agent tooltip: its part in the flow, current state and status text, and the model when known. */
-export function agentTooltip(id: AgentId, state: AgentState | undefined, text: string | undefined, model: string | undefined): TooltipContent {
+/**
+ * Lines of an agent tooltip: its part in the flow, current state and status text, and the model when known.
+ * While the agent works, also what it works on (task title, step, elapsed time, context use, file counts).
+ */
+export function agentTooltip(
+  id: AgentId,
+  state: AgentState | undefined,
+  text: string | undefined,
+  model: string | undefined,
+  work?: AgentWork,
+  now: number = Date.now(),
+): TooltipContent {
   const info = ROLE_INFO[id];
   const lines = [info.does];
   if (state) lines.push(`State: ${state.replace("_", " ")}${text ? ` - ${text}` : ""}`);
   if (model) lines.push(`Model: ${model}`);
+  if (work && workVisible(state)) lines.push(...workTooltipLines(work, now));
   return { title: info.name, lines };
 }
 

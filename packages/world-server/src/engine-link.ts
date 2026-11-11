@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentId, ApprovalDecision, JobView, Repo } from "@agentlife/shared";
+import type { AgentEvent, AgentId, ApprovalDecision, JobDetails, JobView, Repo } from "@agentlife/shared";
 
 /**
  * How the world-server talks to an agent engine. The fake engine (scripted) and the real HTTP/SSE
@@ -9,6 +9,8 @@ export interface EngineLink {
   startJob(repoId: string, goal: string): Promise<{ taskId: string }>;
   resolveApproval(approvalId: string, decision: ApprovalDecision, note?: string): Promise<void>;
   getJob(taskId: string): Promise<JobView>;
+  /** The job card: job view plus artifact contents (each capped by `ARTIFACT_VIEW_MAX_CHARS`). */
+  getJobDetails?(taskId: string): Promise<JobDetails>;
   /** Model label per role for the hover tooltip. Optional: a link without it sends no `models`. */
   roleModels?(): Promise<Partial<Record<AgentId, string>>>;
   /** Stream of agent events. Ends when the link is closed. */

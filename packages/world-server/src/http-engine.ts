@@ -2,6 +2,7 @@ import {
   AgentEventSchema,
   ErrorResponseSchema,
   HealthResponseSchema,
+  jobDetailsFromExport,
   RepoSchema,
   RolesConfigResponseSchema,
   RunExportSchema,
@@ -9,6 +10,7 @@ import {
   type AgentEvent,
   type AgentId,
   type ApprovalDecision,
+  type JobDetails,
   type JobView,
   type Repo,
 } from "@agentlife/shared";
@@ -93,6 +95,10 @@ export class HttpEngineLink implements EngineLink {
         e.type === "task.state_changed" ? [{ ts: e.ts, state: e.state, ...(e.reason ? { text: e.reason } : {}) }] : [],
       ),
     };
+  }
+
+  async getJobDetails(taskId: string): Promise<JobDetails> {
+    return jobDetailsFromExport(RunExportSchema.parse(await this.request("GET", `/tasks/${encodeURIComponent(taskId)}/export`)));
   }
 
   events(): AsyncIterable<AgentEvent> {

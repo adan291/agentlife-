@@ -11,7 +11,10 @@ export const FONT_VAR = "--al-font";
 export const UI_COLOURS = {
   panelBg: "#14101f",
   inputBg: "#0b0a12",
+  /** Dividers and card outlines. Decorative: the content does not depend on seeing them. */
   border: "#4d3b80",
+  /** Outline of buttons and form controls. It marks where the control is, so it keeps 3:1 against the backgrounds. */
+  controlBorder: "#7a66b8",
   accent: "#ff8a1f",
   accentText: "#ffb347",
   text: "#e8e0ff",
@@ -23,6 +26,42 @@ export const UI_COLOURS = {
   delBg: "#3a1620",
   hunk: "#8fd8ff",
 } as const;
+
+/** Minimum contrast: 4.5:1 for text (WCAG AA), 3:1 for icons and the outline of controls. */
+export const MIN_TEXT_CONTRAST = 4.5;
+export const MIN_UI_CONTRAST = 3;
+
+export interface ContrastPair {
+  /** Where the pair is used. */
+  name: string;
+  fg: string;
+  bg: string;
+  min: number;
+}
+
+const C = UI_COLOURS;
+/** Every foreground/background pair `themeCss()` and the DOM components put together. The unit test checks them all. */
+export const CONTRAST_PAIRS: readonly ContrastPair[] = [
+  { name: "text on panels", fg: C.text, bg: C.panelBg, min: MIN_TEXT_CONTRAST },
+  { name: "text on inputs and the terminal", fg: C.text, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "muted text on panels", fg: C.muted, bg: C.panelBg, min: MIN_TEXT_CONTRAST },
+  { name: "muted text on inputs", fg: C.muted, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "headings on panels", fg: C.accentText, bg: C.panelBg, min: MIN_TEXT_CONTRAST },
+  { name: "headings on inputs", fg: C.accentText, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "errors on panels", fg: C.error, bg: C.panelBg, min: MIN_TEXT_CONTRAST },
+  { name: "errors on inputs", fg: C.error, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "diff added lines", fg: C.add, bg: C.addBg, min: MIN_TEXT_CONTRAST },
+  { name: "diff deleted lines", fg: C.del, bg: C.delBg, min: MIN_TEXT_CONTRAST },
+  { name: "diff hunk headers", fg: C.hunk, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "button label, hover (on inputBg)", fg: C.text, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "button label, pressed", fg: C.text, bg: C.border, min: MIN_TEXT_CONTRAST },
+  { name: "button label, disabled", fg: C.muted, bg: C.inputBg, min: MIN_TEXT_CONTRAST },
+  { name: "highlighted button and badges", fg: C.inputBg, bg: C.accent, min: MIN_TEXT_CONTRAST },
+  { name: "highlighted button, hover", fg: C.inputBg, bg: C.accentText, min: MIN_TEXT_CONTRAST },
+  { name: "control outline on panels", fg: C.controlBorder, bg: C.panelBg, min: MIN_UI_CONTRAST },
+  { name: "control outline on inputs", fg: C.controlBorder, bg: C.inputBg, min: MIN_UI_CONTRAST },
+  { name: "hover outline on panels", fg: C.accent, bg: C.panelBg, min: MIN_UI_CONTRAST },
+];
 
 /** `0x2fd4c2` -> `#2fd4c2`. */
 export function cssHex(colour: number): string {
@@ -86,14 +125,15 @@ export const FOCUS_COLOUR = "#8fd8ff";
  */
 export function themeCss(): string {
   return `
-:root { --al-s1: ${SPACING.s1}px; --al-s2: ${SPACING.s2}px; --al-s3: ${SPACING.s3}px; --al-s4: ${SPACING.s4}px; --al-s5: ${SPACING.s5}px; --al-radius: ${RADIUS_PX}px; --al-border: ${UI_COLOURS.border}; --al-shadow: ${SHADOW}; --al-focus: ${FOCUS_COLOUR}; --al-accent: ${UI_COLOURS.accent}; }
+:root { color-scheme: dark; --al-s1: ${SPACING.s1}px; --al-s2: ${SPACING.s2}px; --al-s3: ${SPACING.s3}px; --al-s4: ${SPACING.s4}px; --al-s5: ${SPACING.s5}px; --al-radius: ${RADIUS_PX}px; --al-border: ${UI_COLOURS.border}; --al-control: ${UI_COLOURS.controlBorder}; --al-shadow: ${SHADOW}; --al-focus: ${FOCUS_COLOUR}; --al-accent: ${UI_COLOURS.accent}; }
 .al-shell :focus-visible { outline: 2px solid var(--al-focus); outline-offset: 2px; }
-.al-btn { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-border); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); font: inherit; cursor: pointer; transition: border-color 0.1s, background 0.1s; }
-.al-btn:hover:not(:disabled) { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
-.al-btn:active:not(:disabled) { background: ${UI_COLOURS.border}; transform: translateY(1px); }
-.al-btn:disabled { opacity: 0.5; cursor: default; }
-.al-input, .al-shell select { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font: inherit; }
+.al-btn { background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-control); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); font: inherit; cursor: pointer; transition: border-color 0.1s, background 0.1s; }
+.al-btn:hover:not(:disabled) { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; }
+.al-btn:active:not(:disabled) { background: ${UI_COLOURS.border}; color: ${UI_COLOURS.text}; transform: translateY(1px); }
+.al-btn:disabled { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.muted}; border-style: dashed; cursor: default; }
+.al-input, .al-shell select { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-control); border-radius: var(--al-radius); font: inherit; }
 .al-input:hover, .al-shell select:hover { border-color: var(--al-accent); }
+.al-shell option { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; }
 @media (prefers-reduced-motion: reduce) { .al-btn { transition: none; } }
 `;
 }
