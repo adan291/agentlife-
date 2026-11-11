@@ -49,7 +49,7 @@ function completedIds(): Set<string> {
   if (!existsSync(LOG)) return new Set();
   const done = new Set<string>();
   for (const line of readFileSync(LOG, "utf8").split("\n")) {
-    const m = /^\| (S\d+) \|.*\| ok \|/.exec(line);
+    const m = /^\| (S\d+[A-Z]?) \|.*\| ok \|/.exec(line);
     if (m?.[1]) done.add(m[1]);
   }
   return done;
