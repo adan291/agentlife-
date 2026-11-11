@@ -165,6 +165,10 @@ export class ReplayTransport implements Transport {
     return this.engine.goal;
   }
 
+  get recordedRepoId(): string {
+    return this.engine.repoId;
+  }
+
   get started(): boolean {
     return this.engine.started;
   }

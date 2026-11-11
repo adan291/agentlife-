@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run --passWithNoTests",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "check:demo-build": "node --experimental-strip-types --no-warnings tools/check-demo-build.ts",
+    "e2e:demo": "playwright test -c playwright.demo.config.ts"
   },
   "dependencies": {
     "@agentlife/shared": "workspace:*",

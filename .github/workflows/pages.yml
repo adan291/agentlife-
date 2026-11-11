@@ -1,0 +1,51 @@
+name: Pages
+
+# Publishes the demo: the client in replay mode, playing the recorded run in packages/client/public/demo.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      # The demo build must not hold any live endpoint (WebSocket, world-server address).
+      - run: pnpm --filter @agentlife/client check:demo-build
+      - run: pnpm --filter @agentlife/client build --base=/${{ github.event.repository.name }}/
+        env:
+          VITE_MODE: demo
+      # Smoke test of the same kind of build, served under a sub-path like Pages.
+      - run: pnpm --filter @agentlife/client exec playwright install --with-deps chromium
+      - run: pnpm --filter @agentlife/client e2e:demo
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/client/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

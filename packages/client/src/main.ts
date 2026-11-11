@@ -22,7 +22,11 @@ import { createTeamBar } from "./ui/team-bar.ts";
 import { createToasts } from "./ui/toast.ts";
 import { reportVerdict } from "./ui/report-viewer.ts";
 
-const WORLD_URL = import.meta.env["VITE_WORLD_URL"] ?? "ws://127.0.0.1:8787";
+/**
+ * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
+ * below (LiveTransport, the world-server URL) is removed from a demo build (checked by `pnpm check:demo-build`).
+ */
+const DEMO_BUILD = import.meta.env.VITE_MODE === "demo";
 
 /** Loads the recorded run (from the client's own static files, under any base path) and the room to play it in. */
 async function loadDemo(): Promise<[RunExport, RoomDef]> {
@@ -62,12 +66,22 @@ let live: LiveTransport | undefined;
 /** Replay of the recorded run (demo mode only). In demo mode no `LiveTransport` is ever built. */
 let replay: ReplayTransport | undefined;
 let transport: Transport;
-if (mode === "demo") {
+if (DEMO_BUILD || mode === "demo") {
   const [exp, room] = await loadDemo();
   replay = new ReplayTransport(exp, room);
   transport = replay;
+  if (new URLSearchParams(location.search).has("autostart")) {
+    // `?autostart` starts the recorded run as soon as the room is up (smoke test, screen recordings). Deferred so
+    // every listener has seen the `welcome` first.
+    const player = replay;
+    const stop = player.onMessage((m) => {
+      if (m.type !== "welcome") return;
+      stop();
+      setTimeout(() => player.send({ type: "start_job", repoId: player.recordedRepoId, goal: player.recordedGoal }), 0);
+    });
+  }
 } else {
-  live = new LiveTransport(WORLD_URL);
+  live = new LiveTransport(import.meta.env.VITE_WORLD_URL ?? "ws://127.0.0.1:8787");
   transport = live;
 }
 const sprites = new ProceduralSprites(app.renderer);
