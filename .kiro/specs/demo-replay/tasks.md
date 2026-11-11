@@ -8,7 +8,7 @@
   - Gap compression, speed, approval pause/resume; property test for the schedule
   - _Requirements: 1.2, 1.4, 2.3_
 
-- [ ] 3. ReplayTransport
+- [x] 3. ReplayTransport
   - Implements Transport; runs WorldSim + ReplayEngine in the browser; panels fed from recorded artifacts
   - _Requirements: 1.1, 1.2, 1.3, 1.5_
 
