@@ -99,6 +99,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const works = new Map<AgentId, AgentWork>();
   /** Step of the current job, from its latest state change. Tags activity lines (`awaiting_plan_approval` and the end states have none). */
   let currentStep: StepName | undefined;
+  /** QA verdict per job, from the `verdict:pass|fail` reason of the transition into `report_ready`. Only the current job is kept. */
+  const verdicts = new Map<string, "pass" | "fail">();
   let currentTaskId: string | null = null;
   let jobActive = false;
 
@@ -127,7 +129,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       }
     } else if (panel === "mailbox") {
       for (const a of approvals.values()) send(ws, { type: "approval", approval: a });
-      for (const r of reports.values()) send(ws, { type: "report", report: r });
+      for (const r of reports.values()) send(ws, { type: "report", report: r, resend: true });
     } else if (panel === "board") {
       await jobUpdate(ws);
     }
@@ -164,10 +166,15 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           reports.clear();
           works.clear();
           currentStep = undefined;
+          verdicts.clear();
           if (ws) await jobUpdate(ws);
           break;
         case "task.state_changed":
           if (ev.taskId === currentTaskId) currentStep = STEP_OF_STATE[ev.state];
+          if (ev.state === "report_ready" && ev.reason?.startsWith("verdict:")) {
+            const v = ev.reason.slice("verdict:".length);
+            if (v === "pass" || v === "fail") verdicts.set(ev.taskId, v);
+          }
           if (ev.state === "cancelled" || ev.state === "delivered" || ev.state === "failed") {
             dropPendingApprovals(ev.taskId);
             if (ev.taskId === currentTaskId) works.clear();
@@ -204,7 +211,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           break;
         }
         case "report.ready": {
-          const r: Report = { reportId: ev.reportId, taskId: ev.taskId, title: ev.title, markdown: ev.markdown };
+          const r: Report = {
+            reportId: ev.reportId,
+            taskId: ev.taskId,
+            title: ev.title,
+            markdown: ev.markdown,
+            ts: ev.ts,
+            ...(verdicts.has(ev.taskId) ? { verdict: verdicts.get(ev.taskId)! } : {}),
+          };
           reports.set(r.reportId, r);
           if (ws) send(ws, { type: "report", report: r });
           break;

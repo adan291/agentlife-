@@ -14,6 +14,11 @@ export interface StepFact {
   durationMs?: number;
   credits?: number;
   tokens?: number;
+  model?: string;
+  /** Highest context use seen, 0 to 100. */
+  contextPeak?: number;
+  filesRead?: number;
+  filesEdited?: number;
 }
 
 /** One line of plain text: control characters and runs of whitespace become one space, cut at `maxChars`. */
@@ -145,7 +150,15 @@ export function buildReport(input: ReportInput, facts: readonly StepFact[] = [])
   out.push("## Run facts", "");
   if (facts.length) {
     for (const f of facts) {
-      const parts = [f.status, f.durationMs === undefined ? undefined : formatDuration(f.durationMs), f.credits === undefined ? undefined : `${num(f.credits)} credits`];
+      const files = f.filesRead === undefined && f.filesEdited === undefined ? undefined : `${f.filesRead ?? 0} read, ${f.filesEdited ?? 0} edited`;
+      const parts = [
+        f.status,
+        f.durationMs === undefined ? undefined : formatDuration(f.durationMs),
+        f.credits === undefined ? undefined : `${num(f.credits)} credits`,
+        f.model ? inlineCode(f.model, 100) : undefined,
+        f.contextPeak === undefined ? undefined : `context ${Math.round(f.contextPeak)}%`,
+        files,
+      ];
       out.push(`- **${f.step}:** ${parts.filter((p): p is string => p !== undefined).join(", ")}`);
     }
     if (facts.some((f) => f.credits !== undefined)) {
@@ -183,6 +196,10 @@ export function collectFacts(deps: PipelineDeps, taskId: string): StepFact[] {
       ...(rec.durationMs === undefined ? {} : { durationMs: rec.durationMs }),
       ...(credits === undefined ? {} : { credits }),
       ...(tokens === undefined ? {} : { tokens: Math.round(tokens) }),
+      ...(rec.model ? { model: rec.model } : {}),
+      ...(rec.contextPeak === undefined ? {} : { contextPeak: rec.contextPeak }),
+      ...(rec.filesRead === undefined ? {} : { filesRead: rec.filesRead }),
+      ...(rec.filesEdited === undefined ? {} : { filesEdited: rec.filesEdited }),
     };
   });
 }

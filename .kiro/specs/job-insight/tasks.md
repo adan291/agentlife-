@@ -12,7 +12,7 @@
   - Task title, step, elapsed, context meter, file counts; `#tag` and step in terminal lines; Job panel with steps table, artifact links and the credits line
   - _Requirements: 1.3, 1.4, 1.5, 2.1, 2.2, 2.3_
 
-- [ ] 4. Client: report delivery, Report viewer, mailbox list
+- [x] 4. Client: report delivery, Report viewer, mailbox list
   - Toast queue (your-turn, report), Architect bubble, mailbox glow and unread, Report viewer with verdict badge
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 

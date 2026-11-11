@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
-import { JobDetailsSchema } from "./engine-api.ts";
+import { JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
 
@@ -90,6 +90,10 @@ export const ReportSchema = z.object({
   taskId: z.string().min(1),
   title: z.string().min(1).max(200),
   markdown: z.string().max(100_000),
+  /** QA verdict of the job, from the engine's `verdict:pass|fail` transition reason. Absent when unknown. */
+  verdict: VerdictSchema.optional(),
+  /** Epoch ms when the report was delivered. */
+  ts: z.number().int().nonnegative().optional(),
 });
 export type Report = z.infer<typeof ReportSchema>;
 
@@ -160,7 +164,7 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("repos"), repos: z.array(RepoSchema) }),
   z.object({ type: z.literal("job_update"), job: JobViewSchema }),
   z.object({ type: z.literal("approval"), approval: ApprovalSchema }),
-  z.object({ type: z.literal("report"), report: ReportSchema }),
+  z.object({ type: z.literal("report"), report: ReportSchema, resend: z.literal(true).optional() }),
   z.object({ type: z.literal("activity"), line: ActivityLineSchema }),
   z.object({ type: z.literal("work"), agentId: AgentIdSchema, work: AgentWorkSchema }),
   z.object({ type: z.literal("job_details"), details: JobDetailsSchema }),

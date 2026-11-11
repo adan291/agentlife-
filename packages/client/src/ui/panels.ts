@@ -43,6 +43,16 @@ const CSS = `
 .al-plain code, .al-diff code { font: inherit; }
 .al-diff { overflow-x: auto; background: ${UI_COLOURS.inputBg}; padding: var(--al-s2); margin: var(--al-s2) 0; }
 .al-credits { margin-top: var(--al-s3); }
+.al-badge { display: inline-block; flex: none; padding: 0 var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-s1); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.muted}; }
+.al-badge[data-verdict="pass"] { color: ${UI_COLOURS.add}; background: ${UI_COLOURS.addBg}; border-color: ${UI_COLOURS.add}; }
+.al-badge[data-verdict="fail"] { color: ${UI_COLOURS.del}; background: ${UI_COLOURS.delBg}; border-color: ${UI_COLOURS.del}; }
+.al-report-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--al-s3); margin: var(--al-s3) 0 var(--al-s2); }
+.al-report-facts { margin: 0 0 var(--al-s2); padding-left: var(--al-s5); }
+.al-report-item { display: flex; align-items: center; gap: var(--al-s3); width: 100%; margin: var(--al-s1) 0; padding: var(--al-s2); text-align: left; background: none; color: inherit; font: inherit; cursor: pointer; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-sizing: border-box; }
+.al-report-item:hover { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
+.al-report-item[data-unread="true"] { border-color: var(--al-accent); }
+.al-report-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-new { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s1); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; }
 `;
 
 const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job" };
@@ -56,7 +66,16 @@ export interface Panels {
   close(): void;
   /** Opens a panel with the data already on the client, without walking to the furniture. */
   open(panel: PanelName): void;
+  /** Opens the mailbox with this report in the viewer (toast "Open report"). */
+  openReport(reportId: string): void;
   readonly state: PanelState;
+}
+
+export interface PanelHooks {
+  /** Reports that were delivered and not opened yet; the mailbox marks them. */
+  unreadReports?(): ReadonlySet<string>;
+  /** A report was opened in the viewer. */
+  onReportOpened?(reportId: string): void;
 }
 
 /**
@@ -64,7 +83,12 @@ export interface Panels {
  * a scrollable body and an optional footer for actions. Hidden panels take no space and never block the canvas.
  * `onChange` runs after every re-render (open, close, refresh).
  */
-export function createPanels(send: (msg: ClientMsg) => void, onChange: () => void = () => {}, host: HTMLElement = document.body): Panels {
+export function createPanels(
+  send: (msg: ClientMsg) => void,
+  onChange: () => void = () => {},
+  host: HTMLElement = document.body,
+  hooks: PanelHooks = {},
+): Panels {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -105,12 +129,26 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
-    root.dataset["wide"] = String(state.open === "board");
+    root.dataset["wide"] = String(state.open === "board" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
         : state.open === "mailbox"
-          ? { body: renderMailbox(document, state.data, { decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }) }) }
+          ? {
+              body: renderMailbox(
+                document,
+                state.data,
+                {
+                  decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }),
+                  openReport: (reportId) => openReport(reportId),
+                  back: () => {
+                    state.back();
+                    render();
+                  },
+                },
+                { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
+              ),
+            }
           : {
               body: renderJobPanel(document, state.data, state.viewing, {
                 view: (artifactId) => {
@@ -133,6 +171,13 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
     footer.hidden = !content.footer;
     if (wasHidden) closeBtn.focus();
     onChange();
+  };
+
+  const openReport = (reportId: string) => {
+    if (state.open !== "mailbox") state.apply({ type: "open_panel", panel: "mailbox" });
+    state.view(reportId);
+    hooks.onReportOpened?.(reportId);
+    render();
   };
 
   const requestDetails = () => {
@@ -166,6 +211,7 @@ export function createPanels(send: (msg: ClientMsg) => void, onChange: () => voi
       if (state.apply({ type: "open_panel", panel })) render();
       if (panel === "board") requestDetails();
     },
+    openReport,
     handle(msg) {
       const changed = state.apply(msg);
       if (state.open === "board") {

@@ -199,6 +199,24 @@ describe("gateway with the fake engine", () => {
     expect(welcome.agents.every((a) => a.work === undefined)).toBe(true);
   });
 
+  it("tags a delivered report with the verdict and time, and marks it as a resend when the mailbox is opened", async () => {
+    const c = await setup();
+    c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
+    const approval = await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+    if (approval.type !== "approval") throw new Error("unreachable");
+    c.send({ type: "approve", approvalId: approval.approval.approvalId, decision: "approve" });
+    const live = await c.next((m) => m.type === "report");
+    if (live.type !== "report") throw new Error("unreachable");
+    expect(live.report).toMatchObject({ taskId: "task-1", verdict: "pass", ts: expect.any(Number) });
+    expect(live.resend).toBeUndefined();
+
+    c.send({ type: "use", itemId: "mailbox_1" });
+    const again = await c.next((m) => m.type === "report");
+    if (again.type !== "report") throw new Error("unreachable");
+    expect(again.report.reportId).toBe(live.report.reportId);
+    expect(again.resend).toBe(true);
+  });
+
   it("answers job_details with the steps and the artifact contents", async () => {
     const c = await setup();
     c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });

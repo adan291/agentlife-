@@ -24,6 +24,9 @@ import type { HoverSink } from "../ui/tooltip.ts";
 /** Free space kept around the room when choosing the zoom (per side). */
 const FIT_MARGIN_PX = 16;
 
+/** What the Architect says when a report arrives. */
+export const REPORT_DELIVERED_TEXT = "Report delivered";
+
 export interface WorldViewHooks {
   /** Server `error` messages (no_path, rate_limited, ...). */
   onError?(code: ErrorCode, message: string): void;
@@ -57,6 +60,8 @@ export class WorldView {
   private badge: MailboxBadge | null = null;
   private badgeCount = 0;
   private badgeDot = false;
+  /** When the last report arrived; the mailbox calls for attention for a few seconds from then. */
+  private mailboxAttentionSince: number | null = null;
   private reducedMotion = prefersReducedMotion();
   /** Scene point the camera is held on after a team bar click; null: room centre. */
   private focus: Point | null = null;
@@ -94,6 +99,12 @@ export class WorldView {
     this.badgeCount = count;
     this.badgeDot = dot;
     this.badge?.set(count, dot);
+  }
+
+  /** A report was delivered: the Architect says so, and the mailbox glows brightly and bounces for a few seconds. */
+  notifyReportDelivered(now = Date.now()): void {
+    this.mailboxAttentionSince = now;
+    this.avatars.get("architect")?.overlay.say(REPORT_DELIVERED_TEXT, now);
   }
 
   /**
@@ -175,8 +186,10 @@ export class WorldView {
       const p = easeToward({ x: this.root.x, y: this.root.y }, this.rootTarget);
       this.root.position.set(p.x, p.y);
     }
-    for (const f of this.furni) f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion);
-    this.badge?.update(now, this.reducedMotion);
+    for (const f of this.furni) {
+      f.update(now, f.placed.itemId === this.hoveredItem, this.reducedMotion, f.def.interaction === "mailbox" ? this.mailboxAttentionSince : null);
+    }
+    this.badge?.update(now, this.reducedMotion, this.mailboxAttentionSince);
     for (const { view, overlay } of this.avatars.values()) {
       view.update(now);
       overlay.update(now, view.feetX, view.feetY);

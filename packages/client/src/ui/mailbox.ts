@@ -1,11 +1,30 @@
 import type { PanelData } from "./panel-state.ts";
+import { formatTime } from "./board.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { newestFirst, renderReportViewer, reportHeadline, reportVerdict, verdictBadge } from "./report-viewer.ts";
 
 export interface MailboxActions {
   decide(approvalId: string, decision: "approve" | "reject"): void;
+  /** Open a report in the viewer. */
+  openReport(reportId: string): void;
+  /** Back from the viewer to the list. */
+  back(): void;
 }
 
-export function renderMailbox(doc: Document, data: PanelData, actions: MailboxActions): HTMLElement {
+export interface MailboxView {
+  /** Report open in the viewer, if any. */
+  reading: string | null;
+  /** Reports delivered and not opened yet. */
+  unread: ReadonlySet<string>;
+}
+
+const NO_VIEW: MailboxView = { reading: null, unread: new Set() };
+
+export function renderMailbox(doc: Document, data: PanelData, actions: MailboxActions, view: MailboxView = NO_VIEW): HTMLElement {
+  if (view.reading) {
+    const report = data.reports.find((r) => r.reportId === view.reading);
+    if (report) return renderReportViewer(doc, report, actions);
+  }
   const root = doc.createElement("div");
 
   const h1 = doc.createElement("h4");
@@ -40,13 +59,30 @@ export function renderMailbox(doc: Document, data: PanelData, actions: MailboxAc
   h2.textContent = "Reports";
   root.appendChild(h2);
   if (data.reports.length === 0) root.appendChild(note(doc, "No reports yet."));
-  for (const r of data.reports) {
-    const card = doc.createElement("section");
-    card.className = "al-card";
-    const title = doc.createElement("strong");
-    title.textContent = r.title;
-    card.append(title, renderMarkdown(doc, r.markdown));
-    root.appendChild(card);
+  for (const r of newestFirst(data.reports)) {
+    const unread = view.unread.has(r.reportId);
+    const item = doc.createElement("button");
+    item.type = "button";
+    item.className = "al-report-item";
+    item.dataset["unread"] = String(unread);
+    item.dataset["report"] = r.reportId;
+    const headline = reportHeadline(r);
+    item.title = `Open the report: ${headline}`;
+    const label = doc.createElement("span");
+    label.className = "al-report-title";
+    label.textContent = headline;
+    const when = doc.createElement("span");
+    when.className = "al-muted";
+    when.textContent = r.ts === undefined ? "" : formatTime(r.ts);
+    item.append(verdictBadge(doc, reportVerdict(r)), label, when);
+    if (unread) {
+      const mark = doc.createElement("span");
+      mark.className = "al-new";
+      mark.textContent = "NEW";
+      item.appendChild(mark);
+    }
+    item.addEventListener("click", () => actions.openReport(r.reportId));
+    root.appendChild(item);
   }
   return root;
 }
