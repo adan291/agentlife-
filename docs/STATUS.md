@@ -53,7 +53,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
-| job-insight | 5 / 5 | feat/job-insight | Done on the branch, `pnpm check` and Playwright (34/34, Edge) pass; review and merge pending. Decisions in the spec's design.md ("Decisions made while implementing"). Look in a real browser pending (user) |
+| job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
