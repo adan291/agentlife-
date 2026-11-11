@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Mode selection and base-path-safe assets
+- [x] 1. Mode selection and base-path-safe assets
   - `src/mode.ts`; route all asset URLs through `import.meta.env.BASE_URL`
   - _Requirements: 3.1, 3.2_
 
