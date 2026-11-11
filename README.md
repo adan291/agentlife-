@@ -6,7 +6,7 @@ Kiroween 2026 entry, category: **Resurrection**.
 
 ## Demo
 
-**Live demo:** https://<github-user>.github.io/agentlife/
+**Live demo:** https://adan291.github.io/agentlife-/
 
 The demo runs in the browser with no backend. It replays a real run that was recorded from the agent engine (`packages/client/public/demo/run-001.json`): an Architect plan, a Developer diff, the test log and a QA review. A banner marks it as a replay, and the speed buttons offer 1×, 4× and 16×. Approve the plan in the mailbox to continue the replay.
 
@@ -84,7 +84,7 @@ To play the recorded run without the engine, open http://localhost:5173/?mode=de
 ## Build the demo
 
 ```bash
-VITE_MODE=demo pnpm --filter @agentlife/client build --base=/agentlife/
+VITE_MODE=demo pnpm --filter @agentlife/client build --base=/agentlife-/
 pnpm --filter @agentlife/client check:demo-build   # fails if the build references a live endpoint
 ```
 

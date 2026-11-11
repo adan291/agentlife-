@@ -25,10 +25,11 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 evening (IDE): demo-replay task 7 done on feat/demo-replay: README (English, final except the demo URL placeholder), docs/kiro-usage.md, docs/video-script.md. Pending: user fills the GitHub user in the demo URL, records the video, and reviews the texts; security decisions 1-3 and the history rewrite still open.
 - 2026-11-11 20:10 (IDE): user asked Kiro to decide everything. Done: S11-S13 merged (demo-replay 7/7, demo smoke test passes); flaky http-engine tests fixed (waits on the real connection; 0/20 failures); history rewritten (noreply identity, no personal emails, no key-shaped literals), backup bundle kept, fixtures accepted, merged branches deleted; scan clean. Pending from the user: one git config line, the GitHub repo. Next: hotel-floors spec.
 - 2026-11-11 20:40 (IDE): user's GitHub account is adan291 (private email on, CLI push protection on). History rewritten again: all commits now by adan291 <14869836+adan291@users.noreply.github.com> (second backup bundle in data/backup/). User runs the git config line with that address, then creates the repo.
+- 2026-11-11 20:50 (IDE): user is Adan Sanchez Manzano (GitHub adan291), created https://github.com/adan291/agentlife-; git config set to the noreply identity. LICENSE holder updated, README demo URL set, CI token limited to contents: read. First push of main.
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
-2. Publish: create the public GitHub repo (user, or install `gh` and Kiro does it), push main, enable Pages, put the demo URL in the README (now a `<github-user>` placeholder).
+2. Publish: repo https://github.com/adan291/agentlife- (public). Push main, then enable Pages (Settings > Pages > Source: GitHub Actions); demo URL https://adan291.github.io/agentlife-/ is in the README.
 3. New specs, in this order, written after S13:
    - `hotel-floors`: lobby with reception and an elevator, Engineering floor (today's office), HR floor; elevator is a furniture interaction that changes room.
    - `hr-desk`: HR agent and desk; local catalogue of agent templates; hire, fire and rename; permissions only from fixed tiers (read-only, developer-in-worktree), never from imported files; internet import limited to allowlisted sources, persona and description only, reviewed by agentlife-security and approved by the user.
