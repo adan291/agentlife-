@@ -2,14 +2,14 @@
 
 Source of truth for `pnpm conduct`. Each row is one spec. The conductor takes a row to 100 %:
 build sessions → review (`agentlife-reviewer`) → acceptance verification (`agentlife-verifier`, criterion by criterion with evidence) → up to 2 fix rounds → merge into `main` with `pnpm check` and the leak scanner → next row.
-Rows marked `live` stop after the merge for a human check (browser look or a real job). The conductor never pushes unless `AGENTLIFE_PUSH=1`.
+Rows marked `live` are merged and their human checks are queued in docs/HUMAN-CHECKS.md; the conductor does not wait for them. The conductor never pushes unless `AGENTLIFE_PUSH=1`.
 
 Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, review without blocking issues, merged into `main`, `pnpm check` green, `pnpm security:scan` clean, STATUS.md updated.
 
 | # | Spec | Sessions | Live | Status | What it gives the user |
 |---|---|---|---|---|---|
-| 1 | `project-registry` | S14 | yes | skip | Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch |
-| 2 | `hotel-floors` | S15 S16 | yes | todo | Lobby, elevator with live floor status, one floor per project, two jobs at once |
+| 1 | `project-registry` | S14 | yes | needs-check | Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch |
+| 2 | `hotel-floors` | S15 S16 | yes | done | Lobby, elevator with live floor status, one floor per project, two jobs at once |
 | 3 | `build-board` | S15B | no | todo | Construction board in the lobby: TASKMAP rows, tasks per spec, conductor phase, what waits for you |
 | 4 | `job-types` | S20 S21 | no | todo | Review my branch, write tests, document: each from its own furniture |
 | 5 | `night-shift` | S22 S23 | yes | todo | Schedule jobs for the night; morning summary in the mailbox and on Discord |

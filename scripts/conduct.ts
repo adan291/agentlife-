@@ -8,10 +8,10 @@
 // acceptance verification (agentlife-verifier) -> if FAIL, one fix session and verify again
 // (max 2 rounds) -> merge into main with `pnpm check` and the leak scanner -> push only when
 // AGENTLIFE_PUSH=1. Any red light stops the conductor and notifies the user.
-// Specs marked `live` in the taskmap stop after the merge and wait for the human check.
+// Specs marked `live` get their human checks queued in docs/HUMAN-CHECKS.md and the conductor carries on.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -154,10 +154,41 @@ function conduct(item: Item): void {
   }
   if (verdict === "FAIL") stop(`${item.spec} still fails verification after 2 fix rounds; see docs/reviews/`);
   merge(item.spec);
-  if (item.live) stop(`${item.spec} is merged and needs the human live check listed in its verify report before the next spec`);
+  markRow(item.spec, item.live ? "needs-check" : "done");
+  if (item.live) {
+    // Do not stop the whole map for a human check: queue it and carry on.
+    queueHumanCheck(item.spec);
+    notify(`${item.spec} fusionada; tiene una prueba manual pendiente (docs/HUMAN-CHECKS.md).`);
+  }
 }
 
-const items = loadTaskmap().filter((i) => i.status !== "done" && i.status !== "skip");
+/** Sets the Status cell of a TASKMAP row and commits it, so a rerun of the conductor skips the row. */
+function markRow(spec: string, status: string): void {
+  const t = readFileSync(TASKMAP, "utf8").split("\n").map((l) => {
+    const cells = l.split("|");
+    if (cells.length >= 7 && /^\s*\d+\s*$/.test(cells[1] ?? "") && (cells[2] ?? "").includes(`\`${spec}\``)) cells[5] = ` ${status} `;
+    return cells.join("|");
+  });
+  writeFileSync(TASKMAP, t.join("\n"));
+  sh("git", ["add", "docs/TASKMAP.md"]);
+  sh("git", ["commit", "-q", "-m", `plan: ${spec} ${status}`]);
+}
+
+/** Appends the verifier's "Human checks" list of a spec to docs/HUMAN-CHECKS.md and commits it. */
+function queueHumanCheck(spec: string): void {
+  const file = join(ROOT, "docs", "HUMAN-CHECKS.md");
+  const report = join(ROOT, "docs", "reviews", `${branchOf(spec).replace(/\//g, "-")}-verify.md`);
+  const lines = existsSync(report) ? readFileSync(report, "utf8").split("\n") : [];
+  const start = lines.findIndex((l) => /^#+ .*Human checks/i.test(l));
+  const items = start < 0 ? [] : lines.slice(start + 1).filter((l, i, a) => !a.slice(0, i).some((x) => /^#+ /.test(x)) && /^\s*-\s/.test(l));
+  const head = existsSync(file) ? readFileSync(file, "utf8") : "# Human checks waiting for the user\n\nThe conductor merged these specs and kept going. Tick each item when checked; tell Kiro about anything that fails.\n";
+  const block = `\n## ${spec} (merged ${new Date().toISOString().slice(0, 10)})\n${(items.length ? items : ["- Look at the feature in the browser"]).map((l) => l.replace(/^\s*-\s/, "- [ ] ")).join("\n")}\n`;
+  writeFileSync(file, head + block);
+  sh("git", ["add", "docs/HUMAN-CHECKS.md"]);
+  sh("git", ["commit", "-q", "-m", `plan: human checks for ${spec}`]);
+}
+
+const items = loadTaskmap().filter((i) => !/^(done|skip|needs-check)$/.test(i.status));
 if (args.has("--dry-run")) {
   for (const i of items) console.log(`${i.spec.padEnd(18)} sessions ${i.sessions.join(",").padEnd(10)} live=${i.live} status=${i.status}`);
   process.exit(0);

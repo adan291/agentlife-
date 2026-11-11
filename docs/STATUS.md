@@ -32,6 +32,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 22:40 (IDE): user asked for a full taskmap run with agents to 100 %. Created docs/TASKMAP.md, specs job-types, night-shift, project-memory, list-mode, hr-desk task 5 (Ollama intern), agent agentlife-verifier and the conductor `pnpm conduct` (build -> review -> verify -> fix -> merge). Started with row 2 (hotel-floors).
 - 2026-11-12 (IDE): user wants to see the tasks inside the app; spec build-board added as TASKMAP row 3. Conductor bug found and fixed: kiro-cli was spawned through the Windows shell, so review and verification prompts were split into words and did nothing; hotel-floors sessions S15-S16 are done (5/5) and wait for review + verification.
 - 2026-11-12 00:40 (IDE): public demo live at https://adan291.github.io/agentlife-/ (Pages and CI green). hotel-floors merged after verify FAIL -> fix -> PASS; conductor stopped for the user's browser check (lobby, elevator, floors, demo with floors). Next row: build-board.
+- 2026-11-12 00:50 (IDE): user checked the elevator: OK. Conductor no longer stops on live rows; human checks queue in docs/HUMAN-CHECKS.md. Conductor started on the rest of the TASKMAP (build-board next).
 
 - 2026-11-12 00:15 (Discord): user asked for a summary of progress; Crew read STATUS and the session log and replied. No changes to the project.
 
@@ -64,7 +65,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
 | project-registry | 5 / 6 | main | Tasks 1-5 done, reviewed and merged; review fixes applied (no paths in clone errors, more secret denies, secrets scrubbed from test copies, length-only masks, no FETCH_HEAD). Task 6: live check with the user |
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
-| hotel-floors | 5 / 5 | main | Done: verified PASS on the second round (first FAIL: project name was not drawn on its floor; fixed), merged. Waiting for the user's browser check |
+| hotel-floors | 5 / 5 | main | Done. Lobby and elevator checked by the user 2026-11-12; two-project queue and demo-with-floors checks in docs/HUMAN-CHECKS.md |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
 | build-board | 0 / 2 | — | Construction board in the lobby (TASKMAP row 3). S15B |
 | job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
