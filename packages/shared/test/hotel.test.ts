@@ -183,6 +183,26 @@ describe("Hotel", () => {
     expect(sim.dueMessages()).toContainEqual({ type: "open_panel", panel: "door", data: { to: "hr" } });
   });
 
+  it("a message deferred before the user left a room never arrives when the user comes back", () => {
+    const { hotel, advance } = makeHotel();
+    hotel.addProject({ id: "todo", name: "Todo" });
+    const { you } = hotel.join();
+    const lobbySim = hotel.sim(LOBBY_ROOM)!;
+    lobbySim.handleIntent(you, { type: "use", itemId: "door_hr" }); // open_panel(door) waits for the walk
+    expect(lobbySim.nextDeferredAt()).not.toBeNull();
+    hotel.moveUser(you, projectRoomId("todo"));
+    hotel.moveUser(you, LOBBY_ROOM);
+    advance(10_000);
+    expect(lobbySim.dueMessages()).toEqual([]);
+    expect(lobbySim.nextDeferredAt()).toBeNull();
+    // Leaving and coming back while the walk is still going: nothing is left either.
+    lobbySim.handleIntent(you, { type: "use", itemId: "door_hr" });
+    hotel.moveUser(you, projectRoomId("todo"));
+    advance(10_000);
+    hotel.moveUser(you, LOBBY_ROOM);
+    expect(lobbySim.dueMessages()).toEqual([]);
+  });
+
   it("removing a project's floor moves the users inside to the lobby", () => {
     const { hotel } = makeHotel();
     hotel.addProject({ id: "todo", name: "Todo" });

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-12 (hotel-floors tasks 1–5 done on branch feat/hotel-floors, not merged; review is next)
+Updated: 2026-11-12 (hotel-floors tasks 1–5 done on branch feat/hotel-floors, not merged; review and verification fixes applied, needs a new verification)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -62,7 +62,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
 | project-registry | 5 / 6 | main | Tasks 1-5 done, reviewed and merged; review fixes applied (no paths in clone errors, more secret denies, secrets scrubbed from test copies, length-only masks, no FETCH_HEAD). Task 6: live check with the user |
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
-| hotel-floors | 5 / 5 | feat/hotel-floors | All tasks done, not merged, not reviewed. Lobby (Reception, elevator, HR door, directory), one floor per project, per-project jobs (max 2 at once), client elevator panel with live status, door transition, remembered floor, terminal scope, replay with floors. S15-S16 |
+| hotel-floors | 5 / 5 | feat/hotel-floors | All tasks done, not merged. Review (request changes) and verification (FAIL 1.2b) fixes applied: project name drawn over the elevator and the board (`scene/door-signs.ts`); the "stale deferred messages" blocker is not reproducible (`WorldSim.leave/join` drop them, tick discards other rooms'), covered by a new test; gateway test for a removed floor; `e2e` ignores `demo.spec.ts`. Not looked at in a browser. Lobby (Reception, elevator, HR door, directory), one floor per project, per-project jobs (max 2 at once), client elevator panel with live status, door transition, remembered floor, terminal scope, replay with floors. S15-S16 |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
 | job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
 | night-shift | 0 / 4 | — | Night jobs, morning summary (row 4) |

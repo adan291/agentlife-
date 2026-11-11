@@ -138,6 +138,21 @@ describe("elevator and doors", () => {
     expect(c.has((m) => m.type === "open_panel" && m.panel === "door")).toBe(false);
   });
 
+  it("takes a user standing on a floor whose project was removed to the lobby, and drops the floor from the list", async () => {
+    const e = engineWith(["alpha", "beta"]);
+    const g = await boot(e.link, "project:alpha");
+    const first = connect(g.port);
+    await floorsAre(first, ["project:alpha", "project:beta"]);
+
+    e.setProjects(["beta"]);
+    const second = connect(g.port);
+    await second.waitFor(() => second.welcomes().length === 2);
+    expect(second.welcomes()[0]!.room.id).toBe("project:alpha");
+    expect(second.welcomes()[1]!.room.id).toBe("lobby");
+    await second.waitFor(() => second.floors().length > 0 && !second.statusOf("project:alpha"));
+    expect(second.floors().map((f) => f.roomId)).toEqual(["lobby", "hr", "project:beta"]);
+  });
+
   it("gives a project registered later its floor when the next connection arrives", async () => {
     const e = engineWith(["alpha"]);
     const g = await boot(e.link);

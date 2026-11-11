@@ -9,6 +9,7 @@ import { builderTagName, sessionLabel } from "./crew-label.ts";
 import { FurniView } from "./furni-view.ts";
 import { AvatarOverlay } from "./overlay.ts";
 import { pickFurni } from "./pick.ts";
+import { buildSigns } from "./door-signs.ts";
 import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
@@ -245,6 +246,8 @@ export class WorldView {
     }
 
     this.models = msg.models ?? {};
+    // A project floor writes its name over the elevator and the board.
+    this.objects.addChild(buildSigns(msg.room, (x, y) => room.heightmap.height(x, y) ?? 0));
     this.agentStatus.clear();
     for (const a of msg.agents) this.agentStatus.set(a.agentId, { state: a.state, text: a.text });
     for (const a of msg.agents) this.monitors.get(a.agentId)?.setActive(a.state === "working");
