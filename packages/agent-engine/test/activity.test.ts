@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
-import { AgentEventSchema, type AgentEvent, type Plan, type Review } from "@agentlife/shared";
+import { AgentEventSchema, splitAgentId, type AgentEvent, type Plan, type Review } from "@agentlife/shared";
 import { ACTIVITY_THROTTLE_MS, createActivityEmitter, testResultLine } from "../src/activity.ts";
 import type { LimitsConfig } from "../src/config.ts";
 import { JobRunner } from "../src/jobs/runner.ts";
@@ -117,7 +117,7 @@ afterEach(() => {
 });
 
 const activityOf = (events: AgentEvent[]): string[] =>
-  events.flatMap((e) => (e.type === "agent.activity" ? [`${e.agentId}:${e.text}`] : []));
+  events.flatMap((e) => (e.type === "agent.activity" ? [`${splitAgentId(e.agentId).agentId}:${e.text}`] : []));
 
 describe("runRole", () => {
   it("turns runtime progress into throttled agent.activity events and ignores output and usage", async () => {

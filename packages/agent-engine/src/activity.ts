@@ -24,7 +24,7 @@ export interface ActivityEmitterOptions {
 export function createActivityEmitter(opts: ActivityEmitterOptions): ActivityEmitter {
   const now = opts.now ?? Date.now;
   const gap = opts.throttleMs ?? ACTIVITY_THROTTLE_MS;
-  const lastAt = new Map<AgentId, number>();
+  const lastAt = new Map<string, number>();
 
   const emit = (taskId: string, agentId: AgentId, raw: string): void => {
     const text = sanitize(raw, ACTIVITY_TEXT_MAX);
@@ -35,9 +35,11 @@ export function createActivityEmitter(opts: ActivityEmitterOptions): ActivityEmi
   return {
     progress(taskId, agentId, text) {
       const t = now();
-      const prev = lastAt.get(agentId);
+      // Per job: two jobs on different projects each have their own Architect.
+      const key = `${taskId}:${agentId}`;
+      const prev = lastAt.get(key);
       if (prev !== undefined && t - prev < gap) return;
-      lastAt.set(agentId, t);
+      lastAt.set(key, t);
       emit(taskId, agentId, text);
     },
     line(taskId, agentId, text) {

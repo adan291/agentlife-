@@ -30,10 +30,14 @@ export const ReposConfigSchema = z
 export type RepoConfig = z.infer<typeof RepoConfigSchema>;
 
 const posMs = z.number().int().positive();
+/** Jobs that run at the same time in the whole hotel when `limits.json` does not say. */
+export const DEFAULT_MAX_CONCURRENT_JOBS = 2;
 export const LimitsConfigSchema = z.object({
   timeoutsMs: z.object({ analyze: posMs, develop: posMs, test: posMs, review: posMs }),
   maxDiffLines: z.number().int().positive(),
   maxFilesChanged: z.number().int().positive(),
+  /** At most this many jobs run at once, across all projects; the others wait in a queue. Default 2. */
+  maxConcurrentJobs: z.number().int().min(1).max(8).optional(),
 });
 export type LimitsConfig = z.infer<typeof LimitsConfigSchema>;
 

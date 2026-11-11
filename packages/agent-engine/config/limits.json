@@ -6,5 +6,6 @@
     "review": 300000
   },
   "maxDiffLines": 400,
-  "maxFilesChanged": 10
+  "maxFilesChanged": 10,
+  "maxConcurrentJobs": 2
 }

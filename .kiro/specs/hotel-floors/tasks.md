@@ -4,7 +4,7 @@
   - `world/hotel.ts`, room ids, `roomForProject`, lobby/hr/template room files, elevator/directory/door furniture
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 5.1_
 
-- [ ] 2. Engine: per-project jobs, agent ids and job queue
+- [x] 2. Engine: per-project jobs, agent ids and job queue
   - One active job per project, global limit 2 with a queue, `<projectId>:<role>` agent ids, floor status data
   - _Requirements: 3.1, 3.2, 5.2_
 
