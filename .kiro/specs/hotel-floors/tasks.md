@@ -12,7 +12,7 @@
   - Messages scoped to the user's room, `go_to`, `floors` pushes, rooms created/removed with projects, Builder in the lobby
   - _Requirements: 1.2, 1.4, 2.4, 3.2, 3.3, 5.2, 5.3_
 
-- [ ] 4. Client: elevator, transitions, floor-scoped UI
+- [x] 4. Client: elevator, transitions, floor-scoped UI
   - Floor panel with live status, door transition, HUD floor label, remember floor, terminal "This floor / All floors", directory board
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 4.2_
 

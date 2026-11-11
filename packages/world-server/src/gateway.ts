@@ -145,7 +145,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   // connection (a reload picks up a late engine). Failures leave the cache as it was.
   let models: Partial<Record<AgentId, string>> | undefined;
 
-  let current: { ws: WebSocket; userId: number } | null = null;
+  let current: { ws: WebSocket; userId: number; activityAll: boolean } | null = null;
   const currentWs = (): WebSocket | undefined => current?.ws;
 
   const send = (ws: WebSocket, msg: ServerMsg) => {
@@ -471,11 +471,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             agentId: splitAgentId(ev.agentId).agentId,
             text: ev.text,
             taskId: ev.taskId,
+            roomId,
             ...(f.currentStep && ev.taskId === f.currentTaskId ? { step: f.currentStep } : {}),
           };
           f.activity.push(line);
           if (f.activity.length > ACTIVITY_BUFFER_SIZE) f.activity.splice(0, f.activity.length - ACTIVITY_BUFFER_SIZE);
-          toUser(roomId, { type: "activity", line });
+          // "All floors" also gets the lines of the floors the user is not on (opt-in, see `activity_scope`).
+          if (current?.activityAll) send(current.ws, { type: "activity", line });
+          else toUser(roomId, { type: "activity", line });
           break;
         }
         case "agent.work": {
@@ -605,6 +608,22 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  /** Activity terminal scope. "all" sends the other floors' buffered lines at once and their new lines from now on. */
+  const setActivityScope = (scope: "floor" | "all") => {
+    if (!current) return;
+    current.activityAll = scope === "all";
+    if (!current.activityAll) return;
+    // Sent on every request: the client asks again after each `welcome` (its terminal was reseeded with one floor).
+    const here = userRoom();
+    enqueue(() => {
+      if (!current?.activityAll) return;
+      for (const [roomId, f] of floors) {
+        if (roomId === here || !hotel.has(roomId)) continue;
+        for (const line of f.activity) send(current.ws, { type: "activity", line });
+      }
+    });
+  };
+
   /** The elevator: only while the avatar stands in front of one. */
   const goTo = (ws: WebSocket, roomId: string) => {
     if (!current) return;
@@ -638,7 +657,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     // One user session in the MVP: a second connection replaces the first.
     if (current) current.ws.close(4000, "replaced by a newer connection");
     const { you, welcome } = hotel.join();
-    current = { ws, userId: you };
+    current = { ws, userId: you, activityAll: false };
     sendWelcome(ws, hotel.roomOf(you) ?? LOBBY_ROOM, welcome);
     // A project registered since the last connection gets its floor now.
     if (engine) enqueue(syncProjects);
@@ -682,6 +701,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void deliverJob(ws, msg.taskId);
       } else if (msg.type === "go_to") {
         goTo(ws, msg.roomId);
+      } else if (msg.type === "activity_scope") {
+        setActivityScope(msg.scope);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

@@ -149,3 +149,37 @@ test("the dock height can be dragged and is remembered", async ({ page }) => {
   expect(after.height).toBeLessThanOrEqual(768 / 2 + 1);
   expect(await page.evaluate(() => localStorage.getItem("agentlife-dock-px"))).not.toBeNull();
 });
+
+test("the elevator takes the user to a project floor, and a reload returns there", async ({ page }) => {
+  await open(page, 1366, 768);
+  await expect(page.locator(".al-floor-label")).toHaveText("Lobby");
+  // Only the Builder lives in the lobby.
+  await expect(page.locator(".al-team-row:not([hidden])")).toHaveCount(1);
+
+  await page.getByRole("button", { name: /Take the elevator/ }).click();
+  const panel = page.getByRole("dialog", { name: "Elevator" });
+  await expect(panel).toBeVisible();
+  await expect(panel.locator(".al-floor")).toHaveCount(3);
+  await panel.getByRole("button", { name: "Go to haunted-todo" }).click();
+
+  await expect(page.locator(".al-floor-label")).toHaveText("haunted-todo");
+  await expect(page.locator(".al-team-row:not([hidden])")).toHaveCount(3);
+  await expect(page.locator(".al-doors")).toHaveAttribute("data-phase", "open");
+  expect(await page.evaluate(() => localStorage.getItem("agentlife-floor"))).toBe("project:haunted-todo");
+});
+
+test("a reload returns to the floor the user was on", async ({ page }) => {
+  // Seed the storage once; `open()` would clear it again on the reload.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("seeded")) return;
+    sessionStorage.setItem("seeded", "1");
+    localStorage.clear();
+    localStorage.setItem("agentlife-guide-seen", "1");
+    localStorage.setItem("agentlife-floor", "project:haunted-todo");
+  });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto("/");
+  await expect(page.locator(".al-floor-label")).toHaveText("haunted-todo");
+  await page.reload();
+  await expect(page.locator(".al-floor-label")).toHaveText("haunted-todo");
+});

@@ -43,18 +43,21 @@ function jobMessage(c: JobCase): string {
 /**
  * Opens the page with the real world-server behind a proxy that adds messages after the welcome. The world-server
  * serves one fake engine; the proxy lets a test show states (a job in any step, busy ghosts) without driving a whole job.
+ * The page starts on the haunted-todo floor (the client goes back to the floor it remembers), so the messages are
+ * injected after the welcome of that floor, not the lobby's.
  */
 async function openWith(page: Page, width: number, height: number, inject: string[]): Promise<void> {
   await page.addInitScript(() => {
     localStorage.clear();
     localStorage.setItem("agentlife-guide-seen", "1");
+    localStorage.setItem("agentlife-floor", "project:haunted-todo");
   });
   await page.routeWebSocket(WORLD_URL, (ws) => {
     const server = ws.connectToServer();
     let injected = false;
     server.onMessage((message) => {
       ws.send(message);
-      if (!injected && typeof message === "string" && message.includes('"type":"welcome"')) {
+      if (!injected && typeof message === "string" && message.includes('"type":"welcome"') && message.includes('"roomId":"project:haunted-todo"')) {
         injected = true;
         for (const m of inject) ws.send(m);
       }
@@ -65,6 +68,7 @@ async function openWith(page: Page, width: number, height: number, inject: strin
   await page.goto("/");
   await expect(page.locator(".al-status")).toBeHidden();
   await expect(page.locator(".al-stage > canvas")).toBeVisible();
+  await expect(page.locator(".al-floor-label")).toHaveText("haunted-todo");
 }
 
 for (const size of [

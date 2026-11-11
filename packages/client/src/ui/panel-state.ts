@@ -1,4 +1,4 @@
-import type { Approval, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
+import type { Approval, FloorStatus, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -15,6 +15,10 @@ export interface PanelData {
 export class PanelState {
   open: PanelName | null = null;
   data: PanelData = { repos: [], projects: [], job: null, approvals: [], reports: [], details: null };
+  /** Every floor with its live status (elevator panel and lobby directory). */
+  floors: FloorStatus[] = [];
+  /** Room the user is in, from the latest `welcome`. */
+  roomId: string | undefined;
   /** Last engine error shown in the computer panel. */
   engineError: string | null = null;
   /** Artifact of the job card that is open in the viewer (instead of the card). */
@@ -29,7 +33,19 @@ export class PanelState {
         this.open = null;
         this.viewing = null;
         this.registration = null;
+        this.roomId = msg.roomId ?? msg.room.id;
+        // Another floor has its own job, mailbox and computer: nothing of the old one stays. The server sends the new
+        // floor's pending approvals and job right after the welcome.
+        this.data.job = null;
+        this.data.approvals = [];
+        this.data.reports = [];
+        this.data.details = null;
+        this.data.repos = [];
         return true;
+      case "floors":
+        this.floors = msg.floors;
+        // Only the floor lists show them; re-rendering another panel would drop what the user is typing.
+        return this.open === "elevator" || this.open === "directory";
       case "open_panel":
         this.open = msg.panel;
         this.viewing = null;

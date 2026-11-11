@@ -79,7 +79,7 @@ describe("activity buffer and forwarding", () => {
     await c.waitFor(() => c.received.some((m) => m.type === "activity"));
     expect(c.received.find((m) => m.type === "activity")).toEqual({
       type: "activity",
-      line: { ts: 1_001, agentId: "qa", text: "line 1", taskId: "task-1" },
+      line: { ts: 1_001, agentId: "qa", text: "line 1", taskId: "task-1", roomId: "project:r" },
     });
   });
 

@@ -87,6 +87,8 @@ export const ActivityLineSchema = z.object({
   taskId: z.string().min(1).optional(),
   /** Step the job was in when the line was written. */
   step: StepNameSchema.optional(),
+  /** Room (floor) the line belongs to, so the terminal can show "This floor" or "All floors". */
+  roomId: z.string().min(1).max(100).optional(),
 });
 export type ActivityLine = z.infer<typeof ActivityLineSchema>;
 
@@ -148,6 +150,11 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("deliver"), taskId: TaskIdSchema }),
   /** Elevator: go to another floor. Only accepted while the avatar stands at the elevator. Answered with a new `welcome`. */
   z.object({ type: z.literal("go_to"), roomId: RoomIdSchema }),
+  /**
+   * Activity terminal: `floor` (default on every connection) sends only the activity of the user's floor; `all` also sends
+   * the other floors' lines as they happen, plus their buffered lines right away.
+   */
+  z.object({ type: z.literal("activity_scope"), scope: z.enum(["floor", "all"]) }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 

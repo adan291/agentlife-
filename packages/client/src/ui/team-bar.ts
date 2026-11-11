@@ -50,15 +50,21 @@ export function parseBuilderStarted(text: string | undefined): string | null {
 export class TeamModel {
   private readonly byId = new Map<AgentId, TeamRow>();
   private readonly work = new WorkModel();
+  /** Agents that live on the current floor (from the latest `welcome`); everyone until the first one. */
+  private present = new Set<AgentId>(AGENT_IDS);
 
   constructor(now = Date.now()) {
     for (const id of AGENT_IDS) this.byId.set(id, { agentId: id, state: "idle", since: now });
     this.byId.get("builder")!.model = BUILDER_IDLE_LINE;
   }
 
-  /** Agents in display order: Architect, Developer, QA, Builder. */
+  /** Agents of the current floor in display order: Architect, Developer, QA, Builder. */
   rows(): TeamRow[] {
-    return AGENT_IDS.map((id) => this.byId.get(id)!);
+    return AGENT_IDS.filter((id) => this.present.has(id)).map((id) => this.byId.get(id)!);
+  }
+
+  isPresent(id: AgentId): boolean {
+    return this.present.has(id);
   }
 
   row(id: AgentId): TeamRow {
@@ -82,6 +88,7 @@ export class TeamModel {
   private applyRow(msg: ServerMsg, now: number): boolean {
     switch (msg.type) {
       case "welcome": {
+        this.present = new Set(msg.agents.map((a) => a.agentId));
         for (const id of AGENT_IDS) this.byId.set(id, { agentId: id, state: "idle", since: now });
         for (const a of msg.agents) {
           this.byId.set(a.agentId, { agentId: a.agentId, state: a.state, since: now, ...(a.text === undefined ? {} : { text: a.text }) });
@@ -142,6 +149,7 @@ const CSS = `
 .al-team[data-collapsed="true"] .al-team-ghost { margin-top: 0; box-shadow: 0 0 0 2px ${UI_COLOURS.panelBg}, 0 0 0 4px var(--al-row-colour); }
 .al-team-row { display: flex; gap: var(--al-s2); align-items: flex-start; width: 100%; text-align: left; padding: var(--al-s2); border: 0; border-top: 1px solid var(--al-border); border-left: 3px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; box-sizing: border-box; }
 .al-team-row:hover, .al-team-row:focus-visible { background: ${UI_COLOURS.inputBg}; }
+.al-team-row[hidden] { display: none; }
 .al-team-row[data-highlight="true"] { background: ${UI_COLOURS.inputBg}; }
 .al-team-row:not([data-state="idle"]) { border-left-color: var(--al-row-colour); }
 .al-team-ghost { flex: none; position: relative; width: 18px; height: 20px; margin-top: 2px; border-radius: 9px 9px 2px 2px; background: var(--al-role-colour); }
@@ -326,6 +334,8 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
   };
   const paintAll = () => {
     const now = Date.now();
+    // The team of the current floor only: the lobby has the Builder, a project floor the three role agents.
+    for (const id of AGENT_IDS) els.get(id)!.button.hidden = !model.isPresent(id);
     for (const row of model.rows()) paint(row, now);
   };
   paintAll();

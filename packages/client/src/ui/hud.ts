@@ -9,6 +9,9 @@ const CSS = `
 .al-status[data-status="reconnecting"] { border-color: var(--al-accent); color: ${UI_COLOURS.accentText}; }
 .al-notice { background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s1) var(--al-s3); color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); }
 .al-notice[hidden] { display: none; }
+.al-floor-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${UI_COLOURS.accentText}; font-weight: bold; }
+.al-floor-label[hidden] { display: none; }
+.al-shell[data-compact="true"] .al-floor-label { display: none; }
 .al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
 `;
@@ -36,6 +39,10 @@ export interface Hud {
   toast(text: string, ms?: number): void;
   /** Persistent line at the top of the stage (null hides it). */
   setNotice(text: string | null): void;
+  /** Name of the floor the user is on, in the top bar. */
+  setFloor(name: string): void;
+  /** Text of the Elevator shortcut (it counts the floors that wait for the user). */
+  setElevatorLabel(label: string, title?: string): void;
 }
 
 /** Top bar controls and stage messages: zoom button, text size, help, connection status, notice and toast. */
@@ -45,6 +52,7 @@ export function createHud(
   onHelp: () => void = () => {},
   font?: FontControls,
   onUseHere: () => void = () => {},
+  onElevator: () => void = () => {},
 ): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -62,6 +70,9 @@ export function createHud(
     return b;
   };
 
+  const elevator = button("Elevator", "Take the elevator to another floor");
+  elevator.addEventListener("click", onElevator);
+  mounts.right.appendChild(elevator);
   const zoom = button("");
   zoom.title = "Toggle zoom (Z)";
   zoom.addEventListener("click", onZoom);
@@ -92,6 +103,12 @@ export function createHud(
   useHere.addEventListener("click", onUseHere);
   status.append(statusText, useHere);
   mounts.left.appendChild(status);
+
+  const floor = document.createElement("span");
+  floor.className = "al-hud al-floor-label";
+  floor.setAttribute("aria-label", "Current floor");
+  floor.hidden = true;
+  mounts.left.appendChild(floor);
 
   const notice = document.createElement("div");
   notice.className = "al-hud al-notice";
@@ -126,6 +143,17 @@ export function createHud(
     setNotice(text) {
       notice.hidden = text === null;
       notice.textContent = text ?? "";
+    },
+    setFloor(name) {
+      floor.textContent = name;
+      floor.title = `You are on: ${name}`;
+      floor.hidden = name === "";
+    },
+    setElevatorLabel(label, title) {
+      elevator.textContent = label;
+      const t = title ?? "Take the elevator to another floor";
+      elevator.title = t;
+      elevator.setAttribute("aria-label", label === "Elevator" ? t : `${label}. ${t}`);
     },
     toast(text, ms = 2500) {
       toast.textContent = text;

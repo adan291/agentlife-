@@ -238,6 +238,33 @@ describe("messages stay on their floor", () => {
     expect(lobby.activity).toMatchObject([{ agentId: "builder", text: "Started S1" }]);
   });
 
+  it("sends other floors' activity only after the terminal asks for all floors, tagged with its floor", async () => {
+    const e = engineWith(["alpha", "beta"]);
+    const c = connect((await boot(e.link, "project:alpha")).port);
+    await floorsAre(c, ["project:beta"]);
+    e.push("task-beta", { type: "task.created", repoId: "beta", goal: "g" });
+    e.push("task-beta", { type: "agent.activity", agentId: "beta:architect", text: "before the switch" });
+    e.push("task-alpha", { type: "task.created", repoId: "alpha", goal: "g" });
+    e.push("task-alpha", { type: "agent.activity", agentId: "alpha:architect", text: "own floor" });
+    await c.waitFor(() => c.has((m) => m.type === "activity" && m.line.text === "own floor"));
+    expect(c.has((m) => m.type === "activity" && m.line.text === "before the switch")).toBe(false);
+    expect(c.received.find((m) => m.type === "activity")).toMatchObject({ line: { roomId: "project:alpha" } });
+
+    // The buffered lines of the other floor arrive at once, then its new lines as they happen.
+    c.send({ type: "activity_scope", scope: "all" });
+    await c.waitFor(() => c.has((m) => m.type === "activity" && m.line.text === "before the switch"));
+    expect(c.received.findLast((m) => m.type === "activity")).toMatchObject({ line: { roomId: "project:beta", agentId: "architect" } });
+    e.push("task-beta", { type: "agent.activity", agentId: "beta:architect", text: "after the switch" });
+    await c.waitFor(() => c.has((m) => m.type === "activity" && m.line.text === "after the switch"));
+
+    // Back to one floor: nothing more from the others.
+    c.send({ type: "activity_scope", scope: "floor" });
+    await new Promise((r) => setTimeout(r, 100));
+    e.push("task-beta", { type: "agent.activity", agentId: "beta:architect", text: "quiet again" });
+    await marker(c, e.push, "alpha", "m");
+    expect(c.has((m) => m.type === "activity" && m.line.text === "quiet again")).toBe(false);
+  });
+
   it("the computer of a floor offers only that floor's project", async () => {
     const e = engineWith(["alpha", "beta"]);
     const c = connect((await boot(e.link, "project:alpha")).port);

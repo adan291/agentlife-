@@ -11,11 +11,16 @@ import type { Shell } from "./shell.ts";
 export const TERMINAL_MAX_LINES = 300;
 export type TerminalFilter = AgentId | "all";
 export const TERMINAL_AGENTS: readonly AgentId[] = ["architect", "developer", "qa", "builder"];
+/** "floor": the lines of the floor the user is on; "all": every floor's lines, each tagged with its floor. */
+export type TerminalScope = "floor" | "all";
 
 /** Ring buffer of activity lines plus the agent filter and the unread count. Pure: the DOM layer renders `visible()`. */
 export class TerminalModel {
   private all: ActivityLine[] = [];
   filter: TerminalFilter = "all";
+  scope: TerminalScope = "floor";
+  /** Room the user is on; "This floor" shows its lines (and the ones that belong to no room). */
+  room: string | undefined;
   /** Lines that arrived while the dock was collapsed and have not been shown yet. */
   unread = 0;
 
@@ -23,15 +28,21 @@ export class TerminalModel {
     return this.all.length;
   }
 
-  /** Replaces the content (welcome snapshot after a reload). Seeded lines count as read. */
+  /** Replaces the content (welcome snapshot after a reload or a floor change). Seeded lines count as read. */
   seed(lines: readonly ActivityLine[]): void {
     this.all = lines.slice(-TERMINAL_MAX_LINES);
     this.unread = 0;
   }
 
-  /** `unseen`: nobody can see the line right now (dock collapsed), so it counts as unread. */
+  /**
+   * `unseen`: nobody can see the line right now (dock collapsed), so it counts as unread. Lines from other floors arrive
+   * late (a buffered backlog), so a line goes in at its place by time; a line that is already there is dropped.
+   */
   push(line: ActivityLine, unseen = false): void {
-    this.all.push(line);
+    if (this.all.some((l) => sameLine(l, line))) return;
+    let i = this.all.length;
+    while (i > 0 && this.all[i - 1]!.ts > line.ts) i--;
+    this.all.splice(i, 0, line);
     if (this.all.length > TERMINAL_MAX_LINES) this.all.splice(0, this.all.length - TERMINAL_MAX_LINES);
     if (unseen) this.unread = Math.min(this.unread + 1, TERMINAL_MAX_LINES);
   }
@@ -45,10 +56,18 @@ export class TerminalModel {
     return this.all[this.all.length - 1];
   }
 
-  /** Lines that pass the filter, oldest first (newest at the bottom). */
+  /** Lines that pass the scope and the agent filter, oldest first (newest at the bottom). */
   visible(): ActivityLine[] {
-    return this.filter === "all" ? this.all.slice() : this.all.filter((l) => l.agentId === this.filter);
+    return this.all.filter(
+      (l) =>
+        (this.filter === "all" || l.agentId === this.filter) &&
+        (this.scope === "all" || this.room === undefined || l.roomId === undefined || l.roomId === this.room),
+    );
   }
+}
+
+function sameLine(a: ActivityLine, b: ActivityLine): boolean {
+  return a.ts === b.ts && a.agentId === b.agentId && a.text === b.text && a.taskId === b.taskId && a.roomId === b.roomId;
 }
 
 /** One terminal row as plain parts: `HH:MM:SS  Role  #d232 develop  text`. `tag` is empty for lines that belong to no job. */
@@ -97,17 +116,27 @@ const CSS = `
 .al-term-time { color: ${UI_COLOURS.muted}; margin-right: 1.5ch; }
 .al-term-role { font-weight: bold; margin-right: 1.5ch; }
 .al-term-tag { color: ${UI_COLOURS.accentText}; margin-right: 1.5ch; }
+.al-term-floor { color: ${UI_COLOURS.accentText}; margin-right: 1.5ch; font-style: italic; }
 .al-term-empty { color: ${UI_COLOURS.muted}; }
 `;
 
 export interface Terminal {
   push(line: ActivityLine): void;
   seed(lines: readonly ActivityLine[]): void;
+  /** The user moved to another floor: "This floor" shows that floor's lines. */
+  setRoom(roomId: string): void;
   readonly model: TerminalModel;
 }
 
+export interface TerminalHooks {
+  /** The user chose "This floor" or "All floors". */
+  onScope?(scope: TerminalScope): void;
+  /** Name of a floor, to tag lines in "All floors". */
+  floorName?(roomId: string): string | undefined;
+}
+
 /** Activity terminal in the dock. The shell owns its height (drag the top edge, or collapse to the header row). */
-export function createTerminal(shell: Shell): Terminal {
+export function createTerminal(shell: Shell, hooks: TerminalHooks = {}): Terminal {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -145,13 +174,24 @@ export function createTerminal(shell: Shell): Terminal {
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "al-btn";
+  const scopeSelect = document.createElement("select");
+  scopeSelect.setAttribute("aria-label", "Which floors");
+  for (const [value, text] of [
+    ["floor", "This floor"],
+    ["all", "All floors"],
+  ] as const) {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = text;
+    scopeSelect.appendChild(o);
+  }
   const latest = document.createElement("span");
   latest.className = "al-term-latest";
   const unread = document.createElement("span");
   unread.className = "al-term-unread";
   unread.hidden = true;
   unread.setAttribute("role", "status");
-  head.append(title, latest, unread, select, toggle);
+  head.append(title, latest, unread, scopeSelect, select, toggle);
 
   const body = document.createElement("div");
   body.className = "al-term-body";
@@ -201,15 +241,25 @@ export function createTerminal(shell: Shell): Terminal {
       role.className = "al-term-role";
       role.style.color = cssHex(ROLE_COLOURS[line.agentId]);
       role.textContent = f.role;
+      const parts: (HTMLElement | Text)[] = [time];
+      const floorName = model.scope === "all" && line.roomId ? hooks.floorName?.(line.roomId) : undefined;
+      if (floorName) {
+        const floor = document.createElement("span");
+        floor.className = "al-term-floor";
+        floor.textContent = floorName;
+        floor.title = "Floor of this line";
+        parts.push(floor);
+      }
+      parts.push(role);
       if (f.tag) {
         const tag = document.createElement("span");
         tag.className = "al-term-tag";
         tag.textContent = f.tag;
         tag.title = "Job and step of this line";
-        row.append(time, role, tag, document.createTextNode(f.text));
-      } else {
-        row.append(time, role, document.createTextNode(f.text));
+        parts.push(tag);
       }
+      parts.push(document.createTextNode(f.text));
+      row.append(...parts);
       return row;
     });
     if (rows.length === 0) {
@@ -227,6 +277,12 @@ export function createTerminal(shell: Shell): Terminal {
     model.filter = select.value as TerminalFilter;
     render();
     body.scrollTop = body.scrollHeight;
+  });
+  scopeSelect.addEventListener("change", () => {
+    model.scope = scopeSelect.value === "all" ? "all" : "floor";
+    render();
+    body.scrollTop = body.scrollHeight;
+    hooks.onScope?.(model.scope);
   });
 
   // Resize with the arrow keys on the handle ...
@@ -264,6 +320,11 @@ export function createTerminal(shell: Shell): Terminal {
       model.seed(lines);
       render();
       body.scrollTop = body.scrollHeight;
+      paintSummary();
+    },
+    setRoom(roomId) {
+      model.room = roomId;
+      render();
       paintSummary();
     },
   };

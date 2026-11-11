@@ -78,6 +78,7 @@ describe("GET /tasks/:id/export", () => {
     expect(res.status).toBe(200);
     const exp = RunExportSchema.parse(await res.json());
     expect(exp.job.state).toBe("delivered");
+    expect(exp.roomId).toBe(`project:${exp.job.repoId}`);
     expect(exp.events.length).toBe(store.eventsFor(taskId).length);
     expect(exp.events.map((e) => e.seq)).toEqual([...exp.events.map((e) => e.seq)].sort((a, b) => a - b));
     expect(exp.artifacts.map((a) => a.kind)).toEqual(["plan", "diff", "test_log", "review", "report"]);
