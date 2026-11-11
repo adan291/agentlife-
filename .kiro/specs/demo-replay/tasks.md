@@ -4,7 +4,7 @@
   - `src/mode.ts`; route all asset URLs through `import.meta.env.BASE_URL`
   - _Requirements: 3.1, 3.2_
 
-- [ ] 2. Schedule builder and ReplayEngine
+- [x] 2. Schedule builder and ReplayEngine
   - Gap compression, speed, approval pause/resume; property test for the schedule
   - _Requirements: 1.2, 1.4, 2.3_
 
