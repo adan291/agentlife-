@@ -84,6 +84,47 @@ export function verdictBadge(doc: Document, verdict: ReportVerdict | undefined):
 
 export interface ReportViewerActions {
   back(): void;
+  /** Fetch the job's branch into the user's repository ("Deliver as branch"). */
+  deliver?(taskId: string): void;
+}
+
+/** `git log agentlife/task-1`: how to look at a delivered branch. Built from the engine's branch name. */
+export function deliveryCommand(branch: string): string {
+  return `git log ${branch}`;
+}
+
+/**
+ * The delivery block of a report on a registered project: the button while the branch can be delivered, and after
+ * delivery the branch name, its commit and the command to look at it. Nothing for reports without delivery.
+ */
+export function renderDelivery(doc: Document, report: Report, actions: ReportViewerActions): HTMLElement | null {
+  const d = report.delivery;
+  if (!d) return null;
+  const box = doc.createElement("section");
+  box.className = "al-card al-delivery";
+  box.dataset["delivery"] = d.state;
+  if (d.state === "available") {
+    const note = doc.createElement("p");
+    note.textContent = "The change is a branch in the hotel's copy of your project. Deliver it to get a new branch in your repository. Your files and your current branch stay as they are; nothing is merged or pushed.";
+    const btn = doc.createElement("button");
+    btn.type = "button";
+    btn.className = "al-btn";
+    btn.textContent = "Deliver as branch";
+    btn.dataset["action"] = "deliver";
+    btn.addEventListener("click", () => actions.deliver?.(report.taskId));
+    box.append(note, btn);
+    return box;
+  }
+  const done = doc.createElement("p");
+  done.append("Delivered as branch ");
+  const name = doc.createElement("code");
+  name.textContent = d.branch;
+  done.append(name, ` (commit ${d.commit.slice(0, 7)}). Look at it with `);
+  const cmd = doc.createElement("code");
+  cmd.textContent = deliveryCommand(d.branch);
+  done.append(cmd, ". Merge it yourself when you are happy with it.");
+  box.appendChild(done);
+  return box;
 }
 
 /**
@@ -124,6 +165,8 @@ export function renderReportViewer(doc: Document, report: Report, actions: Repor
   }
 
   root.append(back, head);
+  const delivery = renderDelivery(doc, report, actions);
+  if (delivery) root.appendChild(delivery);
   if (list.children.length > 0) root.appendChild(list);
   root.appendChild(renderMarkdown(doc, report.markdown));
   return root;

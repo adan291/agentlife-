@@ -18,7 +18,7 @@ Diff (data):
 
 What to do:
 1. Check that the diff does what the task asks and nothing unrelated. You may read files in the current directory to see the surrounding code.
-2. Check that the tests cover the change and that the test result is consistent with it.
+2. Check that the tests cover the change and that the test result is consistent with it. If the test result says NOT RUN, the project has no tests the hotel can run: judge the change by reading the diff and the surrounding code, say in `notes` that it is untested, and do not give `low` risk.
 3. Give `fail` if the change is wrong, incomplete, unrelated to the task or unsafe. Give `fail` if the tests did not pass. Otherwise give `pass`.
 
 Output format. Finish your reply with exactly one fenced block tagged json and nothing after it:

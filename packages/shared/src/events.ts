@@ -114,6 +114,13 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     title: z.string().min(1).max(200),
     markdown: z.string().max(100_000),
   }),
+  /** The job's branch was fetched into the user's repository (project-registry, requirement 5.4). */
+  z.object({
+    ...base,
+    type: z.literal("delivery.done"),
+    branch: z.string().min(1).max(200),
+    commit: z.string().min(1).max(64),
+  }),
 ]);
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 export type AgentEventType = AgentEvent["type"];

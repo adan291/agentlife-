@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (demo-replay tasks 1–7 done, submission texts written, branch feat/demo-replay, not merged)
+Updated: 2026-11-11 (project-registry tasks 1–5 done on branch feat/project-registry, not merged; task 6 is the live check with the user)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -28,6 +28,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 20:50 (IDE): user is Adan Sanchez Manzano (GitHub adan291), created https://github.com/adan291/agentlife-; git config set to the noreply identity. LICENSE holder updated, README demo URL set, CI token limited to contents: read. First push of main.
 - 2026-11-11 21:15 (IDE): user's vision: a Habbo-style agent hotel where each real project is a room with its team. Plan: A project-registry (+ delivery as branch), B hotel-floors, C hr-desk, D pipeline-editor, E re-record demo + video. Kiro chose D:\AgentHotel as the allowed projects folder. S14 started. Pages runs were queued on GitHub.
 - 2026-11-11 21:25 (IDE): user asked for the HR rooms and the functional hotel, not only a demo. Specs hotel-floors, hr-desk, pipeline-editor written and queued as S15-S19 after S14 (project-registry).
+- 2026-11-11 22:00 (IDE): S14 done and merged after review. GitHub: Linux CI green, Windows CI failed on GitHub (passes in a clean local clone; the log needs a signed-in GitHub, gh not installed); Pages build still queued. Next: live check of project-registry with a small project in D:\AgentHotel, then S15.
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
@@ -56,9 +57,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
 | job-insight | 5 / 5 | main | Done, reviewed (approve) and merged; review fixes applied (1 MB total cap on job_details, outside files not counted). Look in the browser pending (user) |
-| project-registry | 0 / 6 | — | Agent hotel step 1: Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch in the user's repo. S14 (Sonnet 5.5); task 6 live with the user |
-| hotel-floors | 0 / 5 | — | Lobby (Reception, elevator, HR door, directory), one floor per project, elevator with live floor status, per-project jobs (max 2 at once). S15-S16 |
-| hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
+| project-registry | 5 / 6 | main | Tasks 1-5 done, reviewed and merged; review fixes applied (no paths in clone errors, more secret denies, secrets scrubbed from test copies, length-only masks, no FETCH_HEAD). Task 6: live check with the user |
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
 | demo-replay | 7 / 7 | main | Done. Replay mode, Pages workflow, demo build guard, Playwright demo smoke test (passes, Edge), Kiroween polish, README/kiro-usage/video script. Not published yet |
 
@@ -76,6 +75,12 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- project-registry (tasks 1–5 done; what to know for task 6 and for review):
+  - Not run live: Reception in a browser, a real `kiro-cli` job on a registered project, the first per-project Docker image build, and a real delivery. Everything else is covered by tests that use real git repositories in temp folders and the real pipeline steps over scripted agents (registration rules, path property test, clone, report, delivery leaves HEAD, index, working files, config and other refs unchanged, existing branch refused).
+  - Task 6 steps: start the engine (it creates `D:\AgentHotel` if missing; set `RUNTIME` unset for the real pipeline, Docker running), start the world-server with `ENGINE=http`, open the client, click the new Reception desk (north wall, left of the lamp), register a small node project that lives in `D:\AgentHotel\<name>` (git repo with a commit, `package.json` + `package-lock.json`), start a job on it from the computer, approve, open the report and press "Deliver as branch", then `git log agentlife/<task>` in the project. The first job on a project builds its test image (needs network, can take a minute or two; the test step timeout covers it, see limits.json).
+  - Known limits: one job clone per project, so deliver before starting the next job on the same project (otherwise `branch_missing`); under `RUNTIME=fake` delivery cannot work (no clone); a test command is not prefilled by detection (blank = default); `.env.example` is hidden from the agents too (deny wins).
+  - The task 1 commit was amended once (before any further commit) to build test addresses at runtime, because the repository scanner flagged the literals. Nothing was pushed.
+  - Pending after the live check: merge to main (user), then hotel-floors.
 - demo-replay S12 (tasks 5–6 done, `pnpm check` passes, `e2e:demo` passes with Edge). What exists:
   - `pnpm --filter @agentlife/client check:demo-build` builds with `VITE_MODE=demo` into a temp folder and fails if the output holds `ws://`, port 8787/8788, 127.0.0.1, localhost, `VITE_WORLD_URL`, `LiveTransport` or `new WebSocket(` (`packages/client/tools/demo-guard.ts`, unit tested). To make that pass, `main.ts` now tests `import.meta.env.VITE_MODE === "demo"` (dotted access, so Vite folds it) and the live branch is removed from a demo build. A demo build ignores `?mode=live`. It runs in CI (`ci.yml`) and in `pages.yml`.
   - `.github/workflows/pages.yml` (push to main or manual): check, demo-build check, demo build with `--base=/<repo name>/`, Playwright smoke test, upload and deploy. Untested on GitHub (no repo yet): the repo needs Pages set to "GitHub Actions" in its settings.

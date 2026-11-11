@@ -237,7 +237,7 @@ describe("report viewer", () => {
 });
 
 describe("mailbox list", () => {
-  const data = (reports: Report[]): PanelData => ({ repos: [], job: null, approvals: [], reports, details: null });
+  const data = (reports: Report[]): PanelData => ({ repos: [], projects: [], job: null, approvals: [], reports, details: null });
   const actions = () => {
     const calls: string[] = [];
     return { calls, decide: () => undefined, openReport: (id: string) => calls.push(`open:${id}`), back: () => calls.push("back") };

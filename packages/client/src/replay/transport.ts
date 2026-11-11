@@ -118,6 +118,14 @@ export class ReplayTransport implements Transport {
         return this.resolve(msg.approvalId, msg.decision);
       case "job_details":
         return this.emit({ type: "job_details", details: this.details() });
+      case "register_project":
+        return this.emit({
+          type: "register_result",
+          result: { status: "error", code: "outside_allowed_roots", message: "Registering projects is off in the demo. Run AGENT LIFE on your computer to use the Reception." },
+        });
+      case "remove_project":
+      case "deliver":
+        return this.emit({ type: "error", code: "project_error", message: "This is a recorded run: nothing can be changed here." });
       default:
         this.deliver(this.sim.handleIntent(this.you, msg));
     }
@@ -408,6 +416,11 @@ export class ReplayTransport implements Transport {
       this.emit({
         type: "repos",
         repos: [{ id: this.exp.job.repoId, name: this.exp.job.repoId, description: "Recorded run. The goal is fixed." }],
+      });
+    } else if (panel === "reception") {
+      this.emit({
+        type: "projects",
+        projects: [{ id: this.exp.job.repoId, name: this.exp.job.repoId, stack: "node-npm", testCommand: "npm test", builtin: true, registeredAt: 0 }],
       });
     } else if (panel === "mailbox") {
       for (const a of this.approvals.values()) this.emit({ type: "approval", approval: a });

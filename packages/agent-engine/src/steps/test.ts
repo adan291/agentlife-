@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { StepTimeoutError } from "../errors.ts";
+import { git } from "../git.ts";
 import type { StepContext, TestResult } from "../jobs/steps.ts";
-import { findRepo, worktreeDir, type PipelineDeps } from "./deps.ts";
+import { repoDir, resolveProject, worktreeDir, type PipelineDeps } from "./deps.ts";
+import { buildRunnerImage, runnerImageTag } from "./runner-image.ts";
 
 export const RUNNER_IMAGE = "agentlife-runner:1";
 export const RUNNER_BUILD_HINT = "pnpm --filter @agentlife/agent-engine runner:build";
@@ -76,8 +78,10 @@ export interface DockerRunSpec {
   taskId: string;
   /** Absolute host path of the worktree. Mounted read-only. */
   worktree: string;
-  /** From config/repos.json. Never from a model or a user. */
+  /** From config/repos.json or the user's own project registration. Never from a model. */
   testCommand: string;
+  /** Test image. Default: the image of the built-in fixture. */
+  image?: string;
 }
 
 /**
@@ -85,7 +89,9 @@ export interface DockerRunSpec {
  * a read-only mount of the worktree copied into a size-limited tmpfs, no capabilities, a non-root user.
  */
 export function buildRunArgs(spec: DockerRunSpec): string[] {
-  const script = `cp -r /src/. /work/ && cd /work && ln -s /deps/node_modules node_modules && ${spec.testCommand}`;
+  // Secret-looking files the user accepted at registration never reach the tests' output (and from there QA and the report).
+  const scrub = "find /work \\( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.pem' -o -name '*.key' -o -name 'id_rsa*' -o -name 'id_ed25519*' -o -name '*.p12' -o -name '*.pfx' -o -name '*.jks' -o -name '*.keystore' -o -name '.npmrc' -o -name '.netrc' -o -name '.pypirc' \\) ! -name '.env.example' -type f -delete";
+  const script = `cp -r /src/. /work/ && ${scrub} && cd /work && ln -s /deps/node_modules node_modules && ${spec.testCommand}`;
   return [
     "run",
     "--rm",
@@ -118,7 +124,7 @@ export function buildRunArgs(spec: DockerRunSpec): string[] {
     "NO_COLOR=1",
     "-v",
     `${spec.worktree}:/src:ro`,
-    RUNNER_IMAGE,
+    spec.image ?? RUNNER_IMAGE,
     "sh",
     "-c",
     script,
@@ -137,25 +143,50 @@ function firstLine(text: string): string {
   return text.trim().split(/\r?\n/)[0]?.slice(0, 200) ?? "";
 }
 
+/** Result of a project without a supported test setup: nothing ran, and that is not a failure (requirement 4.3). */
+export const NO_TESTS_LOG = "not run (no supported test setup)";
+
 /**
- * Test step: runs the repo's `testCommand` on the Developer's worktree in a throwaway container.
+ * Test image of a registered project, built on first use from the package.json and package-lock.json of the commit the
+ * job started from (read from the job clone, so a Developer edit cannot change what gets installed).
+ */
+async function projectImage(deps: PipelineDeps, ctx: StepContext, projectId: string, exec: DockerExec): Promise<string> {
+  const clone = repoDir(deps, projectId);
+  const lockfile = await git(clone, ["show", "HEAD:package-lock.json"], { signal: ctx.signal });
+  const tag = runnerImageTag(projectId, lockfile);
+  const found = await exec(["image", "inspect", "--format", "{{.Id}}", tag], { signal: ctx.signal });
+  ctx.signal.throwIfAborted();
+  if (found.code === 0) return tag;
+  const packageJson = await git(clone, ["show", "HEAD:package.json"], { signal: ctx.signal });
+  deps.logger?.info("building test image", { taskId: ctx.taskId, project: projectId, tag });
+  await buildRunnerImage({ tag, packageJson, lockfile, exec, signal: ctx.signal });
+  return tag;
+}
+
+/**
+ * Test step: runs the project's test command on the Developer's worktree in a throwaway container.
  * Failing tests are a result (`passed: false`); a missing Docker, a missing image, a timeout and
- * cancellation are errors.
+ * cancellation are errors. A project without a supported test setup skips the step.
  */
 export async function testStep(deps: PipelineDeps, ctx: StepContext, exec: DockerExec = defaultDockerExec): Promise<TestResult> {
-  const repo = findRepo(deps, ctx.repoId);
+  const project = resolveProject(deps, ctx.repoId);
   const worktree = worktreeDir(deps, ctx.taskId);
   if (!existsSync(worktree)) throw new Error(`worktree is missing: ${worktree}`);
   ctx.signal.throwIfAborted();
+  if (project.stack === "unsupported-tests") return { passed: true, skipped: true, log: NO_TESTS_LOG };
 
   const info = await exec(["version", "--format", "{{.Server.Version}}"], { signal: ctx.signal });
   ctx.signal.throwIfAborted();
   if (info.spawnError) throw new DockerUnavailableError(`cannot start docker (${info.spawnError.message})`);
   if (info.code !== 0) throw new DockerUnavailableError(firstLine(info.output) || `docker version exited with ${String(info.code)}`);
-  const image = await exec(["image", "inspect", "--format", "{{.Id}}", RUNNER_IMAGE], { signal: ctx.signal });
-  ctx.signal.throwIfAborted();
-  if (image.code !== 0) throw new Error(`runner_image_missing: image ${RUNNER_IMAGE} not found; build it with: ${RUNNER_BUILD_HINT}`);
-
+  let image = RUNNER_IMAGE;
+  if (project.builtin) {
+    const found = await exec(["image", "inspect", "--format", "{{.Id}}", RUNNER_IMAGE], { signal: ctx.signal });
+    ctx.signal.throwIfAborted();
+    if (found.code !== 0) throw new Error(`runner_image_missing: image ${RUNNER_IMAGE} not found; build it with: ${RUNNER_BUILD_HINT}`);
+  } else {
+    image = await projectImage(deps, ctx, project.id, exec);
+  }
   const name = containerName(ctx.taskId);
   const killContainer = async (): Promise<void> => {
     await exec(["kill", name]).catch(() => undefined);
@@ -172,7 +203,7 @@ export async function testStep(deps: PipelineDeps, ctx: StepContext, exec: Docke
   const onStop = (): void => void killContainer();
   ac.signal.addEventListener("abort", onStop, { once: true });
   try {
-    const res = await exec(buildRunArgs({ taskId: ctx.taskId, worktree, testCommand: repo.testCommand }), { signal: ac.signal });
+    const res = await exec(buildRunArgs({ taskId: ctx.taskId, worktree, testCommand: project.testCommand, image }), { signal: ac.signal });
     if (ac.signal.aborted) {
       await killContainer();
       throw timedOut ? new StepTimeoutError("test") : ac.signal.reason;

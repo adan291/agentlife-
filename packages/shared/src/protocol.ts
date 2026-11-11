@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
+import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
 
 export const MAX_MESSAGE_BYTES = 16 * 1024;
@@ -14,7 +15,7 @@ const DirSchema = z.number().int().min(0).max(7);
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent ids are strings, so they never collide. */
@@ -85,6 +86,13 @@ export const ActivityLineSchema = z.object({
 });
 export type ActivityLine = z.infer<typeof ActivityLineSchema>;
 
+export const ReportDeliverySchema = z.discriminatedUnion("state", [
+  /** The job's branch can be fetched into the user's repository (the "Deliver as branch" button). */
+  z.object({ state: z.literal("available") }),
+  z.object({ state: z.literal("done"), branch: DeliveryInfoSchema.shape.branch, commit: DeliveryInfoSchema.shape.commit }),
+]);
+export type ReportDelivery = z.infer<typeof ReportDeliverySchema>;
+
 export const ReportSchema = z.object({
   reportId: z.string().min(1),
   taskId: z.string().min(1),
@@ -94,6 +102,8 @@ export const ReportSchema = z.object({
   verdict: VerdictSchema.optional(),
   /** Epoch ms when the report was delivered. */
   ts: z.number().int().nonnegative().optional(),
+  /** Absent: not a job on a registered project, or the engine does not know. */
+  delivery: ReportDeliverySchema.optional(),
 });
 export type Report = z.infer<typeof ReportSchema>;
 
@@ -103,6 +113,8 @@ export const ErrorCodeSchema = z.enum([
   "rate_limited",
   "busy",
   "engine_unavailable",
+  "project_error",
+  "delivery_failed",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -124,6 +136,12 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   }),
   /** Asks for the job card: the job view and the contents of its artifacts. Answered with `job_details`. */
   z.object({ type: z.literal("job_details"), taskId: TaskIdSchema }),
+  /** Reception: register a project. Answered with `register_result` (and `projects` when it worked). */
+  z.object({ type: z.literal("register_project"), ...RegisterProjectBodySchema.shape }),
+  /** Reception: unregister a project (the user's files are not touched). Answered with `projects`. */
+  z.object({ type: z.literal("remove_project"), projectId: z.string().min(1).max(100) }),
+  /** Report viewer: fetch the job's branch into the user's repository. Answered with `report` (resend) or an error. */
+  z.object({ type: z.literal("deliver"), taskId: TaskIdSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -162,6 +180,10 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("say"), id: AvatarIdSchema, text: z.string().min(1).max(300) }),
   z.object({ type: z.literal("open_panel"), panel: PanelNameSchema, data: z.unknown().optional() }),
   z.object({ type: z.literal("repos"), repos: z.array(RepoSchema) }),
+  /** Reception panel data: every project (the built-in one first). Sent when the panel opens and after a change. */
+  z.object({ type: z.literal("projects"), projects: z.array(ProjectSchema) }),
+  /** Outcome of `register_project`: registered, findings to accept, or the rule that refused it. */
+  z.object({ type: z.literal("register_result"), result: RegisterProjectResultSchema }),
   z.object({ type: z.literal("job_update"), job: JobViewSchema }),
   z.object({ type: z.literal("approval"), approval: ApprovalSchema }),
   z.object({ type: z.literal("report"), report: ReportSchema, resend: z.literal(true).optional() }),

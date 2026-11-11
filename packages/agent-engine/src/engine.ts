@@ -1,8 +1,9 @@
 import type http from "node:http";
+import path from "node:path";
 import { createActivityEmitter } from "./activity.ts";
 import { loadConfig, type EngineConfig } from "./config.ts";
 import { installAgents, ROLES } from "./agents.ts";
-import { dataPaths } from "./paths.ts";
+import { dataPaths, PROJECT_ROOT } from "./paths.ts";
 import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, type Route } from "./http/server.ts";
 import { createEventsRoute } from "./http/sse.ts";
 import { createExportRoute } from "./http/export.ts";
@@ -11,6 +12,9 @@ import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
 import { noopLogger, type Logger } from "./log.ts";
+import { ProjectRegistry } from "./projects/registry.ts";
+import { createDeliverRoute, createProjectRoutes } from "./projects/routes.ts";
+import { allowedRoots } from "./projects/roots.ts";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
 import { createPipelineSteps } from "./steps/index.ts";
@@ -38,11 +42,18 @@ export interface EngineOptions {
   extraRoutes?: Route[];
   /** SSE heartbeat interval in ms (default 15000). */
   heartbeatMs?: number;
+  /** Allowed project roots. Default: `AGENTLIFE_PROJECT_ROOTS` or config/hotel.json. */
+  projectRoots?: string[];
+  /** Where registered projects are stored. Default: `AGENTLIFE_PROJECTS_FILE` or `<dataDir>/projects.json`. */
+  projectsFile?: string;
+  /** A ready registry (tests that build their own pipeline steps share it with the engine). */
+  projects?: ProjectRegistry;
 }
 
 export interface Engine {
   store: Store;
   runner: JobRunner;
+  projects: ProjectRegistry;
   server: http.Server;
   config: EngineConfig;
   host: string;
@@ -93,6 +104,15 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const store =
     opts.store ?? new Store({ ...(opts.dataDir ? { runsDir: paths.runs } : {}), ...opts.storeOptions });
   let steps = opts.steps;
+  const projects =
+    opts.projects ??
+    new ProjectRegistry({
+      file: opts.projectsFile ?? process.env["AGENTLIFE_PROJECTS_FILE"] ?? path.join(paths.root, "projects.json"),
+      roots: opts.projectRoots ?? allowedRoots(),
+      builtin: config.repos,
+      reposDir: paths.repos,
+      agentlifeRoot: PROJECT_ROOT,
+    });
   const activity = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
   if (!steps) {
     const real = usesRealPipeline(config);
@@ -103,7 +123,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     const models = roleModels(config);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, limits: config.limits, logger, activity, models })
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models })
       : createRuntimeSteps({ runtimes, store, logger, activity, models });
   }
   const ambient =
@@ -127,10 +147,13 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     config,
     logger,
     token: opts.token,
+    projects,
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
-      createExportRoute(store),
+      createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
       createCrewRoute(createCrewRelay({ append: (ev) => store.appendEvent(ev) })),
+      ...createProjectRoutes(projects, runner, store),
+      createDeliverRoute({ registry: projects, paths, store, logger }),
       ...(opts.extraRoutes ?? []),
     ],
   });
@@ -140,6 +163,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   return {
     store,
     runner,
+    projects,
     server,
     config,
     host,

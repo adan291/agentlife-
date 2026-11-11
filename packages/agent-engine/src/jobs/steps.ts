@@ -22,6 +22,8 @@ export interface TestResult {
   log: string;
   /** Exit code of the test command, when it ran. */
   exitCode?: number;
+  /** The project has no supported test setup, so nothing ran. `passed` is true then; the report says "without tests". */
+  skipped?: boolean;
 }
 
 export type Verdict = "pass" | "fail";
@@ -37,6 +39,8 @@ export interface ReportInput {
   review?: Review;
   /** Set when the job failed (timeout, error, restart). */
   failureReason?: string;
+  /** Commit and branch of the user's project that the job started from. Set by the report step for registered projects. */
+  basedOn?: { commit: string; branch: string };
 }
 
 /** The five job steps. The runner owns state, events, artifacts and timeouts; steps only produce data. */

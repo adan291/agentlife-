@@ -1,5 +1,6 @@
 import type { ReportInput, StepContext } from "../jobs/steps.ts";
-import type { PipelineDeps } from "./deps.ts";
+import { git } from "../git.ts";
+import { repoDir, resolveProject, type PipelineDeps } from "./deps.ts";
 import { logTail } from "./review.ts";
 
 export const REPORT_DIFF_MAX_LINES = 300;
@@ -97,7 +98,8 @@ export function buildReport(input: ReportInput, facts: readonly StepFact[] = [])
     out.push(`- **Task:** ${inlineCode(input.task.title)}`);
     if (input.task.acceptance) out.push(`- **Done when:** ${inlineCode(input.task.acceptance, 300)}`);
   }
-  out.push(`- **Verdict:** ${input.verdict === "pass" ? "PASS" : "FAIL"}`);
+  out.push(`- **Verdict:** ${input.verdict === "pass" ? (input.test?.skipped ? "PASS (without tests)" : "PASS") : "FAIL"}`);
+  if (input.basedOn) out.push(`- Based on commit ${inlineCode(input.basedOn.commit, 40)} of ${inlineCode(input.basedOn.branch, 200)}`);
   out.push("");
 
   if (input.failureReason) {
@@ -126,7 +128,9 @@ export function buildReport(input: ReportInput, facts: readonly StepFact[] = [])
   out.push("");
 
   out.push("## Tests", "");
-  if (input.test) {
+  if (input.test?.skipped) {
+    out.push("Not run (no supported test setup). The verdict rests on the review alone.");
+  } else if (input.test) {
     const code = input.test.exitCode === undefined ? "" : ` (exit code ${input.test.exitCode})`;
     out.push(`${input.test.passed ? "Passed" : "Failed"}${code}. Last lines of the log:`, "");
     out.push(codeBlock(logTail(input.test.log, REPORT_LOG_MAX_LINES, REPORT_LOG_MAX_CHARS)));
@@ -204,7 +208,22 @@ export function collectFacts(deps: PipelineDeps, taskId: string): StepFact[] {
   });
 }
 
+/** Commit and branch the job started from, for a registered project: the job clone still sits on them. */
+async function basedOn(deps: PipelineDeps, repoId: string): Promise<ReportInput["basedOn"]> {
+  try {
+    const project = resolveProject(deps, repoId);
+    if (project.builtin) return undefined;
+    const dir = repoDir(deps, repoId);
+    const commit = (await git(dir, ["rev-parse", "--short=7", "HEAD"])).trim();
+    const branch = (await git(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"])).trim();
+    return commit && branch ? { commit, branch } : undefined;
+  } catch {
+    return undefined; // the job failed before the clone existed
+  }
+}
+
 /** Report step: the template filled with the job's data. The runner calls it for failed jobs too (requirement 8.2). */
 export async function reportStep(deps: PipelineDeps, ctx: StepContext, input: ReportInput): Promise<{ title: string; markdown: string }> {
-  return buildReport(input, collectFacts(deps, ctx.taskId));
+  const from = await basedOn(deps, ctx.repoId);
+  return buildReport(from ? { ...input, basedOn: from } : input, collectFacts(deps, ctx.taskId));
 }

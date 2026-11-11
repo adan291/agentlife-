@@ -8,7 +8,7 @@ import {
   PROTOCOL_VERSION,
   ServerMsgSchema,
 } from "@agentlife/shared";
-import type { ActivityLine, AgentEvent, AgentId, AgentWork, Approval, ErrorCode, JobState, Report, ServerMsg, StepName, WorldSim } from "@agentlife/shared";
+import type { ActivityLine, AgentEvent, AgentId, AgentWork, Approval, ErrorCode, JobState, RegisterProjectBody, Report, ServerMsg, StepName, WorldSim } from "@agentlife/shared";
 import type { EngineLink } from "./engine-link.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 
@@ -119,6 +119,29 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  /** Reception data. Project paths never get this far: the engine only returns id, name, stack and test command. */
+  const sendProjects = async (ws: WebSocket) => {
+    if (!engine?.listProjects) return sendError(ws, "engine_unavailable", "no engine connected");
+    try {
+      send(ws, { type: "projects", projects: await engine.listProjects() });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot list projects");
+    }
+  };
+
+  /** After a project was added or removed: the Reception list and the computer panel's repository list. */
+  const sendProjectLists = async (ws: WebSocket) => {
+    await sendProjects(ws);
+    if (!engine) return;
+    try {
+      send(ws, { type: "repos", repos: await engine.listRepos() });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot list repositories");
+    }
+  };
+
+  const errorText = (e: unknown, fallback: string): string => (e instanceof Error && e.message ? e.message.slice(0, 200) : fallback);
+
   const panelData = async (ws: WebSocket, panel: string) => {
     if (panel === "computer") {
       if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
@@ -127,6 +150,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       } catch {
         sendError(ws, "engine_unavailable", "cannot list repositories");
       }
+    } else if (panel === "reception") {
+      await sendProjects(ws);
     } else if (panel === "mailbox") {
       for (const a of approvals.values()) send(ws, { type: "approval", approval: a });
       for (const r of reports.values()) send(ws, { type: "report", report: r, resend: true });
@@ -219,8 +244,18 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             ts: ev.ts,
             ...(verdicts.has(ev.taskId) ? { verdict: verdicts.get(ev.taskId)! } : {}),
           };
+          // The job card tells whether the job's branch can be delivered to the user's repository.
+          if (engine?.getJobDetails) {
+            try {
+              const { job } = await engine.getJobDetails(ev.taskId);
+              if (job.delivery) r.delivery = { state: "done", branch: job.delivery.branch, commit: job.delivery.commit };
+              else if (job.deliverable) r.delivery = { state: "available" };
+            } catch {
+              // No delivery button, the report itself still arrives.
+            }
+          }
           reports.set(r.reportId, r);
-          if (ws) send(ws, { type: "report", report: r });
+          if (current?.ws) send(current.ws, { type: "report", report: r });
           break;
         }
         case "agent.activity": {
@@ -301,6 +336,42 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  const registerProject = async (ws: WebSocket, body: RegisterProjectBody) => {
+    if (!engine?.registerProject) return sendError(ws, "engine_unavailable", "no engine connected");
+    try {
+      const result = await engine.registerProject(body);
+      send(ws, { type: "register_result", result });
+      if (result.status === "ok") await sendProjectLists(ws);
+    } catch {
+      sendError(ws, "project_error", "cannot register the project");
+    }
+  };
+
+  const removeProject = async (ws: WebSocket, projectId: string) => {
+    if (!engine?.removeProject) return sendError(ws, "engine_unavailable", "no engine connected");
+    try {
+      await engine.removeProject(projectId);
+    } catch (e) {
+      return sendError(ws, "project_error", errorText(e, "cannot remove the project"));
+    }
+    await sendProjectLists(ws);
+  };
+
+  /** Fetches the job's branch into the user's repository, then re-sends the report with its new delivery state. */
+  const deliverJob = async (ws: WebSocket, taskId: string) => {
+    if (!engine?.deliver) return sendError(ws, "engine_unavailable", "no engine connected");
+    try {
+      const info = await engine.deliver(taskId);
+      for (const r of reports.values()) {
+        if (r.taskId !== taskId) continue;
+        r.delivery = { state: "done", branch: info.branch, commit: info.commit };
+        send(ws, { type: "report", report: r, resend: true });
+      }
+    } catch (e) {
+      sendError(ws, "delivery_failed", errorText(e, "cannot deliver the branch"));
+    }
+  };
+
   const tick = setInterval(() => deliver(sim.dueMessages()), options.tickMs ?? 50);
 
   // Model per role for the agent tooltips. Cached so the welcome stays synchronous; refreshed on every
@@ -359,6 +430,17 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void resolveApproval(ws, msg.approvalId, msg.decision, msg.note);
       } else if (msg.type === "job_details") {
         void sendJobDetails(ws, msg.taskId);
+      } else if (msg.type === "register_project") {
+        void registerProject(ws, {
+          path: msg.path,
+          name: msg.name,
+          ...(msg.testCommand === undefined ? {} : { testCommand: msg.testCommand }),
+          ...(msg.acceptFindings === undefined ? {} : { acceptFindings: msg.acceptFindings }),
+        });
+      } else if (msg.type === "remove_project") {
+        void removeProject(ws, msg.projectId);
+      } else if (msg.type === "deliver") {
+        void deliverJob(ws, msg.taskId);
       } else {
         deliver(sim.handleIntent(current.userId, msg));
       }

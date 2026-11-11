@@ -1,4 +1,15 @@
-import type { AgentEvent, AgentId, ApprovalDecision, JobDetails, JobView, Repo } from "@agentlife/shared";
+import type {
+  AgentEvent,
+  AgentId,
+  ApprovalDecision,
+  DeliveryInfo,
+  JobDetails,
+  JobView,
+  Project,
+  RegisterProjectBody,
+  RegisterProjectResult,
+  Repo,
+} from "@agentlife/shared";
 
 /**
  * How the world-server talks to an agent engine. The fake engine (scripted) and the real HTTP/SSE
@@ -13,6 +24,12 @@ export interface EngineLink {
   getJobDetails?(taskId: string): Promise<JobDetails>;
   /** Model label per role for the hover tooltip. Optional: a link without it sends no `models`. */
   roleModels?(): Promise<Partial<Record<AgentId, string>>>;
+  /** Reception: registered projects (id and name, never a path). Optional: a link without it has no Reception. */
+  listProjects?(): Promise<Project[]>;
+  registerProject?(body: RegisterProjectBody): Promise<RegisterProjectResult>;
+  removeProject?(projectId: string): Promise<void>;
+  /** Fetches the job's branch into the user's repository. Rejects with the engine's message when it refuses. */
+  deliver?(taskId: string): Promise<DeliveryInfo>;
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;

@@ -4,6 +4,7 @@ import type { PanelContent } from "./computer.ts";
 import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { PanelState } from "./panel-state.ts";
+import { createReceptionPanel } from "./reception.ts";
 import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
@@ -57,7 +58,7 @@ const CSS = `
 .al-new { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s1); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; }
 `;
 
-const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job" };
+const TITLES: Record<PanelName, string> = { computer: "Computer", mailbox: "Mailbox", board: "Job", reception: "Reception" };
 
 /** How long the job card waits after a `work` message before it asks for fresh numbers. */
 export const DETAILS_REFRESH_MS = 1500;
@@ -80,6 +81,8 @@ export interface PanelHooks {
   onReportOpened?(reportId: string): void;
   /** Replay mode: the goal of the recorded run. The computer panel shows it read-only. */
   lockedGoal?: string;
+  /** Replay mode: registering and removing projects is off; the Reception panel shows this text instead of the form. */
+  projectsLocked?: string;
 }
 
 /**
@@ -99,6 +102,10 @@ export function createPanels(
 
   const state = new PanelState();
   const computer = createComputerPanel(document, { startJob: (repoId, goal) => send({ type: "start_job", repoId, goal }) }, hooks.lockedGoal);
+  const reception = createReceptionPanel(document, {
+    register: (body) => send({ type: "register_project", ...body }),
+    remove: (projectId) => send({ type: "remove_project", projectId }),
+  });
 
   const root = document.createElement("div");
   root.className = "al-panel";
@@ -137,34 +144,37 @@ export function createPanels(
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
-        : state.open === "mailbox"
-          ? {
-              body: renderMailbox(
-                document,
-                state.data,
-                {
-                  decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }),
-                  openReport: (reportId) => openReport(reportId),
+        : state.open === "reception"
+          ? reception(state.data, { registration: state.registration, engineError: state.engineError, locked: hooks.projectsLocked }, render)
+          : state.open === "mailbox"
+            ? {
+                body: renderMailbox(
+                  document,
+                  state.data,
+                  {
+                    decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }),
+                    openReport: (reportId) => openReport(reportId),
+                    deliver: (taskId) => send({ type: "deliver", taskId }),
+                    back: () => {
+                      state.back();
+                      render();
+                    },
+                  },
+                  { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
+                ),
+              }
+            : {
+                body: renderJobPanel(document, state.data, state.viewing, {
+                  view: (artifactId) => {
+                    state.view(artifactId);
+                    render();
+                  },
                   back: () => {
                     state.back();
                     render();
                   },
-                },
-                { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
-              ),
-            }
-          : {
-              body: renderJobPanel(document, state.data, state.viewing, {
-                view: (artifactId) => {
-                  state.view(artifactId);
-                  render();
-                },
-                back: () => {
-                  state.back();
-                  render();
-                },
-              }),
-            };
+                }),
+              };
     // A refresh of the same view keeps the reading position; opening another view starts at the top.
     const viewKey = `${state.open}:${state.viewing ?? ""}`;
     const keep = !wasHidden && viewKey === lastViewKey ? body.scrollTop : 0;

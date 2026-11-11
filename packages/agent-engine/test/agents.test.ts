@@ -50,6 +50,20 @@ describe("role agent files", () => {
     expect(allowed.sort()).toEqual(["fs_read", "fs_write"]);
   });
 
+  it("developer, architect and qa may not read secret-looking files in a project clone (project-registry 4.1)", () => {
+    const base = [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.p12", "*.pfx", "credentials*", "secrets*", ".npmrc", ".aws/**", ".ssh/**", ".git/**"];
+    for (const role of ROLES) {
+      const denied = rulesFor(loadAgentFile(role), "fs_read", "deny").flatMap((r) => r.match);
+      for (const p of base) {
+        expect(denied, `${role}: ${p}`).toContain(p);
+        expect(denied, `${role}: **/${p}`).toContain(`**/${p}`);
+      }
+      // A deny always wins, so nothing the agent is allowed to read can undo these (the only allow is `**` for fs_read).
+      const allowed = loadAgentFile(role).permissions.rules.filter((r) => r.capability === "fs_read" && r.effect === "allow");
+      expect(allowed.flatMap((r) => r.match), role).toEqual(["**"]);
+    }
+  });
+
   it("every system prompt states the untrusted-data rule and never mentions credentials", () => {
     for (const role of ROLES) {
       const a = loadAgentFile(role);

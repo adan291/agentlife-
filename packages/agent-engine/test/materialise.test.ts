@@ -123,3 +123,18 @@ describe("isReservedAgentPath", () => {
     expect(isReservedAgentPath(".kiro/steering/agentlife-qa.md")).toBe(false);
   });
 });
+
+describe("cloneProject failure (review blocker)", () => {
+  it("never names the user's path when git cannot clone", async () => {
+    const { cloneProject } = await import("../src/steps/materialise.ts");
+    const os = await import("node:os");
+    const fsm = await import("node:fs");
+    const p = await import("node:path");
+    const dataDir = fsm.mkdtempSync(p.join(os.tmpdir(), "al-clonefail-"));
+    const missing = p.join(dataDir, "Users", "someone", "secret-project");
+    const err = await cloneProject({ id: "gone", sourcePath: missing, dataDir }).then(() => null, (e: unknown) => e as Error);
+    expect(err).toBeInstanceOf(Error);
+    expect(String(err?.message)).not.toContain(missing);
+    expect(String(err?.message)).not.toContain("someone");
+  });
+});
