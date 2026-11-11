@@ -154,7 +154,8 @@ describe("GET /tasks/:id/export", () => {
 });
 
 describe("secret redaction (requirement 7.4)", () => {
-  const SECRET = "FAKE-SK-KEY-FOR-TESTS";
+  // Fake value assembled at runtime so the source never contains a key-shaped literal.
+  const SECRET = ["sk", "live", "ABCDEF1234567890"].join("-");
 
   it("never lets a configured secret reach logs, events, artifacts, run logs or exports", async () => {
     const runsDir = tmp();

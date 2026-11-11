@@ -15,3 +15,9 @@
 
 ## Secrets
 - Secrets (KIRO_API_KEY, tokens) come from environment variables or `.env` (git-ignored). Never commit them, never log them, never send them to the client.
+
+## Publishing gate
+- Nothing leaves this machine (push, repo creation, upload) while `pnpm security:scan` reports high or medium findings. A Kiro PreToolUse hook (`.kiro/hooks/push-guard.json`) and a git pre-push hook (`pnpm security:install-hook`) enforce it.
+- Decisions on findings (history rewrite, author email, accepting a finding in `scripts/security-allow.json`) are the user's. The `agentlife-security` agent recommends; it never changes files or git.
+- Security reports go to `data/security/` (git-ignored). Never paste secrets into chats, docs or commits; if one is pasted anywhere, revoke and rotate it.
+- Test fixtures must not contain key-shaped literals; build fake tokens at runtime.

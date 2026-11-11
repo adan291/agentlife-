@@ -227,7 +227,14 @@ describe("activity never carries secrets (review blocker)", () => {
     expect(stored).not.toContain(secret);
   });
 
-  it.each(["sk-abcdefghijklmnop", "ghp_abcdefghijklmnopqrstuvwxyz", "github_pat_11ABCDEF_xyz", "FAKE-AWS-KEY-FOR-TESTS", "Bearer abc.def.ghi"])(
+  it.each([
+    // Fake tokens assembled at runtime so the source has no key-shaped literals.
+    "sk-" + "abcdefghijklmnop",
+    "ghp_" + "abcdefghijklmnopqrstuvwxyz",
+    "github_pat_" + "11ABCDEF_xyz",
+    "AKIA" + "ABCDEFGHIJKLMNOP",
+    "Bearer abc.def.ghi",
+  ])(
     "drops token-like text %s",
     (token) => {
       const { emitter, texts } = harness();

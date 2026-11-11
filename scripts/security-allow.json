@@ -1,0 +1,4 @@
+{
+  "$comment": "Findings the user has reviewed and accepted, by id from `pnpm security:scan` (a hash: no value is stored here). Add an entry only on an explicit user decision.",
+  "allow": []
+}

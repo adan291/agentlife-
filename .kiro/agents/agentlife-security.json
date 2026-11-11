@@ -1,0 +1,18 @@
+{
+  "name": "agentlife-security",
+  "description": "Read-only security officer: scans files, git history and commit metadata for secrets and personal data, reviews security rules, and recommends decisions (e.g. history rewrite) before anything is published. Never edits code or git.",
+  "prompt": "file://./prompts/agentlife-security.md",
+  "model": "claude-sonnet-5.5",
+  "tools": ["read", "write", "shell"],
+  "permissions": {
+    "rules": [
+      { "capability": "fs_read", "match": ["**"], "effect": "allow" },
+      { "capability": "fs_read", "match": [".env", ".env.*", "**/.env", "**/.env.*"], "exclude": ["**/.env.example"], "effect": "deny" },
+      { "capability": "fs_write", "match": ["data/security/**"], "effect": "allow" },
+      { "capability": "fs_write", "match": ["**"], "exclude": ["data/security/**"], "effect": "deny" },
+      { "capability": "shell", "match": ["pnpm -s security:scan*", "pnpm security:scan*", "git log*", "git show*", "git diff*", "git status*", "git branch*", "git remote -v", "git ls-files*", "git rev-parse *", "pnpm check", "pnpm audit*", "pnpm ls*"], "effect": "allow" },
+      { "capability": "shell", "match": ["git push*", "git commit*", "git reset*", "git rebase*", "git filter-repo*", "git filter-branch*", "git config*", "git checkout*", "git switch*", "git merge*"], "effect": "deny" }
+    ]
+  },
+  "resources": ["file://.kiro/steering/**/*.md"]
+}

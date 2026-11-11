@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Security gate: block leaking pushes",
+      "trigger": "PreToolUse",
+      "description": "Before any shell tool call that is a git push, runs the leak scanner and blocks the push if it finds secrets or personal data.",
+      "matcher": "execute|shell|command|bash|pwsh",
+      "action": {
+        "type": "command",
+        "command": "node --experimental-strip-types --no-warnings scripts/push-guard.ts",
+        "timeout": 120
+      }
+    }
+  ]
+}
