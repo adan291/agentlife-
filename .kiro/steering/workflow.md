@@ -14,7 +14,7 @@ This project is built across many Kiro sessions. A new session has no memory of 
 
 ## End of session
 1. `pnpm check` must pass.
-2. Update docs/STATUS.md: what was done, what is next, open problems.
+2. Update docs/STATUS.md: what was done, what is next, open problems. When the session talked with the user (IDE chat), add one dated line to ## Last conversation with the user (what was asked, decided and left pending), so a Discord session can continue the thread.
 3. Commit. Do not push or merge unless the user asks.
 
 ## Current status

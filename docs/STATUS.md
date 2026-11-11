@@ -14,6 +14,12 @@ With the fake engine: `config/agents.json` now uses kiro-cli, so set `RUNTIME=fa
 - `pnpm --filter @agentlife/agent-engine start` (`FAKE_DELAY_MS`, default 800, sets the pace of the fake agents)
 - PowerShell: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start`
 
+## Last conversation with the user
+Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side can pick up the thread.
+- 2026-11-11 morning (IDE): ui-shell reviewed and merged; services started; security scanner, publishing gate and agentlife-security agent created; first audit says history must be cleaned before the first push (decisions below). User went out.
+- 2026-11-11 09:47 (Discord): user asked for a summary; Crew had no project context (its steering was not in the per-channel session folder). Fixed: steering copied to the Discord session folders and now tells Crew to read this section first.
+- 2026-11-11 afternoon (IDE): user back. Waiting for: browser look at the new shell, live run 3, security decisions 1-3.
+
 ## Next (2026-11-11)
 1. User looks at the new shell in the browser (collapse team bar, resize terminal, minimise/restore).
 2. Live run 3 from the room (goal: "Validate todo titles in addTodo"), then agent-pipeline task 13: export it to packages/client/public/demo/run-001.json.
