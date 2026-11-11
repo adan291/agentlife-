@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-11 (ui-shell tasks 1–5 done)
+Updated: 2026-11-11 (job-insight tasks 1–5 done, branch feat/job-insight, not merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -22,6 +22,10 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 - 2026-11-11 15:50 (IDE): live run 3 passed and was exported for the demo (agent-pipeline 13/13). User feedback: no way to tell which work is which task, Architect and QA share a model (yes, both claude-haiku-5.5 on purpose: cheapest), unreadable colours, stepper overflow with scroll bars, ghosts show no working visual, report delivery went unnoticed. Spec job-insight written; S10F started. Security decisions still pending.
 
 ## Next (2026-11-11)
+0. job-insight (S10F) is done on `feat/job-insight`: review it (agentlife-reviewer) and merge. What the user should look at in a browser: team bar work block (title, step, elapsed, context meter, files) while a job runs; tooltip on a busy ghost; terminal lines with `#d232 develop` tags; click the board or a stepper step for the Job card (steps table, Documents buttons, credits line); at report delivery the Architect says "Report delivered", the mailbox glows and bounces, a "Report ready: PASS" toast with Open report, the mailbox lists reports with badge and NEW; ghost signs (cloud, candle, envelope, exclamation, sparkle) and the lit desk monitor; stepper without scroll bars (icons below ~660 px of top bar); themed repository dropdown (one repository shows a line). Live run needed to confirm: real `session_info_update` context %, file counts from kiro-cli, the report "Run facts" with the new numbers.
+   - Origin check is on: the client must be served from `http://localhost:5173` or `http://127.0.0.1:5173`, otherwise set `WORLD_ALLOWED_ORIGINS` (comma-separated) for the world-server. Scripts without an Origin header still work on loopback.
+   - Playwright: `$env:E2E_CHANNEL='msedge'; pnpm --filter @agentlife/client e2e` (34 tests; job-insight.spec.ts proxies the world-server WebSocket to inject states).
+   - Not done / limits: the Job card refreshes on state changes and, while open, 1.5 s after a `work` message; reports of an earlier job are dropped when a new job starts (gateway behaviour, unchanged); the demo replay (S11) must build `report.verdict`/`ts` and `job_details` from the export (`jobDetailsFromExport` is in shared).
 1. User looks at the new shell in the browser (collapse team bar, resize terminal, minimise/restore).
 2. Live run 3 from the room (goal: "Validate todo titles in addTodo"), then agent-pipeline task 13: export it to packages/client/public/demo/run-001.json.
 3. S11 (demo-replay 1–4), S12 (5–6 + polish, needs the GitHub repo), S13 (submission texts).
@@ -49,7 +53,7 @@ Gate: `pnpm security:scan` (free). Pushes are blocked by a Kiro hook and a git p
 | room-ux | 5 / 5 | main | Done and merged after review (blocker fixed: token formats in sanitize; activity redacted before storage, tested). Browser look pending (user) |
 | room-fixes | 3 / 3 | main | Done and merged (commit c20d4e6). Its free-viewport code was removed by ui-shell. Browser look pending (user) |
 | ui-shell | 5 / 5 | main | Done, reviewed (approve) and merged. Playwright smoke test 18/18 (Edge). Look in a real browser pending (user) |
-| job-insight | 0 / 5 | — | Work attribution (task, step, model, context %, files), Job panel, report delivery + viewer, stepper fix, working visuals on ghosts, contrast, WebSocket Origin check (audit M3). S10F (Sonnet 5.5) |
+| job-insight | 5 / 5 | feat/job-insight | Done on the branch, `pnpm check` and Playwright (34/34, Edge) pass; review and merge pending. Decisions in the spec's design.md ("Decisions made while implementing"). Look in a real browser pending (user) |
 | demo-replay | 0 / 7 | — | S11–S13 |
 
 ## Manual browser checks (world-room task 12, user to do)
