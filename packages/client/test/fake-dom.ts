@@ -57,6 +57,10 @@ export class FakeElement extends FakeNode {
     this.attributes.delete(name);
   }
   focus(): void {}
+  /** Runs the listeners of an event, as the browser does when the user types (`input`). */
+  fire(type: string): void {
+    for (const fn of this.handlers.get(type) ?? []) fn({});
+  }
 
   appendChild<T extends FakeNode>(child: T): T {
     return appendTo(this, child);

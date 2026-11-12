@@ -1,5 +1,6 @@
 import {
   AgentEventSchema,
+  BranchesResponseSchema,
   BuildBoardSchema,
   BuildReportSchema,
   DeliveryInfoSchema,
@@ -15,6 +16,7 @@ import {
   type AgentEvent,
   type AgentId,
   type ApprovalDecision,
+  type BranchesResponse,
   type BuildBoard,
   type BuildReport,
   type DeliveryInfo,
@@ -26,7 +28,7 @@ import {
   type Repo,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink } from "./engine-link.ts";
+import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 
 export const ENGINE_TOKEN_HEADER = "x-agentlife-token";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -75,8 +77,13 @@ export class HttpEngineLink implements EngineLink {
     return RepoSchema.array().parse(await this.request("GET", "/repos"));
   }
 
-  async startJob(repoId: string, goal: string): Promise<{ taskId: string }> {
-    return StartJobResponseSchema.parse(await this.request("POST", "/tasks", { repoId, goal }));
+  async startJob(repoId: string, goal: string, options?: StartJobOptions): Promise<{ taskId: string }> {
+    const body = options && options.kind !== "change" ? { repoId, goal, kind: options.kind, target: options.target } : { repoId, goal };
+    return StartJobResponseSchema.parse(await this.request("POST", "/tasks", body));
+  }
+
+  async listBranches(projectId: string): Promise<BranchesResponse> {
+    return BranchesResponseSchema.parse(await this.request("GET", `/projects/${encodeURIComponent(projectId)}/branches`));
   }
 
   /** Models per role from `GET /config/roles`; roles without a model are left out. */
@@ -127,6 +134,8 @@ export class HttpEngineLink implements EngineLink {
       taskId: exp.job.taskId,
       repoId: exp.job.repoId,
       goal: exp.job.goal,
+      ...(exp.job.kind && exp.job.kind !== "change" ? { kind: exp.job.kind } : {}),
+      ...(exp.job.target ? { target: exp.job.target } : {}),
       state: exp.job.state,
       timeline: exp.events.flatMap((e) =>
         e.type === "task.state_changed" ? [{ ts: e.ts, state: e.state, ...(e.reason ? { text: e.reason } : {}) }] : [],

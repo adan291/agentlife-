@@ -140,6 +140,8 @@ export class ReplayTransport implements Transport {
       case "hello":
         return;
       case "start_job":
+        // Only the recorded change can be started; the other desks are locked in their panels.
+        if (msg.kind !== undefined && msg.kind !== "change") return this.error("bad_message", "the demo replays one recorded change");
         return this.startJob(msg.repoId);
       case "approve":
         return this.resolve(msg.approvalId, msg.decision);
@@ -157,6 +159,8 @@ export class ReplayTransport implements Transport {
         return this.goTo(msg.roomId);
       case "activity_scope":
         return; // every recorded line belongs to the one recorded floor
+      case "list_branches":
+        return; // the review desk is off in the demo (its panel says so)
       case "build_board":
       case "build_report":
         return; // the demo has no construction board data (the panel says so when it opens)
@@ -527,7 +531,7 @@ export class ReplayTransport implements Transport {
   }
 
   private panelData(panel: string): void {
-    if (panel === "computer") {
+    if (panel === "computer" || panel === "review" || panel === "tests" || panel === "library") {
       this.emit({
         type: "repos",
         repos: [{ id: this.exp.job.repoId, name: this.exp.job.repoId, description: "Recorded run. The goal is fixed." }],

@@ -1,6 +1,6 @@
 import { ReviewSchema, type Plan, type Review } from "@agentlife/shared";
 import type { PlanTask, StepContext, TestResult } from "../jobs/steps.ts";
-import { fence, loadPromptTemplate, renderPrompt } from "../prompts.ts";
+import { fence, loadPromptTemplate, renderPrompt, templateFor } from "../prompts.ts";
 import { runRole, worktreeDir, type PipelineDeps } from "./deps.ts";
 import { runStructured } from "./extract-json.ts";
 
@@ -61,7 +61,7 @@ export function finalizeReview(review: Review, test: TestResult): Review {
  */
 export async function reviewStep(deps: PipelineDeps, ctx: StepContext, input: ReviewInput): Promise<Review> {
   const cwd = worktreeDir(deps, ctx.taskId);
-  const prompt = renderPrompt(loadPromptTemplate("qa"), {
+  const prompt = renderPrompt(loadPromptTemplate(templateFor("qa", ctx.kind ?? "change")), {
     goal: fence(ctx.goal),
     task: fence(JSON.stringify(input.task, null, 2), "json"),
     testStatus: testStatusText(input.test),

@@ -1,4 +1,4 @@
-import { PlanSchema, ReviewSchema, type Plan, type Review } from "@agentlife/shared";
+import { BRANCH_FINDINGS_MAX, BranchReviewSchema, PlanSchema, ReviewSchema, type Plan, type Review } from "@agentlife/shared";
 import type { ActivityEmitter } from "../activity.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Logger } from "../log.ts";
@@ -110,6 +110,21 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
         `${dataPrompt(ctx.goal)}\nDiff:\n${input.diff}\nTests passed: ${input.test.passed}\nReturn JSON {verdict, notes, risk}.`,
       );
       return ReviewSchema.parse(parseJson(out, "review"));
+    },
+    async reviewBranch(ctx, input) {
+      const out = await collect(
+        "qa",
+        "review",
+        ctx,
+        `${dataPrompt(ctx.goal)}\nBranch: ${JSON.stringify(input.branch)}\nReturn JSON {verdict, risk, findings}.`,
+      );
+      const json = parseJson(out, "branch review");
+      const direct = BranchReviewSchema.safeParse(json);
+      if (direct.success) return { review: direct.data, diff: "(simulated branch diff)\n", base: "main" };
+      // The fake QA answers with a change review; its notes become low findings.
+      const review = ReviewSchema.parse(json);
+      const findings = review.notes.slice(0, BRANCH_FINDINGS_MAX).map((text) => ({ severity: "low" as const, text }));
+      return { review: { verdict: review.verdict, risk: review.risk, findings }, diff: "(simulated branch diff)\n", base: "main" };
     },
     async report(_ctx, input) {
       return fallbackReport(input);

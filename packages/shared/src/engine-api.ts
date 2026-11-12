@@ -1,14 +1,24 @@
 import { z } from "zod";
 import { AgentEventSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
+import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { DeliveryInfoSchema } from "./projects.ts";
 
 // The public repo view is `RepoSchema` in protocol.ts; `source` paths are never exposed.
 
-export const StartJobBodySchema = z.object({
-  repoId: z.string().min(1).max(100),
-  goal: z.string().trim().min(1).max(GOAL_MAX_CHARS),
-});
+export const StartJobBodySchema = z
+  .object({
+    repoId: z.string().min(1).max(100),
+    goal: z.string().trim().min(1).max(GOAL_MAX_CHARS),
+    /** What the job does. Default `change`. */
+    kind: JobKindSchema.default("change"),
+    /** `review-branch`: a local branch of the project. `write-tests`: a path or module. `document`: a topic or path. */
+    target: z.string().max(JOB_TARGET_MAX_CHARS).optional(),
+  })
+  .superRefine((body, ctx) => {
+    const problem = targetProblem(body.kind, body.target);
+    if (problem) ctx.addIssue({ code: "custom", path: ["target"], message: problem });
+  });
 export type StartJobBody = z.infer<typeof StartJobBodySchema>;
 
 export const ApprovalBodySchema = z.object({
@@ -43,6 +53,35 @@ export const ReviewSchema = z.object({
   risk: RiskSchema,
 });
 export type Review = z.infer<typeof ReviewSchema>;
+
+export const FindingSeveritySchema = z.enum(["high", "medium", "low"]);
+export type FindingSeverity = z.infer<typeof FindingSeveritySchema>;
+
+export const BRANCH_FINDINGS_MAX = 30;
+export const FINDING_TEXT_MAX = 500;
+
+/** Result of reviewing a branch (`review-branch` jobs): findings by severity and a verdict on merging it. */
+export const BranchReviewSchema = z.object({
+  verdict: VerdictSchema,
+  risk: RiskSchema,
+  findings: z
+    .array(
+      z.object({
+        severity: FindingSeveritySchema,
+        text: z.string().min(1).max(FINDING_TEXT_MAX),
+        file: z.string().min(1).max(200).optional(),
+      }),
+    )
+    .max(BRANCH_FINDINGS_MAX),
+});
+export type BranchReview = z.infer<typeof BranchReviewSchema>;
+
+/** `GET /projects/:id/branches`: the local branches of the project (never free text) and the one checked out. */
+export const BranchesResponseSchema = z.object({
+  current: z.string().min(1).max(JOB_TARGET_MAX_CHARS).nullable(),
+  branches: z.array(z.string().min(1).max(JOB_TARGET_MAX_CHARS)).max(200),
+});
+export type BranchesResponse = z.infer<typeof BranchesResponseSchema>;
 
 /** `GET /config/roles`: only the runtime and model of each role, nothing else from the config. */
 export const RolesConfigResponseSchema = z.object({
@@ -90,6 +129,10 @@ export const EngineJobViewSchema = z.object({
   taskId: z.string().min(1),
   repoId: z.string().min(1),
   goal: z.string().max(GOAL_MAX_CHARS),
+  /** Absent means `change`. */
+  kind: JobKindSchema.optional(),
+  /** Branch, module path or topic of a non-`change` job. */
+  target: z.string().max(JOB_TARGET_MAX_CHARS).optional(),
   state: JobStateSchema,
   steps: z.array(StepRecordSchema),
   approvals: z.array(ApprovalRecordSchema),

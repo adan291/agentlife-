@@ -1,13 +1,14 @@
 import { z } from "zod";
-import { DeliveryInfoSchema, OkResponseSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "@agentlife/shared";
+import { BranchesResponseSchema, DeliveryInfoSchema, OkResponseSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "@agentlife/shared";
 import { ConflictError, NotFoundError } from "../errors.ts";
 import type { JobRunner } from "../jobs/runner.ts";
 import type { Logger } from "../log.ts";
 import type { DataPaths } from "../paths.ts";
 import { parseBody, sendJson, type Route } from "../http/server.ts";
 import type { Store } from "../store.ts";
+import { listBranches } from "./branches.ts";
 import { deliverBranch } from "./deliver.ts";
-import type { ProjectRegistry } from "./registry.ts";
+import { ProjectUnavailableError, type ProjectRegistry } from "./registry.ts";
 
 const MAX_ID_CHARS = 100;
 
@@ -35,6 +36,9 @@ export function createDeliverRoute(deps: DeliverRouteDeps): Route {
       }
       const job = taskId.length > MAX_ID_CHARS ? undefined : deps.store.getJob(taskId);
       if (!job) throw new NotFoundError("unknown task");
+      if ((job.kind ?? "change") === "review-branch") {
+        throw new ConflictError("not_deliverable", "A branch review changes nothing, so there is nothing to deliver.");
+      }
       if (job.state !== "report_ready" && job.state !== "delivered") {
         throw new ConflictError("job_not_finished", `The job is ${job.state}; wait for its report.`);
       }
@@ -48,6 +52,32 @@ export function createDeliverRoute(deps: DeliverRouteDeps): Route {
       });
       deps.store.appendEvent({ type: "delivery.done", taskId, branch: info.branch, commit: info.commit });
       sendJson(res, 200, DeliveryInfoSchema, info);
+    },
+  };
+}
+
+/**
+ * `GET /projects/:id/branches`: the local branches of a project and the checked-out one, read with git by the engine
+ * (requirement 2.2 of job-types). A project that moved or left its allowed folder answers 409 `project_unavailable`.
+ */
+export function createBranchesRoute(deps: { registry: ProjectRegistry; paths: DataPaths }): Route {
+  return {
+    method: "GET",
+    pattern: /^\/projects\/([^/]+)\/branches$/,
+    handle: async ({ res, params }) => {
+      let id: string;
+      try {
+        id = decodeURIComponent(params[0] ?? "");
+      } catch {
+        throw new NotFoundError("bad id");
+      }
+      if (!id || id.length > MAX_ID_CHARS) throw new NotFoundError("unknown project");
+      try {
+        sendJson(res, 200, BranchesResponseSchema, await listBranches({ registry: deps.registry, paths: deps.paths, repoId: id }));
+      } catch (e) {
+        if (e instanceof ProjectUnavailableError) throw new ConflictError("project_unavailable", e.message);
+        throw e;
+      }
     },
   };
 }

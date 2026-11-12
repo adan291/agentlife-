@@ -61,7 +61,7 @@ describe("startEngine with kiro-cli roles", () => {
 });
 
 describe("createPipelineSteps", () => {
-  it("exposes the five steps", () => {
+  it("exposes the five steps and the branch review", () => {
     const config = loadConfig();
     const store = new Store({ dbPath: ":memory:", runsDir: tmp() });
     const steps = createPipelineSteps({
@@ -71,7 +71,7 @@ describe("createPipelineSteps", () => {
       repos: config.repos,
       limits: config.limits,
     });
-    expect(Object.keys(steps).sort()).toEqual(["analyze", "develop", "report", "review", "test"]);
+    expect(Object.keys(steps).sort()).toEqual(["analyze", "develop", "report", "review", "reviewBranch", "test"]);
     store.close();
   });
 });

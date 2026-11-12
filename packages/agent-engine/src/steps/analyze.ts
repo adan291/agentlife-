@@ -1,6 +1,6 @@
 import { PlanSchema, type Plan } from "@agentlife/shared";
 import type { StepContext } from "../jobs/steps.ts";
-import { fence, loadPromptTemplate, renderPrompt } from "../prompts.ts";
+import { fence, loadPromptTemplate, renderPrompt, templateFor } from "../prompts.ts";
 import { resolveProject, runRole, type PipelineDeps } from "./deps.ts";
 import { runStructured } from "./extract-json.ts";
 import { cloneProject, materialise } from "./materialise.ts";
@@ -39,7 +39,11 @@ export async function analyzeStep(deps: PipelineDeps, ctx: StepContext): Promise
     const cloned = await cloneProject({ id: project.id, sourcePath, dataDir: deps.paths.root, signal: ctx.signal });
     dir = cloned.dir;
   }
-  const prompt = renderPrompt(loadPromptTemplate("architect"), { goal: fence(ctx.goal) });
+  const kind = ctx.kind ?? "change";
+  const prompt = renderPrompt(loadPromptTemplate(templateFor("architect", kind)), {
+    goal: fence(ctx.goal),
+    ...(kind === "change" ? {} : { target: fence(ctx.target ?? "") }),
+  });
   return runStructured({
     what: "plan",
     schema: PlanSchema,

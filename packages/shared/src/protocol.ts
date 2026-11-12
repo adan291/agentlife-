@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
-import { JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
+import { BranchesResponseSchema, JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
 import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
 import { FloorStatusSchema } from "./floors.ts";
+import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
@@ -20,7 +21,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent ids are strings, so they never collide. */
@@ -62,6 +63,10 @@ export const JobViewSchema = z.object({
   taskId: z.string().min(1),
   repoId: z.string().min(1),
   goal: z.string().max(GOAL_MAX_CHARS),
+  /** Absent means `change`. */
+  kind: JobKindSchema.optional(),
+  /** Branch, module path or topic of a job that is not a `change`. */
+  target: z.string().max(JOB_TARGET_MAX_CHARS).optional(),
   state: JobStateSchema,
   timeline: z.array(TimelineEntrySchema),
 });
@@ -130,11 +135,22 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hello"), protocol: z.number().int() }),
   z.object({ type: z.literal("move"), x: z.number().int(), y: z.number().int() }),
   z.object({ type: z.literal("use"), itemId: z.string().min(1).max(100) }),
-  z.object({
-    type: z.literal("start_job"),
-    repoId: z.string().min(1).max(100),
-    goal: z.string().trim().min(1).max(GOAL_MAX_CHARS),
-  }),
+  z
+    .object({
+      type: z.literal("start_job"),
+      repoId: z.string().min(1).max(100),
+      goal: z.string().trim().min(1).max(GOAL_MAX_CHARS),
+      /** What the job does; absent means `change`. The furniture the user used decides it (job-types spec). */
+      kind: JobKindSchema.optional(),
+      /** Branch (`review-branch`), path or module (`write-tests`), topic or path (`document`). */
+      target: z.string().max(JOB_TARGET_MAX_CHARS).optional(),
+    })
+    .superRefine((msg, ctx) => {
+      const problem = targetProblem(msg.kind ?? "change", msg.target);
+      if (problem) ctx.addIssue({ code: "custom", path: ["target"], message: problem });
+    }),
+  /** Review desk: ask for the local branches of the project on the user's floor. Answered with `branches`. */
+  z.object({ type: z.literal("list_branches") }),
   z.object({
     type: z.literal("approve"),
     approvalId: z.string().min(1).max(100),
@@ -200,6 +216,8 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("say"), id: AvatarIdSchema, text: z.string().min(1).max(300) }),
   z.object({ type: z.literal("open_panel"), panel: PanelNameSchema, data: z.unknown().optional() }),
   z.object({ type: z.literal("repos"), repos: z.array(RepoSchema) }),
+  /** Local branches of a project (never free text), for the branch picker of the review desk. */
+  z.object({ type: z.literal("branches"), projectId: z.string().min(1).max(100), ...BranchesResponseSchema.shape }),
   /** Reception panel data: every project (the built-in one first). Sent when the panel opens and after a change. */
   z.object({ type: z.literal("projects"), projects: z.array(ProjectSchema) }),
   /** Outcome of `register_project`: registered, findings to accept, or the rule that refused it. */

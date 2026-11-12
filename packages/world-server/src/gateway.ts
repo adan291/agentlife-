@@ -30,7 +30,7 @@ import type {
   StepName,
   WelcomeMsg,
 } from "@agentlife/shared";
-import type { EngineLink } from "./engine-link.ts";
+import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
@@ -288,10 +288,25 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   const errorText = (e: unknown, fallback: string): string => (e instanceof Error && e.message ? e.message.slice(0, 200) : fallback);
 
+  /** The branches of the project on the user's floor, for the branch picker of the review desk. */
+  const sendBranches = async (ws: WebSocket, roomId: string) => {
+    const projectId = projectIdOfRoom(roomId);
+    if (projectId === undefined) return sendError(ws, "bad_message", "the review desk is on a project's floor");
+    if (!engine?.listBranches) return sendError(ws, "engine_unavailable", "listing branches needs the real engine");
+    try {
+      send(ws, { type: "branches", projectId, ...(await engine.listBranches(projectId)) });
+    } catch (e) {
+      sendError(ws, "engine_unavailable", errorText(e, "cannot list the branches of the project"));
+    }
+  };
+
   const panelData = async (ws: WebSocket, roomId: string, panel: string) => {
     const f = floorOf(roomId);
-    if (panel === "computer") {
+    if (panel === "computer" || panel === "tests" || panel === "library") {
       await sendRepos(ws, roomId);
+    } else if (panel === "review") {
+      await sendRepos(ws, roomId);
+      await sendBranches(ws, roomId);
     } else if (panel === "reception") {
       await sendProjects(ws);
     } else if (panel === "mailbox") {
@@ -539,16 +554,16 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   // ---- client commands ----
 
-  const startJob = async (ws: WebSocket, repoId: string, goal: string) => {
+  const startJob = async (ws: WebSocket, repoId: string, goal: string, options?: StartJobOptions) => {
     if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
     const roomId = userRoom();
-    // The computer of a floor starts jobs for the floor's own project only.
-    if (!roomId || projectIdOfRoom(roomId) !== repoId) return sendError(ws, "bad_message", "start the job from the computer on the project's floor");
+    // The furniture of a floor starts jobs for the floor's own project only.
+    if (!roomId || projectIdOfRoom(roomId) !== repoId) return sendError(ws, "bad_message", "start the job from the furniture on the project's floor");
     const f = floorOf(roomId);
     if (f.jobActive) return sendError(ws, "busy", "a job is already running");
     f.jobActive = true;
     try {
-      const { taskId } = await engine.startJob(repoId, goal);
+      const { taskId } = await engine.startJob(repoId, goal, options);
       f.currentTaskId = taskId;
       taskRooms.set(taskId, roomId);
     } catch (e) {
@@ -704,7 +719,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         return;
       }
       if (msg.type === "start_job") {
-        void startJob(ws, msg.repoId, msg.goal);
+        const kind = msg.kind ?? "change";
+        void startJob(ws, msg.repoId, msg.goal, kind === "change" ? undefined : { kind, target: msg.target });
+      } else if (msg.type === "list_branches") {
+        const room = userRoom();
+        if (room) void sendBranches(ws, room);
       } else if (msg.type === "approve") {
         void resolveApproval(ws, msg.approvalId, msg.decision, msg.note);
       } else if (msg.type === "job_details") {

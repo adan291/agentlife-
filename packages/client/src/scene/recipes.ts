@@ -205,6 +205,52 @@ const constructionBoard: Recipe = (g, c) => {
   });
 };
 
+/** A lectern with a paper, a board of check marks behind it: where a branch is reviewed. */
+const reviewDesk: Recipe = (g, c) => {
+  const back = backRect(c, 0.12, 0.1);
+  drawBoxes(g, [
+    piece(full(c, 0.12), 0, 1.5, C.wood),
+    piece(full(c, 0.08), 1.5, 1.65, C.woodDark),
+    piece(shrinkLong(frontRect(c, 0.3, 0.16), 0.15), 1.65, 1.75, C.lampShade),
+    piece(back, 1.65, 3.0, C.woodDark),
+  ]);
+  const board = frontFace(c, back, 0.1, 0.9, 1.85, 2.9);
+  if (board) fillPoly(g, board, C.screenOff);
+  [C.screen, C.pumpkin].forEach((colour, k) => {
+    const mark = frontFace(c, back, 0.2, 0.8, 2.5 - k * 0.4, 2.7 - k * 0.4);
+    if (mark) fillPoly(g, mark, colour);
+  });
+};
+
+/** A bench with three flasks and a faint glow: where tests are written. */
+const testLab: Recipe = (g, c) => {
+  drawBoxes(g, [
+    piece(full(c, 0.1), 0, 1.5, C.metal),
+    piece(full(c, 0.06), 1.5, 1.65, C.woodDark),
+    piece({ x0: -0.3, y0: -0.12, x1: -0.14, y1: 0.04 }, 1.65, 2.5, C.screen),
+    piece({ x0: -0.08, y0: -0.12, x1: 0.08, y1: 0.04 }, 1.65, 2.0, C.pumpkin),
+    piece({ x0: 0.14, y0: -0.12, x1: 0.3, y1: 0.04 }, 1.65, 2.8, C.note3),
+  ]);
+  const [gx, gy] = P(0, -0.04, 2.0);
+  g.ellipse(gx, gy, 20, 10).fill({ color: C.screen, alpha: 0.14 });
+};
+
+/** A tall bookcase with three rows of books. */
+const libraryShelf: Recipe = (g, c) => {
+  const body = full(c, 0.06);
+  drawBoxes(g, [piece(body, 0, 4.0, C.woodDark)]);
+  const inside = frontFace(c, body, 0.08, 0.92, 0.3, 3.8);
+  if (inside) fillPoly(g, inside, C.screenOff);
+  const books = [C.note1, C.note2, C.note3, C.wood, C.pumpkin, C.note1];
+  [0.4, 1.55, 2.7].forEach((z, row) => {
+    books.forEach((colour, k) => {
+      const u0 = 0.14 + k * 0.12;
+      const q = frontFace(c, body, u0, u0 + 0.09, z, z + 0.85 + ((k + row) % 3) * 0.08);
+      if (q) fillPoly(g, q, colour);
+    });
+  });
+};
+
 /** A door in the wall with a lit sign above it. */
 const door: Recipe = (g, c) => {
   const slab = backRect(c, 0.12, 0.04);
@@ -309,6 +355,9 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   elevator,
   directory_board: directoryBoard,
   construction_board: constructionBoard,
+  review_desk: reviewDesk,
+  test_lab: testLab,
+  library_shelf: libraryShelf,
   door,
   chair,
   plant,

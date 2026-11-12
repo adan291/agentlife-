@@ -35,6 +35,8 @@ export function applyEvent(view: EngineJobView | undefined, ev: AgentEvent): Eng
       taskId: ev.taskId,
       repoId: ev.repoId,
       goal: ev.goal,
+      ...(ev.kind ? { kind: ev.kind } : {}),
+      ...(ev.target ? { target: ev.target } : {}),
       state: "created",
       steps: [],
       approvals: [],
