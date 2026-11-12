@@ -80,6 +80,9 @@ export const ROLE_COLOURS = {
   builder: 0xc9b6ff,
   hr: 0xff7eb6,
   user: 0xe8e0ff,
+  /** Team members without a desk (hr-desk): a reviewer and a researcher stand on the project floor. */
+  reviewer: 0xe8c547,
+  researcher: 0x6ec6ff,
 } as const;
 
 export type RoleKey = keyof typeof ROLE_COLOURS;
@@ -91,6 +94,8 @@ export const HAIR_COLOURS: Record<RoleKey, number> = {
   builder: 0x5a4a8a,
   hr: 0x6a2a4a,
   user: 0x6a6090,
+  reviewer: 0x6a5a10,
+  researcher: 0x1a4a6a,
 };
 
 /** Status badge colours (background of the round icon). */

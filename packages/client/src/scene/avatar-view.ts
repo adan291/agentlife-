@@ -21,7 +21,8 @@ export class AvatarView {
 
   constructor(
     readonly id: number | string,
-    readonly role: RoleKey,
+    /** A guest spot starts with a placeholder and takes the role of whoever stands there. */
+    public role: RoleKey,
     private readonly sprites: SpriteProvider,
     tile: Tile,
     dir: number,

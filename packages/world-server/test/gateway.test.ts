@@ -76,13 +76,14 @@ describe("gateway", () => {
     });
   });
 
-  it("a project floor holds the user and the project's three agents", async () => {
+  it("a project floor holds the user, the project's three agents and six empty standing spots", async () => {
     const g = await setup();
     const c = connect(g.port);
     const welcome = await c.next((m) => m.type === "welcome");
     if (welcome.type !== "welcome") throw new Error("unreachable");
     expect(welcome.room.id).toBe("project:haunted-todo");
-    expect(welcome.avatars).toHaveLength(4);
+    expect(welcome.avatars).toHaveLength(4 + 6);
+    expect(welcome.avatars.filter((a) => typeof a.id === "string" && a.id.startsWith("guest"))).toHaveLength(6);
     expect(welcome.agents.map((a) => a.agentId)).toEqual(["architect", "developer", "qa"]);
   });
 

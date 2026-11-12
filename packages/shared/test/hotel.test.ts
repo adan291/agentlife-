@@ -5,6 +5,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   FURNI_CATALOG,
+  GUEST_IDS,
   Hotel,
   HR_ROOM,
   LOBBY_ROOM,
@@ -149,7 +150,7 @@ describe("Hotel", () => {
     const welcome = hotel.moveUser(you, projectRoomId("todo"))!;
     expect(welcome.room.id).toBe("project:todo");
     expect(welcome.agents.map((a) => a.agentId)).toEqual(["architect", "developer", "qa"]);
-    expect(welcome.avatars.map((a) => a.id).sort()).toEqual(["architect", "developer", "qa", you].sort());
+    expect(welcome.avatars.map((a) => a.id).sort()).toEqual(["architect", "developer", "qa", ...GUEST_IDS, you].sort());
     expect(hotel.sim(LOBBY_ROOM)!.snapshot().avatars.some((a) => a.id === you)).toBe(false);
     expect(hotel.roomOf(you)).toBe("project:todo");
     expect(hotel.moveUser(you, "project:nope")).toBeUndefined();

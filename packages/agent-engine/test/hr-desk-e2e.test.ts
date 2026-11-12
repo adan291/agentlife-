@@ -60,7 +60,7 @@ async function open() {
 }
 
 describe("HR office end to end", () => {
-  it("shows the catalogue and the default team, hires, and puts the new person on the bench", async () => {
+  it("shows the catalogue and the default team, hires, and puts the new person on the floor", async () => {
     const c = await open();
     c.send({ type: "hr_state" });
     await c.until("the desk", () => c.lastHr() !== undefined);
@@ -81,6 +81,40 @@ describe("HR office end to end", () => {
     if (hired?.type !== "hr") throw new Error("unreachable");
     expect(hired.state.teams[0]).toMatchObject({ customised: true });
     expect(hired.state.teams[0]!.members.at(-1)).toMatchObject({ displayName: "Vera", role: "qa", templateId: "qa-strict" });
+
+    // The new QA is a second member of a seated role: she stands at a spot on the project's floor (requirement 4.3).
+    c.send({ type: "go_to", roomId: "project:haunted-todo" });
+    await c.until("the project floor", () => c.received.filter((m) => m.type === "welcome").length === 2);
+    await c.until("the team on the floor", () => c.received.some((m) => m.type === "team_view" && (m.guests ?? []).length > 0));
+    const view = c.received.findLast((m) => m.type === "team_view");
+    if (view?.type !== "team_view") throw new Error("unreachable");
+    expect(view.members.map((m) => m.agentId)).toEqual(["architect", "developer", "qa"]);
+    expect(view.guests).toEqual([expect.objectContaining({ guestId: "guest3", name: "Vera", role: "qa" })]);
+  });
+
+  it("shows a second developer, a reviewer, a researcher and the Night intern on the project's floor", async () => {
+    const c = await open();
+    const hires = [
+      ["developer", "Dex"],
+      ["reviewer", "Rhea"],
+      ["researcher", "Rue"],
+      ["night-intern", "Nox"],
+    ] as const;
+    for (const [i, [templateId, displayName]] of hires.entries()) {
+      c.send({ type: "hr_do", act: { action: "hire", projectId: "haunted-todo", templateId, displayName } });
+      await c.until(`${displayName} hired`, () => {
+        const m = c.lastHr();
+        return m?.type === "hr" && m.state.teams[0]!.members.length === 4 + i;
+      });
+    }
+    c.send({ type: "go_to", roomId: "project:haunted-todo" });
+    await c.until("the team on the floor", () => c.received.some((m) => m.type === "team_view" && (m.guests ?? []).length === 4));
+    const view = c.received.findLast((m) => m.type === "team_view");
+    if (view?.type !== "team_view") throw new Error("unreachable");
+    expect(Object.fromEntries(view.guests!.map((g) => [g.name, g.role]))).toEqual({ Dex: "developer", Rhea: "reviewer", Rue: "researcher", Nox: "researcher" });
+    expect(new Set(view.guests!.map((g) => g.guestId)).size).toBe(4);
+    // Every one of the seven is on the floor: three at their desks and four at spots.
+    expect(view.members).toHaveLength(3);
   });
 
   it("refuses to fire the last architect and says why", async () => {

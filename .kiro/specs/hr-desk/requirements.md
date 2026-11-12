@@ -47,7 +47,7 @@ Depends on project-registry and hotel-floors (HR office room, per-project teams)
 #### Acceptance Criteria
 1. THE HR office room SHALL have an HR desk (panel: catalogue, teams per project, import queue) and an HR ghost.
 2. THE HR agent (read-only tier, cheap model) SHALL answer "suggest a team for <project>" with a proposal based on the project's stack and size, which the user can apply with one click (it never hires on its own).
-3. Hired agents SHALL appear on their project's floor at their desk; a fired agent SHALL walk to the elevator and leave.
+3. Hired agents SHALL appear on their project's floor: the first member of a role that has a desk (architect, developer, qa) at that desk, every other member (a second developer or QA, a reviewer, a researcher, the Night intern) standing at one of the floor's spots near the desks; a fired agent SHALL walk to the elevator and leave. Every member of a team (up to 8) is visible on its floor.
 
 ### Requirement 5: Tests
 

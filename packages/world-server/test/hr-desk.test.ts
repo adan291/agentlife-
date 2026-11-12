@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { ServerMsgSchema } from "@agentlife/shared";
-import type { AgentEvent, CatalogueEntry, ClientMsg, HrState, Project, RoomId, ServerMsg, TeamMember, TeamSuggestion } from "@agentlife/shared";
+import { ServerMsgSchema, resolveAnchor } from "@agentlife/shared";
+import type { AgentEvent, CatalogueEntry, ClientMsg, GuestId, HrState, Project, RoomId, ServerMsg, TeamMember, TeamSuggestion } from "@agentlife/shared";
 import { EventQueue } from "../src/engine-link.ts";
 import type { EngineLink, HrLink } from "../src/engine-link.ts";
 import { startGateway } from "../src/gateway.ts";
@@ -28,11 +28,23 @@ const entry = (id: string, role: CatalogueEntry["role"]): CatalogueEntry => ({
 });
 const member = (id: string, role: TeamMember["role"], displayName: string, templateId = id): TeamMember => ({ id, role, displayName, templateId, model: "auto" });
 
+/** The templates of the mock catalogue: `night-intern` is a researcher, `reviewer` a reviewer. */
+const CATALOGUE: CatalogueEntry[] = [
+  entry("architect", "architect"),
+  entry("developer", "developer"),
+  entry("qa", "qa"),
+  entry("qa-fast", "qa"),
+  entry("reviewer", "reviewer"),
+  entry("researcher", "researcher"),
+  entry("night-intern", "researcher"),
+];
+const DEFAULT_TEAM = (): TeamMember[] => [member("architect", "architect", "Architect"), member("developer", "developer", "Developer"), member("qa", "qa", "QA")];
+
 /** An engine with an HR office whose teams live in memory, and a log of what the gateway asked it to do. */
-function engineWithHr(opts: { refuse?: string } = {}) {
+function engineWithHr(opts: { refuse?: string; team?: TeamMember[] } = {}) {
   const queue = new EventQueue<AgentEvent>();
   const calls: string[] = [];
-  let members: TeamMember[] = [member("architect", "architect", "Architect"), member("developer", "developer", "Developer"), member("qa", "qa", "QA")];
+  let members: TeamMember[] = opts.team ?? DEFAULT_TEAM();
   let counter = 0;
   const suggestion: TeamSuggestion = {
     projectId: "alpha",
@@ -43,7 +55,7 @@ function engineWithHr(opts: { refuse?: string } = {}) {
   const hr: HrLink = {
     state: (): Promise<HrState> =>
       Promise.resolve({
-        catalogue: [entry("architect", "architect"), entry("developer", "developer"), entry("qa", "qa"), entry("qa-fast", "qa")],
+        catalogue: [...CATALOGUE],
         teams: [{ projectId: "alpha", name: "ALPHA", customised: members.length !== 3, members: [...members] }],
         imports: [],
         sources: [],
@@ -53,7 +65,7 @@ function engineWithHr(opts: { refuse?: string } = {}) {
     hire: (projectId, body) => {
       calls.push(`hire:${projectId}:${body.templateId}:${body.displayName}:${body.model ?? ""}`);
       if (opts.refuse) return Promise.reject(new Error(opts.refuse));
-      const role = body.templateId.startsWith("qa") ? "qa" : (body.templateId as TeamMember["role"]);
+      const role = CATALOGUE.find((c) => c.id === body.templateId)?.role ?? "qa";
       const added = member(`${role}-${++counter}`, role, body.displayName, body.templateId);
       members = [...members, added];
       return Promise.resolve(added);
@@ -87,7 +99,8 @@ function engineWithHr(opts: { refuse?: string } = {}) {
 }
 
 async function connect(link: EngineLink, start: RoomId = "hr") {
-  const gateway = await startGateway({ hotel: testHotel({ start }), engine: link, port: 0, tickMs: 5 });
+  const hotel = testHotel({ start });
+  const gateway = await startGateway({ hotel, engine: link, port: 0, tickMs: 5 });
   gateways.push(gateway);
   const ws = new WebSocket(`ws://127.0.0.1:${gateway.port}`);
   sockets.push(ws);
@@ -112,7 +125,7 @@ async function connect(link: EngineLink, start: RoomId = "hr") {
   const has = (pred: (m: ServerMsg) => boolean) => received.some(pred);
   const count = (type: ServerMsg["type"]) => received.filter((m) => m.type === type).length;
   await waitFor(() => has((m) => m.type === "welcome"));
-  return { received, waitFor, send, has, count };
+  return { received, waitFor, send, has, count, hotel };
 }
 
 describe("HR desk", () => {
@@ -240,5 +253,143 @@ describe("people at the desks", () => {
     await c.waitFor(() => c.count("welcome") === 2);
     await c.waitFor(() => c.received.some((m) => m.type === "team_view" && m.members.some((x) => x.name === "Quinn")));
     expect(c.has((m) => m.type === "agent_presence")).toBe(false);
+  });
+});
+
+/** Hr-desk requirement 4.3: every hired member is on their project's floor, at a desk or at a standing spot. */
+describe("everybody hired is on the floor", () => {
+  type Conn = Awaited<ReturnType<typeof connect>>;
+  const views = (c: Conn) => c.received.flatMap((m) => (m.type === "team_view" ? [m] : []));
+  const lastView = (c: Conn) => views(c).at(-1);
+  const guestsOf = (c: Conn) => Object.fromEntries((lastView(c)?.guests ?? []).map((g) => [g.guestId, `${g.name}:${g.role}`]));
+  const lastWelcome = (c: Conn) => c.received.findLast((m) => m.type === "welcome");
+  const floor = (c: Conn) => c.hotel.sim("project:alpha")!;
+  const spot = (c: Conn, id: GuestId | "qa") => {
+    const a = resolveAnchor(floor(c).room, "home", id)!;
+    return { x: a.x, y: a.y };
+  };
+  const door = (c: Conn) => ({ x: floor(c).room.door.x, y: floor(c).room.door.y });
+
+  const secondDeveloper = member("developer-2", "developer", "Dex", "developer");
+  const secondQa = member("qa-2", "qa", "Wren", "qa-fast");
+  const reviewer = member("reviewer-1", "reviewer", "Rhea", "reviewer");
+  const researcher = member("researcher-1", "researcher", "Rue", "researcher");
+  const intern = member("night-intern-1", "researcher", "Nox", "night-intern");
+
+  it("puts a second developer, a reviewer, a researcher and the Night intern at standing spots near the desks", async () => {
+    const e = engineWithHr();
+    const c = await connect(e.link);
+    let hired = 0;
+    for (const [templateId, displayName] of [["developer", "Dex"], ["reviewer", "Rhea"], ["researcher", "Rue"], ["night-intern", "Nox"]] as const) {
+      c.send({ type: "hr_do", act: { action: "hire", projectId: "alpha", templateId, displayName } });
+      hired += 1;
+      const expected = hired;
+      await c.waitFor(() => c.count("hr") === expected);
+    }
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 2);
+    await c.waitFor(() => Object.keys(guestsOf(c)).length === 4);
+
+    // The second developer stands by the developer's desk, the reviewer and researcher by the middle of the room.
+    expect(guestsOf(c)).toEqual({ guest2: "Dex:developer", guest5: "Rhea:reviewer", guest6: "Rue:researcher", guest1: "Nox:researcher" });
+    // The three desks keep the first member of their role.
+    expect(lastView(c)!.members.map((m) => m.name)).toEqual(["Architect", "Developer", "QA"]);
+    // All six spots exist in the room the user entered, and the four hired members walked to theirs.
+    const w = lastWelcome(c);
+    expect(w?.type === "welcome" && w.avatars.filter((a) => typeof a.id === "string" && a.id.startsWith("guest")).length).toBe(6);
+    await c.waitFor(() => (["guest1", "guest2", "guest5", "guest6"] as const).every((g) => JSON.stringify(floor(c).tileOf(g)) === JSON.stringify(spot(c, g))));
+    // The two spots nobody uses stay at the elevator, and the client is told only about the four.
+    expect(floor(c).tileOf("guest3")).toEqual(door(c));
+    expect(floor(c).tileOf("guest4")).toEqual(door(c));
+    expect(lastView(c)!.guests).toHaveLength(4);
+  });
+
+  it("shows a full team of eight: three at their desks and five at spots, each walking in from the elevator", async () => {
+    const team = [...DEFAULT_TEAM(), secondDeveloper, secondQa, reviewer, researcher, intern];
+    expect(team).toHaveLength(8);
+    const e = engineWithHr({ team });
+    const c = await connect(e.link, "project:alpha");
+    await c.waitFor(() => (lastView(c)?.guests?.length ?? 0) === 5);
+    const view = lastView(c)!;
+    expect([...view.members.map((m) => m.name), ...view.guests!.map((g) => g.name)].sort()).toEqual(team.map((m) => m.displayName).sort());
+    expect(new Set(view.guests!.map((g) => g.guestId)).size).toBe(5);
+
+    const welcome = lastWelcome(c);
+    if (welcome?.type !== "welcome") throw new Error("unreachable");
+    for (const g of view.guests!) {
+      const home = resolveAnchor(welcome.room, "home", g.guestId)!;
+      const at = (pred: (m: ServerMsg) => boolean) => c.received.findIndex(pred);
+      const presence = at((m) => m.type === "agent_presence" && m.agentId === g.guestId && m.present);
+      const walk = at((m) => m.type === "walk" && m.id === g.guestId);
+      const listed = at((m) => m.type === "team_view" && (m.guests ?? []).some((x) => x.guestId === g.guestId));
+      // Told they are present, then seen walking to their spot, and only then listed on the floor.
+      expect(presence, `${g.name} comes in`).toBeGreaterThan(-1);
+      expect(walk, `${g.name} walks`).toBeGreaterThan(presence);
+      expect(listed, `${g.name} is listed`).toBeGreaterThan(walk);
+      const walkMsg = c.received[walk];
+      expect(walkMsg?.type === "walk" && walkMsg.path.at(-1)).toEqual({ x: home.x, y: home.y });
+    }
+  });
+
+  it("walks a member who is let go to the elevator, empties the spot, and leaves the others where they stand", async () => {
+    const e = engineWithHr({ team: [...DEFAULT_TEAM(), secondDeveloper, reviewer] });
+    const c = await connect(e.link);
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 2);
+    await c.waitFor(() => Object.keys(guestsOf(c)).length === 2);
+    expect(guestsOf(c)).toEqual({ guest2: "Dex:developer", guest5: "Rhea:reviewer" });
+    await c.waitFor(() => JSON.stringify(floor(c).tileOf("guest2")) === JSON.stringify(spot(c, "guest2")));
+
+    c.send({ type: "go_to", roomId: "hr" });
+    await c.waitFor(() => c.count("welcome") === 3);
+    c.send({ type: "hr_do", act: { action: "fire", projectId: "alpha", memberId: "developer-2" } });
+    await c.waitFor(() => c.count("hr") === 1);
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 4);
+    const back = c.received.map((m) => m.type).lastIndexOf("welcome");
+    // Arriving while he is still on his way out: that ghost is kept out of the room.
+    expect(c.received.slice(back).some((m) => m.type === "agent_presence" && m.agentId === "guest2" && !m.present)).toBe(true);
+    await c.waitFor(() => Object.keys(guestsOf(c)).length === 1);
+    expect(guestsOf(c)).toEqual({ guest5: "Rhea:reviewer" });
+    expect(floor(c).tileOf("guest2")).toEqual(door(c));
+    expect(floor(c).tileOf("guest5")).toEqual(spot(c, "guest5"));
+  });
+
+  it("gives the desk to the next member of the role when the holder is let go, and empties that member's spot", async () => {
+    const e = engineWithHr({ team: [...DEFAULT_TEAM(), secondQa] });
+    const c = await connect(e.link);
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 2);
+    await c.waitFor(() => Object.keys(guestsOf(c)).length === 1);
+    expect(guestsOf(c)).toEqual({ guest3: "Wren:qa" });
+    expect(lastView(c)!.members.find((m) => m.agentId === "qa")?.name).toBe("QA");
+
+    c.send({ type: "go_to", roomId: "hr" });
+    await c.waitFor(() => c.count("welcome") === 3);
+    c.send({ type: "hr_do", act: { action: "fire", projectId: "alpha", memberId: "qa" } });
+    await c.waitFor(() => c.count("hr") === 1);
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 4);
+    await c.waitFor(() => lastView(c)?.members.find((m) => m.agentId === "qa")?.name === "Wren" && (lastView(c)?.guests ?? []).length === 0);
+    await c.waitFor(() => JSON.stringify(floor(c).tileOf("qa")) === JSON.stringify(spot(c, "qa")));
+    expect(floor(c).tileOf("guest3")).toEqual(door(c));
+  });
+
+  it("walks a newly hired member in while the user is on the floor", async () => {
+    const e = engineWithHr();
+    const c = await connect(e.link);
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 2);
+    await c.waitFor(() => views(c).length > 0);
+    expect(lastView(c)!.guests).toEqual([]);
+    // The hire is made in the HR office; the floor learns of it when the user comes back.
+    c.send({ type: "go_to", roomId: "hr" });
+    await c.waitFor(() => c.count("welcome") === 3);
+    c.send({ type: "hr_do", act: { action: "hire", projectId: "alpha", templateId: "night-intern", displayName: "Nox", model: "auto" } });
+    await c.waitFor(() => c.count("hr") === 1);
+    c.send({ type: "go_to", roomId: "project:alpha" });
+    await c.waitFor(() => c.count("welcome") === 4);
+    await c.waitFor(() => guestsOf(c)["guest6"] === "Nox:researcher");
+    expect(lastView(c)!.guests![0]).toMatchObject({ guestId: "guest6", name: "Nox", role: "researcher", model: "auto" });
   });
 });

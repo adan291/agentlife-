@@ -104,13 +104,14 @@ describe("helpers", () => {
     expect(nameProblem("<script>")).toBeTruthy();
   });
 
-  it("puts the first member of a role with a desk at the desk, the others on the bench, and roles without a desk aside", () => {
-    const s = standing([member("a", "qa", "A"), member("b", "qa", "B"), member("c", "architect", "C"), member("d", "reviewer", "D")]);
+  it("puts the first member of a role with a desk at the desk, and everybody else on the floor (a second QA, a reviewer, a researcher)", () => {
+    const s = standing([member("a", "qa", "A"), member("b", "qa", "B"), member("c", "architect", "C"), member("d", "reviewer", "D"), member("e", "researcher", "E")]);
     expect([...s]).toEqual([
       ["a", "desk"],
-      ["b", "bench"],
+      ["b", "floor"],
       ["c", "desk"],
-      ["d", "unused"],
+      ["d", "floor"],
+      ["e", "floor"],
     ]);
   });
 
@@ -131,10 +132,12 @@ describe("Teams tab", () => {
       ["architect", "desk"],
       ["developer", "desk"],
       ["qa", "desk"],
-      ["qa-2", "bench"],
-      ["res-1", "unused"],
+      ["qa-2", "floor"],
+      ["res-1", "floor"],
     ]);
-    expect(textOf(rows[3])).toContain("on the bench");
+    expect(textOf(rows[3])).toContain("on the floor");
+    expect(textOf(rows[4])).toContain("on the floor");
+    expect(textOf(h.body)).not.toContain("bench");
     expect(textOf(h.body)).toContain("Default team".replace("Default", "Custom"));
   });
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ProjectSchema } from "./projects.ts";
+import { GuestIdSchema } from "./room.ts";
 import {
   CatalogueEntrySchema,
   ImportApproveBodySchema,
@@ -104,3 +105,12 @@ export const TeamViewMemberSchema = z.object({
   model: z.string().max(100).optional(),
 });
 export type TeamViewMember = z.infer<typeof TeamViewMemberSchema>;
+
+/** A member who does not hold a role's desk and stands at one of the floor's spots (`guest1`..`guest6`). */
+export const TeamViewGuestSchema = z.object({
+  guestId: GuestIdSchema,
+  name: z.string().min(1).max(60),
+  role: TeamRoleSchema,
+  model: z.string().max(100).optional(),
+});
+export type TeamViewGuest = z.infer<typeof TeamViewGuestSchema>;

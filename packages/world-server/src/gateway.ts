@@ -3,6 +3,7 @@ import type { RawData, WebSocket } from "ws";
 import {
   ACTIVITY_BUFFER_SIZE,
   ClientMsgSchema,
+  GUEST_IDS,
   HR_ROOM,
   LOBBY_ROOM,
   MAX_MESSAGES_PER_SECOND,
@@ -25,6 +26,7 @@ import type {
   Approval,
   ErrorCode,
   FloorStatus,
+  GuestId,
   Hotel,
   HrAction,
   JobState,
@@ -37,6 +39,7 @@ import type {
   ServerMsg,
   StepName,
   TeamMember,
+  TeamRole,
   WelcomeMsg,
 } from "@agentlife/shared";
 import type { EngineLink, StartJobOptions } from "./engine-link.ts";
@@ -447,7 +450,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     // A project floor shows who sits at each desk, and keeps the ghosts that have left by the elevator out of the room.
     const projectId = projectIdOfRoom(roomId);
     if (projectId !== undefined && engine?.hr) {
-      for (const role of SEATED_ROLES) if (absent.has(`${roomId}|${role}`)) send(ws, { type: "agent_presence", agentId: role, present: false });
+      for (const slot of SLOTS) if (absent.has(`${roomId}|${slot}`)) send(ws, { type: "agent_presence", agentId: slot, present: false });
       const view = teamViewMsg(projectId);
       if (view) send(ws, view);
       enqueue(() => refreshTeam(projectId, false));
@@ -489,22 +492,55 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     memberId: string;
     name: string;
     model?: string;
+    role: TeamRole;
   }
-  type Seats = Map<SeatedRole, Seat>;
+  /** A desk of a role, or a standing spot (`guest1`..`guest6`). */
+  type SlotId = SeatedRole | GuestId;
+  const SLOTS: readonly SlotId[] = [...SEATED_ROLES, ...GUEST_IDS];
+  const isGuestSlot = (slot: SlotId): slot is GuestId => (GUEST_IDS as readonly string[]).includes(slot);
+  /** Desks always have an entry (the room label when nobody was hired); a spot has one only while somebody stands there. */
+  type Seats = Map<SlotId, Seat>;
   /** Who works each desk according to the engine, and who the room shows (a ghost that is being replaced keeps its name until the new one walks in). */
   const seatsNow = new Map<string, Seats>();
   const seatsShown = new Map<string, Seats>();
-  /** `<roomId>|<role>` of the ghosts that have left by the elevator and are not back yet. */
+  /** `<roomId>|<slot>` of the ghosts that have left by the elevator and are not back yet. */
   const absent = new Set<string>();
   const swapTimers = new Set<NodeJS.Timeout>();
   /** The label the room uses for a desk nobody was hired for. */
   const DEFAULT_SEAT_NAME: Record<SeatedRole, string> = { architect: "Architect", developer: "Developer", qa: "QA" };
+  /** Where a member who holds no desk likes to stand: near the desk of their own role, else by the middle of the room. */
+  const SPOT_PREFERENCE: Record<TeamRole, readonly GuestId[]> = {
+    architect: ["guest1", "guest5", "guest6"],
+    developer: ["guest2", "guest5", "guest6"],
+    qa: ["guest3", "guest4", "guest6"],
+    reviewer: ["guest5", "guest6", "guest4"],
+    researcher: ["guest6", "guest5", "guest1"],
+  };
 
-  const seatsOf = (members: readonly TeamMember[]): Seats => {
+  /**
+   * The seats for a team: the first member of each seated role holds that role's desk, every other member stands at a
+   * spot (hr-desk requirement 4.3: everybody hired is on the floor). A member keeps the spot they had (`previous`).
+   */
+  const seatsOf = (members: readonly TeamMember[], previous?: Seats): Seats => {
     const out: Seats = new Map();
+    const seated = new Set<string>();
     for (const role of SEATED_ROLES) {
       const m = members.find((x) => x.role === role);
-      out.set(role, m ? { memberId: m.id, name: m.displayName, model: m.model } : { memberId: "", name: DEFAULT_SEAT_NAME[role] });
+      if (m) seated.add(m.id);
+      out.set(role, m ? { memberId: m.id, name: m.displayName, model: m.model, role } : { memberId: "", name: DEFAULT_SEAT_NAME[role], role });
+    }
+    const seatOf = (m: TeamMember): Seat => ({ memberId: m.id, name: m.displayName, model: m.model, role: m.role });
+    const others = members.filter((m) => !seated.has(m.id));
+    for (const spot of GUEST_IDS) {
+      const kept = previous?.get(spot);
+      const m = kept ? others.find((x) => x.id === kept.memberId) : undefined;
+      if (m) out.set(spot, seatOf(m));
+    }
+    const placed = new Set([...out.values()].map((s) => s.memberId));
+    for (const m of others) {
+      if (placed.has(m.id)) continue;
+      const spot = [...SPOT_PREFERENCE[m.role], ...GUEST_IDS].find((g) => !out.has(g));
+      if (spot) out.set(spot, seatOf(m)); // a team has at most 8 members and 2 or more hold desks: there is always a spot
     }
     return out;
   };
@@ -519,12 +555,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         const s = shown.get(role)!;
         return { agentId: role, name: s.name, ...(s.model ? { model: s.model } : {}) };
       }),
+      guests: GUEST_IDS.flatMap((guestId) => {
+        const s = shown.get(guestId);
+        return s ? [{ guestId, name: s.name, role: s.role, ...(s.model ? { model: s.model } : {}) }] : [];
+      }),
     };
   };
 
+  /** Queued behind the walks and presence messages already waiting, so a ghost is told where it is before it is shown. */
   const pushTeamView = (projectId: string): void => {
-    const msg = teamViewMsg(projectId);
-    if (msg) toUser(projectRoomId(projectId), msg);
+    enqueue(() => {
+      const msg = teamViewMsg(projectId);
+      if (msg) toUser(projectRoomId(projectId), msg);
+    });
   };
 
   /** Time a ghost needs to walk to a place, from the `walk` message the sim answered with. */
@@ -533,23 +576,36 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     return w && w.type === "walk" ? w.path.length * w.msPerTile : 0;
   };
 
-  /** The ghost at this desk was let go (or replaced): it walks to the elevator and leaves; its successor comes back through it. */
-  const startSwap = (projectId: string, role: SeatedRole): void => {
+  /** Somebody new takes a spot (or comes back to a desk): they walk in from the elevator to their place. */
+  const walkIn = (projectId: string, slot: SlotId): void => {
     const roomId = projectRoomId(projectId);
-    const key = `${roomId}|${role}`;
+    const back = hotel.sim(roomId)?.sendAgentTo(slot, "home") ?? [];
+    deliver(roomId, [{ type: "agent_presence", agentId: slot, present: true }, ...back]);
+  };
+
+  /**
+   * The ghost at this desk or spot was let go (or replaced): it walks to the elevator and leaves; its successor, if
+   * there is one, comes back through it. A spot nobody takes stays empty.
+   */
+  const startSwap = (projectId: string, slot: SlotId): void => {
+    const roomId = projectRoomId(projectId);
+    const key = `${roomId}|${slot}`;
     if (absent.has(key)) return; // the coming-back step reads the newest team
     absent.add(key);
-    const out = hotel.sim(roomId)?.sendAgentTo(role, "door") ?? [];
-    deliver(roomId, [...out, { type: "agent_presence", agentId: role, present: false }]);
+    const out = hotel.sim(roomId)?.sendAgentTo(slot, "door") ?? [];
+    deliver(roomId, [...out, { type: "agent_presence", agentId: slot, present: false }]);
     const timer = setTimeout(
       () => {
         swapTimers.delete(timer);
         enqueue(() => {
           absent.delete(key);
-          const seat = seatsNow.get(projectId)?.get(role);
-          if (seat) seatsShown.get(projectId)?.set(role, seat);
-          const back = hotel.sim(roomId)?.sendAgentTo(role, "home") ?? [];
-          deliver(roomId, [{ type: "agent_presence", agentId: role, present: true }, ...back]);
+          const seat = seatsNow.get(projectId)?.get(slot);
+          if (seat) {
+            seatsShown.get(projectId)?.set(slot, seat);
+            walkIn(projectId, slot);
+          } else {
+            seatsShown.get(projectId)?.delete(slot);
+          }
           pushTeamView(projectId);
         });
       },
@@ -561,7 +617,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   /**
    * Reads a project's team and shows it in the room: names and models on the ghosts, and, when `announce` is set and
-   * somebody else now sits at a desk, the old ghost leaves and the new one walks in. Never throws.
+   * somebody else now sits at a desk, the old ghost leaves and the new one walks in. Members at the spots always walk
+   * in and out (they have no job to keep still for). Never throws.
    */
   const refreshTeam = async (projectId: string, announce: boolean): Promise<void> => {
     const hr = engine?.hr;
@@ -572,17 +629,31 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     } catch {
       return;
     }
-    const next = seatsOf(team.members);
+    const next = seatsOf(team.members, seatsNow.get(projectId));
     seatsNow.set(projectId, next);
     const shown = seatsShown.get(projectId);
     if (!shown) {
       seatsShown.set(projectId, new Map(next));
+      for (const slot of GUEST_IDS) if (next.has(slot)) walkIn(projectId, slot);
     } else {
-      for (const role of SEATED_ROLES) {
-        const n = next.get(role)!;
-        const s = shown.get(role)!;
-        if (n.memberId === s.memberId || !announce) shown.set(role, n);
-        else startSwap(projectId, role);
+      for (const slot of SLOTS) {
+        const n = next.get(slot);
+        const s = shown.get(slot);
+        if (!isGuestSlot(slot)) {
+          if (n!.memberId === s!.memberId || !announce) shown.set(slot, n!);
+          else startSwap(projectId, slot);
+        } else if (n && s && n.memberId === s.memberId) {
+          shown.set(slot, n);
+        } else if (n && s) {
+          startSwap(projectId, slot); // somebody else takes the spot
+        } else if (n) {
+          if (!absent.has(`${projectRoomId(projectId)}|${slot}`)) {
+            shown.set(slot, n);
+            walkIn(projectId, slot);
+          }
+        } else if (s) {
+          startSwap(projectId, slot); // let go
+        }
       }
     }
     pushTeamView(projectId);

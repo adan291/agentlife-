@@ -42,17 +42,16 @@ export function nameProblem(name: string): string | undefined {
 }
 
 /**
- * Where each member stands: the first member of a role that has a desk works it, the others wait on the bench until a
- * job can use them. Roles without a desk (reviewer, researcher) are hired for the pipeline editor and not used yet.
+ * Where each member stands on the project's floor: the first member of a role that has a desk works it; every other
+ * member (a second developer, a reviewer, a researcher, the Night intern) stands at a spot near the desks. Everybody
+ * hired is on the floor (requirement 4.3).
  */
-export function standing(members: readonly TeamMember[]): Map<string, "desk" | "bench" | "unused"> {
-  const out = new Map<string, "desk" | "bench" | "unused">();
+export function standing(members: readonly TeamMember[]): Map<string, "desk" | "floor"> {
+  const out = new Map<string, "desk" | "floor">();
   const seated = new Set<TeamRole>();
   for (const m of members) {
-    if (!(SEATED_ROLES as readonly string[]).includes(m.role)) {
-      out.set(m.id, "unused");
-    } else if (seated.has(m.role)) {
-      out.set(m.id, "bench");
+    if (!(SEATED_ROLES as readonly string[]).includes(m.role) || seated.has(m.role)) {
+      out.set(m.id, "floor");
     } else {
       seated.add(m.role);
       out.set(m.id, "desk");
@@ -61,7 +60,7 @@ export function standing(members: readonly TeamMember[]): Map<string, "desk" | "
   return out;
 }
 
-const STANDING_TEXT = { desk: "at the desk", bench: "on the bench", unused: "no desk yet" } as const;
+const STANDING_TEXT = { desk: "at the desk", floor: "on the floor" } as const;
 
 /** One line for the status chip of an import. */
 export function importStatusText(i: Pick<ImportView, "status">): string {
@@ -141,7 +140,7 @@ export function createHrPanel(doc: Document, actions: HrActions) {
     return f;
   };
 
-  function memberRow(team: HrTeam, m: TeamMember, where: "desk" | "bench" | "unused", state: HrState, rerender: () => void): HTMLElement {
+  function memberRow(team: HrTeam, m: TeamMember, where: "desk" | "floor", state: HrState, rerender: () => void): HTMLElement {
     const row = el(doc, "li", "al-card al-hr-member");
     row.dataset["member"] = m.id;
     row.dataset["standing"] = where;
@@ -259,7 +258,7 @@ export function createHrPanel(doc: Document, actions: HrActions) {
         doc,
         "p",
         "al-muted",
-        "Each project has its own team. The first member of a role works that role's desk; the others wait on the bench. A change applies to the next job. The HR agent only proposes: nothing changes until you apply it.",
+        "Each project has its own team, and everybody hired is on the project's floor. The first member of a role works that role's desk; the others stand near the desks. A change applies to the next job. The HR agent only proposes: nothing changes until you apply it.",
       ),
     );
     if (state.teams.length === 0) root.appendChild(el(doc, "p", "al-muted", "There are no projects yet. Register one at the Reception in the lobby."));
@@ -283,7 +282,7 @@ export function createHrPanel(doc: Document, actions: HrActions) {
       if (view.suggestion && view.suggestion.projectId === team.projectId) section.appendChild(suggestionCard(team, view.suggestion));
       const where = standing(team.members);
       const list = el(doc, "ul", "al-night-list");
-      for (const m of team.members) list.appendChild(memberRow(team, m, where.get(m.id) ?? "bench", state, rerender));
+      for (const m of team.members) list.appendChild(memberRow(team, m, where.get(m.id) ?? "floor", state, rerender));
       section.appendChild(list);
       section.appendChild(hireForm(team, state, rerender));
       root.appendChild(section);

@@ -79,6 +79,13 @@
 - **Compromiso:** dos caminos de modelo local en el motor. Las notas del informe se guardan en memoria y se pierden si el motor se reinicia.
 - **Sin probar en vivo:** Ollama con `qwen3.5:4b` y el fallback con `kiro-cli` real.
 
+### D12. Todo miembro contratado se ve en la planta de su proyecto (spec hr-desk, requisito 4.3)
+
+- **Decisión (del usuario, opción A):** el primer miembro de cada rol con mesa (architect, developer, qa) trabaja esa mesa; los demás (un segundo developer, QA, un reviewer, un researcher, el Night intern) están de pie en uno de seis puestos de la planta (`home_guest1`..`home_guest6` en `rooms/project-template.json`). Un equipo de 8 miembros se ve entero: 3 mesas y hasta 5 puestos (hasta 6 si falta el QA).
+- **Cómo:** los puestos son avatares de la simulación con id `guest1`..`guest6` (`GUEST_IDS`, `AvatarIdSchema`), no agentes: no tienen estado, trabajo ni eventos, y las listas de agentes (`welcome.agents`, barra de equipo) no cambian. El world-server decide quién ocupa cada puesto y lo manda en `team_view.guests`; `agent_presence` admite ids de puesto. El motor y el contrato de eventos no cambian.
+- **Por qué no ids de agente dinámicos:** habría tocado `AGENT_IDS`, los eventos del motor (`ScopedAgentId`), la barra de equipo y los estados por agente, para unas figuras que hoy no trabajan. Los puestos son una capa de solo presencia.
+- **Compromiso:** un puesto no es un agente: el segundo developer no hace trabajo visible hasta que pipeline-editor le dé tareas. Si el titular de una mesa se despide y otro del mismo rol toma la mesa, el que estaba de pie sale por el ascensor y el de la mesa entra por él (no camina del puesto a la mesa).
+
 ## Riesgos
 
 | # | Riesgo | Prob. | Impacto | Mitigación |
