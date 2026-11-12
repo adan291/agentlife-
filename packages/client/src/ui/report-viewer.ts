@@ -141,7 +141,7 @@ export function renderDelivery(doc: Document, report: Report, actions: ReportVie
  * The report in a wide panel: verdict badge first, then the title, the time and the key facts, then every section of
  * the report (headings, the change with green and red diff lines, the test summary and log, the review). Text only.
  */
-export function renderReportViewer(doc: Document, report: Report, actions: ReportViewerActions): HTMLElement {
+export function renderReportViewer(doc: Document, report: Report, actions: ReportViewerActions, remember: HTMLElement | null = null): HTMLElement {
   const root = doc.createElement("div");
   root.className = "al-report";
   const back = doc.createElement("button");
@@ -177,6 +177,7 @@ export function renderReportViewer(doc: Document, report: Report, actions: Repor
   root.append(back, head);
   const delivery = renderDelivery(doc, report, actions);
   if (delivery) root.appendChild(delivery);
+  if (remember) root.appendChild(remember);
   if (list.children.length > 0) root.appendChild(list);
   root.appendChild(renderMarkdown(doc, report.markdown));
   return root;

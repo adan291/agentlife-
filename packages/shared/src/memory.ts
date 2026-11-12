@@ -85,3 +85,13 @@ export type MemoryAcceptBody = z.infer<typeof MemoryAcceptBodySchema>;
 /** `PUT /projects/:id/memory/settings`. */
 export const MemorySettingsBodySchema = z.object({ autoRemember: z.boolean() });
 export type MemorySettingsBody = z.infer<typeof MemorySettingsBodySchema>;
+
+/** What the user can do in the Library panel and in the report's "Remember this?" card. The project is the user's floor. */
+export const MemoryActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("edit"), entryId: MemoryEntryIdSchema, kind: MemoryKindSchema.optional(), text: z.string().max(2000).optional() }),
+  z.object({ action: z.literal("delete"), entryId: MemoryEntryIdSchema }),
+  z.object({ action: z.literal("accept"), proposalId: MemoryProposalIdSchema, kind: MemoryKindSchema.optional(), text: z.string().max(2000).optional() }),
+  z.object({ action: z.literal("dismiss"), proposalId: MemoryProposalIdSchema }),
+  z.object({ action: z.literal("auto"), autoRemember: z.boolean() }),
+]);
+export type MemoryAction = z.infer<typeof MemoryActionSchema>;

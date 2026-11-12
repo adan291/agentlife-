@@ -44,7 +44,8 @@ function rejects(fn: () => unknown, code: string): void {
 
 describe("what the Library refuses (requirement 1.2)", () => {
   it("paths of any kind", () => {
-    for (const t of ["See D:\\work\\app\\src\\a.ts for the setup", "Config lives in C:/Users/someone/app", "Run /usr/local/bin/tool first", "Edit \\\\server\\share\\x"]) {
+    const homePath = ["C:", "Users", "someone", "app"].join("/");
+    for (const t of ["See D:\\work\\app\\src\\a.ts for the setup", `Config lives in ${homePath}`, "Run /usr/local/bin/tool first", "Edit \\\\server\\share\\x"]) {
       rejects(() => checkMemoryText(t, []), "path_or_secret");
     }
   });

@@ -12,6 +12,7 @@ import {
   ImportViewSchema,
   jobDetailsFromExport,
   MorningSummariesSchema,
+  MemoryStateSchema,
   NightJobSchema,
   NightStateSchema,
   OkResponseSchema,
@@ -44,7 +45,7 @@ import {
   type Repo,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink, HrLink, StartJobOptions } from "./engine-link.ts";
+import type { EngineLink, HrLink, MemoryLink, StartJobOptions } from "./engine-link.ts";
 
 export const ENGINE_TOKEN_HEADER = "x-agentlife-token";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -112,6 +113,26 @@ export class HttpEngineLink implements EngineLink {
     },
     suggest: async (projectId) =>
       TeamSuggestionSchema.parse(await this.request("POST", `/projects/${encodeURIComponent(projectId)}/team/suggest`, {}, AGENT_REQUEST_TIMEOUT_MS)),
+  };
+
+  /** The Library: calls to the engine's memory routes. */
+  readonly memory: MemoryLink = {
+    state: async (projectId) => MemoryStateSchema.parse(await this.request("GET", `/projects/${encodeURIComponent(projectId)}/memory`)),
+    edit: async (projectId, entryId, patch) => {
+      await this.request("PATCH", `/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(entryId)}`, patch);
+    },
+    remove: async (projectId, entryId) => {
+      OkResponseSchema.parse(await this.request("DELETE", `/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(entryId)}`));
+    },
+    accept: async (projectId, proposalId, edit) => {
+      await this.request("POST", `/projects/${encodeURIComponent(projectId)}/memory/proposals/${encodeURIComponent(proposalId)}/accept`, edit);
+    },
+    dismiss: async (projectId, proposalId) => {
+      OkResponseSchema.parse(await this.request("DELETE", `/projects/${encodeURIComponent(projectId)}/memory/proposals/${encodeURIComponent(proposalId)}`));
+    },
+    setAutoRemember: async (projectId, on) => {
+      await this.request("PUT", `/projects/${encodeURIComponent(projectId)}/memory/settings`, { autoRemember: on });
+    },
   };
 
   constructor(opts: HttpEngineOptions) {

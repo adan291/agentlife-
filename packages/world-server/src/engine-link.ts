@@ -12,6 +12,9 @@ import type {
   JobDetails,
   JobKind,
   JobView,
+  MemoryAcceptBody,
+  MemoryState,
+  MemoryUpdateBody,
   MorningSummary,
   NightJob,
   NightJobRequest,
@@ -38,6 +41,16 @@ export interface HrLink {
   approveImport(id: string, hash: string): Promise<ImportView>;
   rejectImport(id: string): Promise<void>;
   suggest(projectId: string): Promise<TeamSuggestion>;
+}
+
+/** The Library of the projects (project-memory). Every method rejects with the engine's own message when it refuses. */
+export interface MemoryLink {
+  state(projectId: string): Promise<MemoryState>;
+  edit(projectId: string, entryId: string, patch: MemoryUpdateBody): Promise<void>;
+  remove(projectId: string, entryId: string): Promise<void>;
+  accept(projectId: string, proposalId: string, edit: MemoryAcceptBody): Promise<void>;
+  dismiss(projectId: string, proposalId: string): Promise<void>;
+  setAutoRemember(projectId: string, on: boolean): Promise<void>;
 }
 
 /** What a job other than a plain change needs: its kind and the branch, path or topic it works on. */
@@ -81,6 +94,8 @@ export interface EngineLink {
   moveNightJob?(id: string, direction: "up" | "down"): Promise<void>;
   /** The HR office (hr-desk). Optional: the scripted engine and the demo have none. */
   hr?: HrLink;
+  /** The Library (project-memory). Optional: the scripted engine and the demo have none. */
+  memory?: MemoryLink;
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;
