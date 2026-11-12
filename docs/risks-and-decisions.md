@@ -113,3 +113,10 @@
 4. Si vas solo o en equipo (máximo 3 personas).
 5. Categoría final: Resurrection es la propuesta.
 6. Estilo visual: pixel art dibujado a mano o render de modelos 3D CC0.
+
+### D13. Vista de lista: resumen de solo lectura y "moverse y actuar" (spec list-mode)
+
+- **Decisión (de Kiro, por encargo del usuario, 2026-11-12):** opción 1 del bloqueo de S26. Un mensaje de solo lectura `overview` (con `overview_watch` para suscribirse) resume todas las plantas de proyecto: trabajo, paso, quién, aprobaciones pendientes, último veredicto e ids de artefactos. `go_to` admite `via: "list"`, que cambia de planta sin pasar por el ascensor. Cada acción de la lista o de la paleta sobre otro proyecto envía primero ese `go_to` y después el mismo mensaje que el mueble.
+- **Por qué:** las reglas por planta del gateway (aprobar, entregar o ver detalles solo en la planta propia) siguen siendo el único camino de cada acción, así que no hay una segunda vía que revisar. La lista es la forma de uso diaria del hotel, más allá del hackatón, y necesita ver todos los proyectos.
+- **Compromiso:** se relaja la regla "solo desde el ascensor" para la lista. `overview` no lleva rutas, cuerpos de informe ni diffs, solo ids, nombres, estados, cuentas, veredictos y horas. En la demo la lista no está disponible hasta volver a grabarla con varias plantas.
+- **Descartadas:** limitar la lista a la planta actual (incumple 1.2, 1.3 y 2.1) y añadir `roomId` a cada comando (cambia el modelo por plantas y duplica las comprobaciones).
