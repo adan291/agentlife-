@@ -9,3 +9,6 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [x] Lobby, elevator with door transition, project floor with its name (checked by the user 2026-11-12)
 - [ ] With two registered projects, start jobs on both and a third one to see the queue
 - [ ] Demo build (`?mode=demo` or the public URL): elevator to the lobby and back
+
+## night-shift (merged 2026-11-12)
+- [ ] Look at the feature in the browser
