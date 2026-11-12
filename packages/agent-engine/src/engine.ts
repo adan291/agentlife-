@@ -14,7 +14,8 @@ import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import { ProjectRegistry } from "./projects/registry.ts";
-import { createDeliverRoute, createProjectRoutes } from "./projects/routes.ts";
+import { createBranchesRoute, createDeliverRoute, createProjectRoutes } from "./projects/routes.ts";
+import { listBranches } from "./projects/branches.ts";
 import { allowedRoots } from "./projects/roots.ts";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
@@ -150,6 +151,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     logger,
     token: opts.token,
     projects,
+    branches: async (repoId) => (await listBranches({ registry: projects, paths, repoId })).branches,
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
       createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
@@ -157,6 +159,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
       ...createProjectRoutes(projects, runner, store),
       createDeliverRoute({ registry: projects, paths, store, logger }),
+      createBranchesRoute({ registry: projects, paths }),
       ...(opts.extraRoutes ?? []),
     ],
   });

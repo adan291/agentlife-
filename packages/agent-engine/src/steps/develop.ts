@@ -3,7 +3,7 @@ import path from "node:path";
 import { DiffRejectedError } from "../errors.ts";
 import type { PlanTask, StepContext } from "../jobs/steps.ts";
 import { DEVELOPER_IDENTITY, git } from "../git.ts";
-import { fence, loadPromptTemplate, renderPrompt } from "../prompts.ts";
+import { fence, loadPromptTemplate, renderPrompt, templateFor } from "../prompts.ts";
 import { repoDir, runRole, worktreeDir, type PipelineDeps } from "./deps.ts";
 import { parseGitDiff, validateDiff, type DiffCheck } from "./validate-diff.ts";
 
@@ -47,7 +47,7 @@ export async function developStep(deps: PipelineDeps, ctx: StepContext, input: D
   }
 
   const kind = ctx.kind ?? "change";
-  const prompt = renderPrompt(loadPromptTemplate("developer"), {
+  const prompt = renderPrompt(loadPromptTemplate(templateFor("developer", kind)), {
     goal: fence(ctx.goal),
     task: fence(JSON.stringify(input.task, null, 2), "json"),
     feedback: fence(input.feedback.length ? input.feedback.join("\n") : "(none)"),

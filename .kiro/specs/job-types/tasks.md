@@ -4,7 +4,7 @@
   - `kind` in StartJobBody; fixed pipeline per kind; diff validation by kind; review-branch reads the branch diff read-only
   - _Requirements: 1.1, 1.2, 1.3, 4.1_
 
-- [ ] 2. Engine: branch listing and per-kind prompts and reports
+- [x] 2. Engine: branch listing and per-kind prompts and reports
   - `GET /projects/:id/branches`; prompts for review, tests and docs; report sections by kind; no delivery for review-branch
   - _Requirements: 2.2, 3.1, 3.2_
 

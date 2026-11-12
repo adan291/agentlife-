@@ -1,3 +1,4 @@
+import { jobKindLabel, type JobKind } from "@agentlife/shared";
 import type { ReportInput, StepContext } from "../jobs/steps.ts";
 import { git } from "../git.ts";
 import { repoDir, resolveProject, type PipelineDeps } from "./deps.ts";
@@ -83,17 +84,186 @@ function num(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
+/** One changed file of a patch. */
+export interface PatchFile {
+  path: string;
+  status: "added" | "changed" | "deleted";
+  added: number;
+  deleted: number;
+}
+
+/** Files of a unified patch with their status and line counts. Best effort: a path with odd quoting is shown as git wrote it. */
+export function patchFiles(diff: string): PatchFile[] {
+  const files: PatchFile[] = [];
+  let cur: PatchFile | undefined;
+  for (const l of diff.replace(/\r\n/g, "\n").split("\n")) {
+    const head = /^diff --git a\/.+ b\/(.+)$/.exec(l);
+    if (head) {
+      cur = { path: head[1]!, status: "changed", added: 0, deleted: 0 };
+      files.push(cur);
+    } else if (!cur) {
+      continue;
+    } else if (l.startsWith("new file mode")) cur.status = "added";
+    else if (l.startsWith("deleted file mode")) cur.status = "deleted";
+    else if (l.startsWith("+") && !l.startsWith("+++")) cur.added += 1;
+    else if (l.startsWith("-") && !l.startsWith("---")) cur.deleted += 1;
+  }
+  return files;
+}
+
+/** Test cases the patch adds, counted from added lines that start a JS/TS, Python or Go test. Approximate, and says so. */
+export function addedTestCases(diff: string): number {
+  let n = 0;
+  for (const l of diff.replace(/\r\n/g, "\n").split("\n")) {
+    if (!l.startsWith("+") || l.startsWith("+++")) continue;
+    if (/^\+\s*(?:it|test)(?:\.\w+)*\s*\(/.test(l) || /^\+\s*(?:async\s+)?def\s+test_/.test(l) || /^\+func\s+Test\w+\(/.test(l)) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Coverage from the text table of c8, nyc or Vitest, or the summary line of Istanbul. The row of the target wins over
+ * the overall figure. Undefined when the test command printed no coverage, which is the usual case.
+ */
+export function coverageOf(log: string, target?: string): string | undefined {
+  const text = log.replace(/\r\n/g, "\n");
+  const base = target?.split("/").pop();
+  if (base) {
+    const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const row = new RegExp(`^\\s*[^|\\n]*${escaped}[^|\\n]*\\|\\s*([\\d.]+)`, "m").exec(text);
+    if (row) return `${row[1]}% of statements in ${inlineCode(base, 100)}`;
+  }
+  const all = /^\s*All files\s*\|\s*([\d.]+)/m.exec(text);
+  if (all) return `${all[1]}% of statements overall`;
+  const statements = /^\s*Statements\s*:\s*([\d.]+)%/m.exec(text);
+  if (statements) return `${statements[1]}% of statements overall`;
+  return undefined;
+}
+
+const TARGET_LABEL: Record<JobKind, string> = { change: "Target", "review-branch": "Branch", "write-tests": "Target", document: "Topic" };
+
+function fileList(files: readonly PatchFile[]): string[] {
+  const shown = files.slice(0, 20).map((f) => `- ${inlineCode(f.path, 200)} (${f.status}, +${f.added} -${f.deleted})`);
+  if (files.length > shown.length) shown.push(`- and ${files.length - shown.length} more`);
+  return shown;
+}
+
+/** The "## Tests" section, shared by every kind that runs the tests. */
+function testsSection(input: ReportInput): string[] {
+  const out: string[] = ["## Tests", ""];
+  if (input.kind === "document") {
+    out.push("Not part of a documentation job. The review is the check.");
+  } else if (input.test?.skipped) {
+    out.push("Not run (no supported test setup). The verdict rests on the review alone.");
+  } else if (input.test) {
+    const code = input.test.exitCode === undefined ? "" : ` (exit code ${input.test.exitCode})`;
+    out.push(`${input.test.passed ? "Passed" : "Failed"}${code}. Last lines of the log:`, "");
+    out.push(codeBlock(logTail(input.test.log, REPORT_LOG_MAX_LINES, REPORT_LOG_MAX_CHARS)));
+    if (input.kind === "write-tests") {
+      const coverage = coverageOf(input.test.log, input.target);
+      out.push("", coverage ? `Coverage: ${coverage}.` : "Coverage: not reported by the test command.");
+    }
+  } else {
+    out.push("The tests did not run.");
+  }
+  out.push("");
+  return out;
+}
+
+/** The "## Run facts" section. */
+function factsSection(facts: readonly StepFact[]): string[] {
+  const out: string[] = ["## Run facts", ""];
+  if (facts.length) {
+    for (const f of facts) {
+      const files = f.filesRead === undefined && f.filesEdited === undefined ? undefined : `${f.filesRead ?? 0} read, ${f.filesEdited ?? 0} edited`;
+      const parts = [
+        f.status,
+        f.durationMs === undefined ? undefined : formatDuration(f.durationMs),
+        f.credits === undefined ? undefined : `${num(f.credits)} credits`,
+        f.model ? inlineCode(f.model, 100) : undefined,
+        f.contextPeak === undefined ? undefined : `context ${Math.round(f.contextPeak)}%`,
+        files,
+      ];
+      out.push(`- **${f.step}:** ${parts.filter((p): p is string => p !== undefined).join(", ")}`);
+    }
+    if (facts.some((f) => f.credits !== undefined)) {
+      out.push("", `Total credits: ${num(facts.reduce((sum, f) => sum + (f.credits ?? 0), 0))}.`);
+    }
+  } else {
+    out.push("No step data.");
+  }
+  return out;
+}
+
+function reportTitle(goal: string): string {
+  const title = `Report: ${oneLine(goal, TITLE_MAX_CHARS)}`;
+  return title.length > TITLE_MAX_CHARS ? `${title.slice(0, TITLE_MAX_CHARS - 1)}…` : title;
+}
+
+/**
+ * Report of a `review-branch` job (job-types, requirement 3.1): the verdict as "ready to merge" or "changes
+ * requested", the findings by severity, the branch diff and the tests. There is no plan, because nothing was planned,
+ * and no way to deliver it, because nothing was changed.
+ */
+function buildBranchReport(input: ReportInput, facts: readonly StepFact[]): { title: string; markdown: string } {
+  const out: string[] = ["# AGENT LIFE report", "", "## Summary", ""];
+  out.push(`- **Goal:** ${inlineCode(input.goal)}`);
+  out.push(`- **Kind:** ${jobKindLabel("review-branch")}`);
+  if (input.target) out.push(`- **Branch:** ${inlineCode(input.target, 200)}`);
+  const ready = input.verdict === "pass";
+  out.push(`- **Verdict:** ${ready ? (input.test?.skipped ? "READY TO MERGE (without tests)" : "READY TO MERGE") : "CHANGES REQUESTED"}`);
+  if (input.branchReview) out.push(`- **Risk:** ${input.branchReview.risk}`);
+  if (input.comparedWith) out.push(`- **Compared with:** ${inlineCode(input.comparedWith, 200)}`);
+  out.push("");
+
+  if (input.failureReason) out.push("## Failure", "", codeBlock(input.failureReason.slice(0, 2000)), "");
+
+  out.push("## Findings", "");
+  const findings = input.branchReview?.findings ?? [];
+  if (input.branchReview) {
+    const count = (s: string): number => findings.filter((f) => f.severity === s).length;
+    out.push(`${findings.length} ${findings.length === 1 ? "finding" : "findings"}: ${count("high")} high, ${count("medium")} medium, ${count("low")} low.`);
+    if (findings.length) out.push("");
+    for (const f of findings) {
+      const label = f.severity === "high" ? "High" : f.severity === "medium" ? "Medium" : "Low";
+      out.push(`- **${label}:** ${inlineCode(f.text)}${f.file ? ` in ${inlineCode(f.file, 200)}` : ""}`);
+    }
+  } else {
+    out.push("No review was done.");
+  }
+  out.push("");
+
+  out.push("## Change", "");
+  if (input.diff) {
+    const s = diffStats(input.diff);
+    out.push(`${s.files} ${s.files === 1 ? "file" : "files"} changed in the branch, +${s.added} -${s.deleted}.`, "", codeBlock(cutDiff(input.diff), "diff"));
+  } else {
+    out.push("No change was read.");
+  }
+  out.push("");
+
+  out.push(...testsSection(input));
+  out.push(...factsSection(facts));
+  return { title: reportTitle(input.goal), markdown: out.join("\n") + "\n" };
+}
+
 /**
  * Builds report.md (requirement 8.1) in the Markdown subset the mailbox renders: headings, flat lists,
  * fenced code, bold and code spans. Text from the user or a model only appears in code spans, fenced
  * blocks and the plain-text title, so the report never carries Markdown or HTML of its own making.
  */
 export function buildReport(input: ReportInput, facts: readonly StepFact[] = []): { title: string; markdown: string } {
+  const kind: JobKind = input.kind ?? "change";
+  if (kind === "review-branch") return buildBranchReport(input, facts);
   const out: string[] = [];
   out.push("# AGENT LIFE report", "");
 
   out.push("## Summary", "");
   out.push(`- **Goal:** ${inlineCode(input.goal)}`);
+  if (kind !== "change") {
+    out.push(`- **Kind:** ${jobKindLabel(kind)}`);
+    if (input.target) out.push(`- **${TARGET_LABEL[kind]}:** ${inlineCode(input.target, 200)}`);
+  }
   if (input.task) {
     out.push(`- **Task:** ${inlineCode(input.task.title)}`);
     if (input.task.acceptance) out.push(`- **Done when:** ${inlineCode(input.task.acceptance, 300)}`);
@@ -118,26 +288,35 @@ export function buildReport(input: ReportInput, facts: readonly StepFact[] = [])
   }
   out.push("");
 
-  out.push("## Change", "");
-  if (input.diff) {
-    const s = diffStats(input.diff);
-    out.push(`${s.files} ${s.files === 1 ? "file" : "files"} changed, +${s.added} -${s.deleted}.`, "", codeBlock(cutDiff(input.diff), "diff"));
+  if (kind === "document") {
+    out.push("## Files written", "");
+    const files = input.diff ? patchFiles(input.diff) : [];
+    if (files.length) out.push(...fileList(files), "", codeBlock(cutDiff(input.diff ?? ""), "diff"));
+    else out.push("No file was written.");
   } else {
-    out.push("No change was produced.");
+    out.push("## Change", "");
+    if (input.diff) {
+      const s = diffStats(input.diff);
+      out.push(`${s.files} ${s.files === 1 ? "file" : "files"} changed, +${s.added} -${s.deleted}.`, "", codeBlock(cutDiff(input.diff), "diff"));
+    } else {
+      out.push("No change was produced.");
+    }
   }
   out.push("");
 
-  out.push("## Tests", "");
-  if (input.test?.skipped) {
-    out.push("Not run (no supported test setup). The verdict rests on the review alone.");
-  } else if (input.test) {
-    const code = input.test.exitCode === undefined ? "" : ` (exit code ${input.test.exitCode})`;
-    out.push(`${input.test.passed ? "Passed" : "Failed"}${code}. Last lines of the log:`, "");
-    out.push(codeBlock(logTail(input.test.log, REPORT_LOG_MAX_LINES, REPORT_LOG_MAX_CHARS)));
-  } else {
-    out.push("The tests did not run.");
+  if (kind === "write-tests") {
+    out.push("## Tests added", "");
+    const files = input.diff ? patchFiles(input.diff) : [];
+    if (files.length && input.diff) {
+      const cases = addedTestCases(input.diff);
+      out.push(`${files.length} test ${files.length === 1 ? "file" : "files"}, about ${cases} test ${cases === 1 ? "case" : "cases"} added (counted from the patch).`, "", ...fileList(files));
+    } else {
+      out.push("No tests were added.");
+    }
+    out.push("");
   }
-  out.push("");
+
+  out.push(...testsSection(input));
 
   out.push("## Review", "");
   if (input.review) {
@@ -151,29 +330,9 @@ export function buildReport(input: ReportInput, facts: readonly StepFact[] = [])
   }
   out.push("");
 
-  out.push("## Run facts", "");
-  if (facts.length) {
-    for (const f of facts) {
-      const files = f.filesRead === undefined && f.filesEdited === undefined ? undefined : `${f.filesRead ?? 0} read, ${f.filesEdited ?? 0} edited`;
-      const parts = [
-        f.status,
-        f.durationMs === undefined ? undefined : formatDuration(f.durationMs),
-        f.credits === undefined ? undefined : `${num(f.credits)} credits`,
-        f.model ? inlineCode(f.model, 100) : undefined,
-        f.contextPeak === undefined ? undefined : `context ${Math.round(f.contextPeak)}%`,
-        files,
-      ];
-      out.push(`- **${f.step}:** ${parts.filter((p): p is string => p !== undefined).join(", ")}`);
-    }
-    if (facts.some((f) => f.credits !== undefined)) {
-      out.push("", `Total credits: ${num(facts.reduce((sum, f) => sum + (f.credits ?? 0), 0))}.`);
-    }
-  } else {
-    out.push("No step data.");
-  }
+  out.push(...factsSection(facts));
 
-  const title = `Report: ${oneLine(input.goal, TITLE_MAX_CHARS)}`;
-  return { title: title.length > TITLE_MAX_CHARS ? `${title.slice(0, TITLE_MAX_CHARS - 1)}…` : title, markdown: out.join("\n") + "\n" };
+  return { title: reportTitle(input.goal), markdown: out.join("\n") + "\n" };
 }
 
 /** Durations from the job's step records, credits and tokens from the run logs (same keys as the export). */

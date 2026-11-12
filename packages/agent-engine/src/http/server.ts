@@ -38,6 +38,8 @@ export interface EngineServerDeps {
   extraRoutes?: Route[];
   /** Registered projects. Without it only the repos of config/repos.json exist. */
   projects?: ProjectRegistry;
+  /** Local branches of a project, for `review-branch` jobs. Without it that kind is refused. */
+  branches?: (repoId: string) => Promise<string[]>;
 }
 
 export interface RouteContext {
@@ -163,6 +165,15 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
           throw new BadRequestError("unknown_repo", "repository is not allowlisted", [
             { path: "repoId", message: "not in the allowlist" },
           ]);
+        }
+        if (body.kind === "review-branch" && body.target) {
+          // Requirement 2.2: a branch is chosen from the project's local branches, never typed free.
+          const names = await deps.branches?.(body.repoId).catch(() => undefined);
+          if (!names || !names.includes(body.target)) {
+            throw new BadRequestError("unknown_branch", "that is not a local branch of the project", [
+              { path: "target", message: "not a branch of this project" },
+            ]);
+          }
         }
         const taskId = runner.start(body.repoId, body.goal, {
           kind: body.kind,

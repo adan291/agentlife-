@@ -1,13 +1,29 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { JobKind } from "@agentlife/shared";
 import type { Role } from "./runtimes/types.ts";
 
 export const PROMPTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "prompts");
 
 /** Templates of the job kinds other than `change`, next to the three role templates. */
-export const KIND_PROMPT_NAMES = ["qa-branch"] as const;
+export const KIND_PROMPT_NAMES = [
+  "architect-tests",
+  "architect-docs",
+  "developer-tests",
+  "developer-docs",
+  "qa-tests",
+  "qa-docs",
+  "qa-branch",
+] as const;
 export type PromptName = (typeof KIND_PROMPT_NAMES)[number];
+
+/** The template a role uses in a job of this kind. `change` (and an unknown kind) uses the role's own template. */
+export function templateFor(role: Role, kind: JobKind = "change"): Role | PromptName {
+  if (kind === "write-tests") return `${role}-tests` as PromptName;
+  if (kind === "document") return `${role}-docs` as PromptName;
+  return role;
+}
 
 export function loadPromptTemplate(role: Role | PromptName, dir: string = PROMPTS_DIR): string {
   return readFileSync(path.join(dir, `${role}.md`), "utf8");
