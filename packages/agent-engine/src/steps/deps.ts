@@ -8,7 +8,7 @@ import type { DataPaths } from "../paths.ts";
 import type { ProjectRegistry, ResolvedProject } from "../projects/registry.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
-import type { TeamResolver } from "../team/service.ts";
+import { memberForStep, type TeamResolver } from "../team/service.ts";
 import { assertInternStep } from "../team/intern.ts";
 import { createStepTracker } from "../work.ts";
 import type { JobNotes } from "./notes.ts";
@@ -84,7 +84,7 @@ export async function runRole(
 ): Promise<string> {
   assertSafeTaskId(ctx.taskId);
   const outputs: string[] = [];
-  const member = deps.team?.resolve(ctx.repoId, ctx.taskId, role);
+  const member = memberForStep(deps.team, ctx, role);
   // The local intern has no tools: it may only do the small read-only steps. Refused before anything runs.
   let runtime = deps.runtimes[role];
   if (member?.runtime === "ollama") {

@@ -44,6 +44,26 @@ export interface ResolvedMember {
 /** What the pipeline steps ask for. A role the team does not have gives undefined and the step uses the built-in agent. */
 export interface TeamResolver {
   resolve(projectId: string, taskId: string, role: TeamRole): ResolvedMember | undefined;
+  /**
+   * A named member of the job's team (a pipeline step may name its member). Undefined when that member is not on the team
+   * any more. Optional so that a resolver written for roles only keeps working.
+   */
+  resolveMember?(projectId: string, taskId: string, memberId: string): ResolvedMember | undefined;
+}
+
+/**
+ * The agent for a step: the member the pipeline names, else the first member of the role. A named member that has left
+ * the team stops the step with a clear message instead of running someone else.
+ */
+export function memberForStep(
+  team: TeamResolver | undefined,
+  ctx: { repoId: string; taskId: string; memberId?: string | undefined },
+  role: TeamRole,
+): ResolvedMember | undefined {
+  if (!ctx.memberId || !team?.resolveMember) return team?.resolve(ctx.repoId, ctx.taskId, role);
+  const member = team.resolveMember(ctx.repoId, ctx.taskId, ctx.memberId);
+  if (!member) throw new Error(`The team member '${ctx.memberId}' is not on this team any more.`);
+  return member;
 }
 
 /** One role of one open job that is being worked on right now. */
@@ -73,6 +93,12 @@ export interface TeamServiceOptions {
 /** Teams kept per job so a running job keeps its agents when the team changes (changes apply to the next job). */
 const MAX_SNAPSHOTS = 200;
 
+/** The team as one job sees it: the first member of each role, and every member by id. */
+interface Snapshot {
+  byRole: Map<TeamRole, ResolvedMember>;
+  byId: Map<string, ResolvedMember>;
+}
+
 export interface TeamView {
   customised: boolean;
   members: TeamMember[];
@@ -87,7 +113,7 @@ export class TeamService implements TeamResolver {
   private readonly o: TeamServiceOptions;
   private readonly log: Logger;
   private readonly newId: () => string;
-  private readonly snapshots = new Map<string, Map<TeamRole, ResolvedMember>>();
+  private readonly snapshots = new Map<string, Snapshot>();
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(opts: TeamServiceOptions) {
@@ -131,30 +157,28 @@ export class TeamService implements TeamResolver {
   }
 
   /** The member that does the work of `role` in `projectId`: the first one of that role. */
-  private currentTeam(projectId: string): Map<TeamRole, ResolvedMember> {
+  private currentTeam(projectId: string): Snapshot {
     const stored = this.o.store.get(projectId);
     const members = stored ?? this.defaultTeam();
-    const out = new Map<TeamRole, ResolvedMember>();
+    const byRole = new Map<TeamRole, ResolvedMember>();
+    const byId = new Map<string, ResolvedMember>();
     for (const m of members) {
-      if (out.has(m.role)) continue;
       const template = this.o.catalogue.get(m.templateId);
       const local = template?.runtime === "ollama";
-      out.set(m.role, {
+      const resolved: ResolvedMember = {
         memberId: m.id,
         agent: this.agentOf(projectId, m, stored !== undefined),
         ...(m.model ? { model: m.model } : {}),
         displayName: m.displayName,
         ...(local && template ? { runtime: "ollama" as const, system: `${template.persona} ${ROLE_INSTRUCTIONS[template.role]}` } : {}),
-      });
+      };
+      byId.set(m.id, resolved);
+      if (!byRole.has(m.role)) byRole.set(m.role, resolved);
     }
-    return out;
+    return { byRole, byId };
   }
 
-  /**
-   * The agent for a step. The whole team is read when a job asks for the first time and the answer is kept for that
-   * job, so a rename, a new model or a firing applies from the next job on.
-   */
-  resolve(projectId: string, taskId: string, role: TeamRole): ResolvedMember | undefined {
+  private snapshotOf(projectId: string, taskId: string): Snapshot {
     let snap = this.snapshots.get(taskId);
     if (!snap) {
       snap = this.currentTeam(projectId);
@@ -164,7 +188,20 @@ export class TeamService implements TeamResolver {
         if (oldest !== undefined) this.snapshots.delete(oldest);
       }
     }
-    return snap.get(role);
+    return snap;
+  }
+
+  /**
+   * The agent for a step. The whole team is read when a job asks for the first time and the answer is kept for that
+   * job, so a rename, a new model or a firing applies from the next job on.
+   */
+  resolve(projectId: string, taskId: string, role: TeamRole): ResolvedMember | undefined {
+    return this.snapshotOf(projectId, taskId).byRole.get(role);
+  }
+
+  /** A named member of the job's team (the same snapshot as `resolve`). */
+  resolveMember(projectId: string, taskId: string, memberId: string): ResolvedMember | undefined {
+    return this.snapshotOf(projectId, taskId).byId.get(memberId);
   }
 
   private workingMemberIds(projectId: string): Set<string> {

@@ -71,7 +71,7 @@ describe("createPipelineSteps", () => {
       repos: config.repos,
       limits: config.limits,
     });
-    expect(Object.keys(steps).sort()).toEqual(["analyze", "auditDeps", "develop", "report", "review", "reviewBranch", "test"]);
+    expect(Object.keys(steps).sort()).toEqual(["analyze", "auditDeps", "develop", "report", "research", "review", "reviewBranch", "secondReview", "test"]);
     store.close();
   });
 });

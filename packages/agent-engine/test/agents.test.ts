@@ -121,7 +121,7 @@ describe("installAgents", () => {
 
 describe("prompt templates", () => {
   it("only use known placeholders and carry the untrusted-content rule", () => {
-    const known = new Set(["goal", "task", "feedback", "diff", "testLog", "testStatus", "memory"]);
+    const known = new Set(["goal", "task", "feedback", "diff", "testLog", "testStatus", "memory", "research"]);
     for (const role of ROLES) {
       const t = loadPromptTemplate(role);
       expect(t, role).toMatch(/Untrusted-content rule/);

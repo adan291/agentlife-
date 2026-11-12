@@ -17,6 +17,7 @@ export default defineConfig({
       RUNTIME: "fake",
       AGENTLIFE_PROJECTS_FILE: path.join(scratch, "no-projects.json"),
       AGENTLIFE_TEAMS_FILE: path.join(scratch, "no-teams.json"),
+      AGENTLIFE_PIPELINES_FILE: path.join(scratch, "no-pipelines.json"),
       AGENTLIFE_IMPORTS_FILE: path.join(scratch, "no-imports.json"),
       AGENTLIFE_PROJECT_ROOTS: "",
     },

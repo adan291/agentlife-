@@ -13,6 +13,7 @@ import {
   jobDetailsFromExport,
   MorningSummariesSchema,
   MemoryStateSchema,
+  PipelineResponseSchema,
   NightJobSchema,
   NightStateSchema,
   OkResponseSchema,
@@ -45,7 +46,7 @@ import {
   type Repo,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink, HrLink, MemoryLink, StartJobOptions } from "./engine-link.ts";
+import type { EngineLink, HrLink, MemoryLink, PipelineLink, StartJobOptions } from "./engine-link.ts";
 
 export const ENGINE_TOKEN_HEADER = "x-agentlife-token";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -133,6 +134,13 @@ export class HttpEngineLink implements EngineLink {
     setAutoRemember: async (projectId, on) => {
       await this.request("PUT", `/projects/${encodeURIComponent(projectId)}/memory/settings`, { autoRemember: on });
     },
+  };
+
+  /** The pipeline of a project: calls to the engine's pipeline routes. */
+  readonly pipeline: PipelineLink = {
+    state: async (projectId) => PipelineResponseSchema.parse(await this.request("GET", `/projects/${encodeURIComponent(projectId)}/pipeline`)),
+    save: async (projectId, steps) => PipelineResponseSchema.parse(await this.request("PUT", `/projects/${encodeURIComponent(projectId)}/pipeline`, { steps })),
+    reset: async (projectId) => PipelineResponseSchema.parse(await this.request("DELETE", `/projects/${encodeURIComponent(projectId)}/pipeline`)),
   };
 
   constructor(opts: HttpEngineOptions) {

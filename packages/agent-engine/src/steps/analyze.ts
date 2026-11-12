@@ -17,15 +17,12 @@ export function checkPlan(plan: Plan): string | undefined {
 }
 
 /**
- * Architect step: prepare the repo, run the read-only Architect on it and return the validated plan.
- * The built-in fixture is copied into a one-commit repository; a registered project is cloned at its current
- * branch and `HEAD` after the registry has checked the folder is still inside an allowed root.
- * An invalid reply gets one retry with the validation error appended (requirement 4.3).
- * The runner stores plan.json and asks for approval, one option per task.
+ * Prepares the repo a read-only agent works in: the built-in fixture is copied into a one-commit repository; a registered
+ * project is cloned at its current branch and `HEAD` after the registry has checked the folder is still inside an allowed
+ * root. Returns the directory.
  */
-export async function analyzeStep(deps: PipelineDeps, ctx: StepContext): Promise<Plan> {
+export async function prepareProjectDir(deps: PipelineDeps, ctx: StepContext): Promise<string> {
   const project = resolveProject(deps, ctx.repoId);
-  let dir: string;
   if (project.builtin) {
     const mat = await materialise({
       repo: { id: project.id, source: project.source ?? "" },
@@ -33,17 +30,27 @@ export async function analyzeStep(deps: PipelineDeps, ctx: StepContext): Promise
       dataDir: deps.paths.root,
       signal: ctx.signal,
     });
-    dir = mat.dir;
-  } else {
-    if (!deps.projects) throw new Error(`unknown repo '${ctx.repoId}'`);
-    const sourcePath = deps.projects.revalidate(project);
-    const cloned = await cloneProject({ id: project.id, sourcePath, dataDir: deps.paths.root, signal: ctx.signal });
-    dir = cloned.dir;
+    return mat.dir;
   }
+  if (!deps.projects) throw new Error(`unknown repo '${ctx.repoId}'`);
+  const sourcePath = deps.projects.revalidate(project);
+  const cloned = await cloneProject({ id: project.id, sourcePath, dataDir: deps.paths.root, signal: ctx.signal });
+  return cloned.dir;
+}
+
+/**
+ * Architect step: prepare the repo, run the read-only Architect on it and return the validated plan.
+ * An invalid reply gets one retry with the validation error appended (requirement 4.3).
+ * The notes of a research step, when the pipeline has one, go into the prompt as fenced data.
+ * The runner stores plan.json and asks for approval, one option per task.
+ */
+export async function analyzeStep(deps: PipelineDeps, ctx: StepContext): Promise<Plan> {
+  const dir = await prepareProjectDir(deps, ctx);
   const kind = ctx.kind ?? "change";
   const prompt = renderPrompt(loadPromptTemplate(templateFor("architect", kind)), {
     goal: fence(ctx.goal),
     memory: memoryBlock(deps.memory, ctx.repoId, { goal: ctx.goal, files: ctx.target ? [ctx.target] : [] }, deps.logger),
+    research: ctx.research ? fence(ctx.research, "markdown") : "(none)",
     ...(kind === "change" ? {} : { target: fence(ctx.target ?? "") }),
   });
   return runStructured({

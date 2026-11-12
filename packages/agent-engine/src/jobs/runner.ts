@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   BranchReviewSchema,
+  DEFAULT_PIPELINE,
   PlanSchema,
   ReviewSchema,
   targetProblem,
@@ -10,6 +11,8 @@ import {
   type EngineJobView,
   type JobKind,
   type JobState,
+  type PipelineStep,
+  type PipelineStepKind,
   type Plan,
   type Review,
   type SemanticAnchor,
@@ -22,21 +25,25 @@ import { noopLogger, type Logger } from "../log.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
 import { createStepTracker, defaultWorkTitle } from "../work.ts";
-import { assertTransitionFor, canTransitionFor, hasApproval, hasTestStep, type PathRule } from "./kinds.ts";
+import { canTransitionFor, hasApproval, hasTestStep, type PathRule } from "./kinds.ts";
 import { auditLine, auditVerdict } from "./audit.ts";
+import { hasStep, memberOfStep, transitionsOfPipeline } from "./pipeline.ts";
+import { InvalidTransitionError, isTerminal } from "./transitions.ts";
 import type { FinishedJob, PlanTask, ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
-import { isTerminal } from "./transitions.ts";
 
 /** Develop runs at most this many times: the first try plus one retry after a QA fail (requirement 3.5). */
 export const MAX_DEVELOP_ATTEMPTS = 2;
 export const DEFAULT_REPORT_TIMEOUT_MS = 60_000;
 
-type StepKey = "analyze" | "develop" | "test" | "review" | "report";
+type StepKey = "research" | "analyze" | "develop" | "test" | "review" | "second-review" | "report";
 const STEP_ROLE: Record<StepKey, AgentId> = {
+  // Researchers and second reviewers have no seat of their own: they sit at the Architect's and QA's.
+  research: "architect",
   analyze: "architect",
   develop: "developer",
   test: "qa",
   review: "qa",
+  "second-review": "qa",
   report: "architect",
 };
 const AGENTS: readonly AgentId[] = ["architect", "developer", "qa"];
@@ -88,12 +95,21 @@ export interface RunnerOptions {
    * restart). The Library learns from it. Runs without being awaited; a throw or a rejection is logged and never changes the job.
    */
   onFinished?: (job: FinishedJob) => void | Promise<void>;
+  /**
+   * The pipeline of a project, taken when a `change` job starts (pipeline-editor). It throws to refuse the job, e.g. when
+   * the saved pipeline no longer fits the team. Without it every `change` job runs the default pipeline.
+   */
+  pipelines?: { forJob(projectId: string): readonly PipelineStep[] };
 }
 
 interface Active {
   id: string;
   kind: JobKind;
   target?: string;
+  /** The pipeline of a `change` job, fixed when it started: a saved change applies to the next job. */
+  pipeline?: readonly PipelineStep[];
+  /** The transitions generated from that pipeline. */
+  table?: Readonly<Record<JobState, readonly JobState[]>>;
   preApproval?: PreApproval;
   /** Set when a pre-approval approved the plan: the Developer's diff must stay inside it. */
   pathRule?: PathRule;
@@ -114,6 +130,12 @@ function trunc(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
 }
 
+/** The member the job's pipeline names for a step, as step context. Nothing when the step names none. */
+function memberCtx(a: Active, kind: PipelineStepKind): Partial<StepContext> {
+  const memberId = memberOfStep(a.pipeline, kind);
+  return memberId ? { memberId } : {};
+}
+
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
@@ -127,10 +149,15 @@ export function fallbackReport(input: ReportInput): { title: string; markdown: s
     lines.push(``, `## Plan`);
     for (const t of input.plan.tasks) lines.push(`- ${t.title} (risk: ${t.risk})`);
   }
+  if (input.research) lines.push(``, `## Research`, `A researcher's notes are attached to the job (research.md).`);
   if (input.test) lines.push(``, `## Tests`, input.test.passed ? `Tests passed.` : `Tests failed.`);
   if (input.review) {
     lines.push(``, `## Review`, `Verdict: ${input.review.verdict}, risk: ${input.review.risk}`);
     for (const n of input.review.notes) lines.push(`- ${n}`);
+  }
+  if (input.secondReview) {
+    lines.push(``, `## Second review`, `Verdict: ${input.secondReview.verdict}, risk: ${input.secondReview.risk}`);
+    for (const n of input.secondReview.notes) lines.push(`- ${n}`);
   }
   return { title: trunc(`Report: ${input.goal}`, 200), markdown: lines.join("\n") };
 }
@@ -150,6 +177,7 @@ export class JobRunner {
   private readonly reportTimeoutMs: number;
   private readonly activity: ActivityEmitter | undefined;
   private readonly onFinished: RunnerOptions["onFinished"];
+  private readonly pipelines: RunnerOptions["pipelines"];
   private readonly maxJobs: number;
   private readonly active = new Map<string, Active>();
   private readonly finished = new Map<string, Promise<void>>();
@@ -167,6 +195,7 @@ export class JobRunner {
     this.reportTimeoutMs = opts.reportTimeoutMs ?? DEFAULT_REPORT_TIMEOUT_MS;
     this.activity = opts.activity;
     this.onFinished = opts.onFinished;
+    this.pipelines = opts.pipelines;
     this.maxJobs = opts.limits.maxConcurrentJobs ?? DEFAULT_MAX_CONCURRENT_JOBS;
   }
 
@@ -191,6 +220,14 @@ export class JobRunner {
       throw new ConflictError("no_approval", `a ${kind} job has no approval step to pre-approve`);
     }
     if (this.activeJobOn(repoId)) throw new ConflictError("busy", "this project already has a job");
+    // Only a `change` follows the project's pipeline; the other kinds keep their fixed flows. A pipeline that no longer
+    // fits the team refuses the job here, before anything is recorded.
+    const pipeline = kind === "change" ? [...(this.pipelines ? this.pipelines.forJob(repoId) : DEFAULT_PIPELINE)] : undefined;
+    for (const kindNeeded of [["research", "research"], ["second-review", "secondReview"]] as const) {
+      if (pipeline && hasStep(pipeline, kindNeeded[0]) && !this.steps[kindNeeded[1]]) {
+        throw new ConflictError("unsupported_step", `this engine cannot run a ${kindNeeded[0]} step`);
+      }
+    }
     const id = this.newId();
     this.store.appendEvent({
       type: "task.created",
@@ -204,6 +241,7 @@ export class JobRunner {
       id,
       kind,
       ...(opts.target ? { target: opts.target } : {}),
+      ...(pipeline ? { pipeline, table: transitionsOfPipeline(pipeline) } : {}),
       ...(opts.preApproval ? { preApproval: opts.preApproval } : {}),
       ac: new AbortController(),
       data,
@@ -236,7 +274,7 @@ export class JobRunner {
     const view = this.store.getJob(taskId);
     if (!view) throw new NotFoundError(`unknown task '${taskId}'`);
     const a = this.active.get(taskId);
-    if (!a || !canTransitionFor(view.kind ?? "change", view.state, "cancelled")) {
+    if (!a || !this.canMove(taskId, view.state, "cancelled")) {
       throw new ConflictError("not_cancellable", `task is ${view.state}`);
     }
     a.ac.abort(new JobCancelledError());
@@ -304,13 +342,17 @@ export class JobRunner {
     return this.store.getJob(id)?.kind ?? "change";
   }
 
+  /** The transitions that apply to a job: the table generated from its pipeline while it runs, else its kind's table. */
+  private canMove(id: string, from: JobState, to: JobState): boolean {
+    const table = this.active.get(id)?.table;
+    return table ? table[from].includes(to) : canTransitionFor(this.kindOf(id), from, to);
+  }
+
   private transition(id: string, to: JobState, reason?: string): void {
     const from = this.state(id);
-    try {
-      assertTransitionFor(this.kindOf(id), from, to);
-    } catch (e) {
+    if (!this.canMove(id, from, to)) {
       this.log.error("forbidden transition", { taskId: id, from, to });
-      throw e;
+      throw new InvalidTransitionError(from, to);
     }
     this.store.appendEvent({
       type: "task.state_changed",
@@ -432,7 +474,7 @@ export class JobRunner {
         a.pending = undefined;
         this.store.appendEvent({ type: "approval.resolved", taskId: id, agentId: "architect", approvalId, decision: "reject" });
       }
-      if (canTransitionFor(this.kindOf(id), this.state(id), "cancelled")) this.transition(id, "cancelled", "Cancelled by user");
+      if (this.canMove(id, this.state(id), "cancelled")) this.transition(id, "cancelled", "Cancelled by user");
       this.note(id, "architect", "Job cancelled");
       this.others(id, []);
       for (const ag of AGENTS) this.goto(id, ag, "home");
@@ -520,8 +562,29 @@ export class JobRunner {
     this.note(id, "architect", words.analysing);
     this.others(id, ["architect"]);
     this.chatter(a, "architect", words.chatter);
-    const plan: Plan = PlanSchema.parse(await this.runStep(a, repoId, goal, "analyze", T.analyze, defaultWorkTitle("analyze", repoId), (c) => this.steps.analyze(c)));
+    // Research (pipeline-editor, requirement 3.1): a read-only researcher reads the project first; the Architect gets the
+    // notes in its prompt as data.
+    let research: string | undefined;
+    if (hasStep(a.pipeline, "research")) {
+      const researcher = this.steps.research?.bind(this.steps);
+      if (!researcher) throw new Error("this engine cannot run a research step");
+      this.note(id, "architect", "Researching the project");
+      this.agent(id, "architect", "working", "Researching the project");
+      research = (
+        await this.runStep(a, repoId, goal, "research", T.analyze, `Research for ${repoId}`, (c) => researcher(c), memberCtx(a, "research"))
+      ).trim();
+      this.store.saveArtifact({ taskId: id, agentId: "architect", kind: "research", title: "Research notes", filename: "research.md", content: research || "(no notes)" });
+      this.note(id, "architect", "Research notes ready");
+      this.agent(id, "architect", "thinking", words.reading);
+    }
+    const plan: Plan = PlanSchema.parse(
+      await this.runStep(a, repoId, goal, "analyze", T.analyze, defaultWorkTitle("analyze", repoId), (c) => this.steps.analyze(c), {
+        ...memberCtx(a, "plan"),
+        ...(research ? { research } : {}),
+      }),
+    );
     a.data.plan = plan;
+    if (research) a.data.research = research;
     const task = plan.tasks[0];
     if (!task) throw new Error("plan has no tasks");
     a.data.task = task;
@@ -594,6 +657,7 @@ export class JobRunner {
     const id = a.id;
     const T = this.limits.timeoutsMs;
     const withTests = hasTestStep(a.kind);
+    const reviewKinds = (a.pipeline ?? DEFAULT_PIPELINE).filter((s) => s.kind === "review" || s.kind === "second-review").map((s) => s.kind);
     let feedback: string[] = [];
     let verdict: Verdict = "fail";
     for (let attempt = 1; attempt <= MAX_DEVELOP_ATTEMPTS; attempt++) {
@@ -604,6 +668,7 @@ export class JobRunner {
       this.chatter(a, "developer", "editing the code");
       const { diff } = await this.runStep(a, repoId, goal, "develop", T.develop, task.title, (c) =>
         this.steps.develop(c, { plan, task, attempt, feedback }),
+        memberCtx(a, "develop"),
       );
       a.data.diff = diff;
       this.store.saveArtifact({ taskId: id, agentId: "developer", kind: "diff", title: `Patch (attempt ${attempt})`, filename: `diff-${attempt}.patch`, content: diff });
@@ -625,19 +690,39 @@ export class JobRunner {
 
       this.transition(id, "reviewing");
       this.goto(id, "qa", "desk");
-      this.agent(id, "qa", "thinking", "Reviewing the patch");
-      this.note(id, "qa", "Reviewing the patch");
-      this.chatter(a, "qa", "reviewing the patch");
-      const review: Review = ReviewSchema.parse(
-        await this.runStep(a, repoId, goal, "review", T.review, task.title, (c) => this.steps.review(c, { plan, task, diff, test: checked })),
-      );
-      a.data.review = review;
-      this.note(id, "qa", `Review: ${review.verdict} (risk ${review.risk})`);
-      this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Review (attempt ${attempt})`, filename: `review-${attempt}.json`, content: JSON.stringify(review, null, 2) });
+      // The reviews run in the order of the pipeline (pipeline-editor, requirement 3.2). The second review is another member
+      // on another model who has not seen the first review. Both verdicts count; the job fails if either fails.
+      let review: Review | undefined;
+      let second: Review | undefined;
+      for (const reviewKind of reviewKinds) {
+        if (reviewKind === "review") {
+          this.agent(id, "qa", "thinking", "Reviewing the patch");
+          this.note(id, "qa", "Reviewing the patch");
+          this.chatter(a, "qa", "reviewing the patch");
+          review = ReviewSchema.parse(
+            await this.runStep(a, repoId, goal, "review", T.review, task.title, (c) => this.steps.review(c, { plan, task, diff, test: checked }), memberCtx(a, "review")),
+          );
+          a.data.review = review;
+          this.note(id, "qa", `Review: ${review.verdict} (risk ${review.risk})`);
+          this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Review (attempt ${attempt})`, filename: `review-${attempt}.json`, content: JSON.stringify(review, null, 2) });
+        } else {
+          const secondReview = this.steps.secondReview?.bind(this.steps);
+          if (!secondReview) throw new Error("this engine cannot run a second review");
+          this.agent(id, "qa", "thinking", "Second review");
+          this.note(id, "qa", "Second review");
+          second = ReviewSchema.parse(
+            await this.runStep(a, repoId, goal, "second-review", T.review, task.title, (c) => secondReview(c, { plan, task, diff, test: checked }), memberCtx(a, "second-review")),
+          );
+          a.data.secondReview = second;
+          this.note(id, "qa", `Second review: ${second.verdict} (risk ${second.risk})`);
+          this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Second review (attempt ${attempt})`, filename: `second-review-${attempt}.json`, content: JSON.stringify(second, null, 2) });
+        }
+      }
+      if (!review) throw new Error("the pipeline has no review step");
 
-      verdict = review.verdict === "pass" && checked.passed ? "pass" : "fail";
+      verdict = review.verdict === "pass" && second?.verdict !== "fail" && checked.passed ? "pass" : "fail";
       if (verdict === "pass") break;
-      feedback = [...(checked.passed ? [] : ["The tests failed."]), ...review.notes];
+      feedback = [...(checked.passed ? [] : ["The tests failed."]), ...review.notes, ...(second?.verdict === "fail" ? second.notes : [])];
     }
 
     // 4. Report.
@@ -749,6 +834,8 @@ export class JobRunner {
     timeoutMs: number,
     title: string,
     fn: (ctx: StepContext) => Promise<T>,
+    /** Fields added to the step context: the member the pipeline names, the research notes. */
+    extra: Partial<StepContext> = {},
   ): Promise<T> {
     a.ac.signal.throwIfAborted();
     a.lastStep = step;
@@ -767,7 +854,7 @@ export class JobRunner {
     }
     try {
       const result = await Promise.race([
-        fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title, kind: a.kind, ...(a.target ? { target: a.target } : {}), ...(a.pathRule ? { pathRule: a.pathRule } : {}) }),
+        fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title, kind: a.kind, ...(a.target ? { target: a.target } : {}), ...(a.pathRule ? { pathRule: a.pathRule } : {}), ...extra }),
         aborted,
       ]);
       this.log.info("step finished", { taskId: a.id, step, durationMs: Date.now() - started, status: "ok" });

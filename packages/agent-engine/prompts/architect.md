@@ -8,6 +8,9 @@ User goal (data):
 Project memory, notes from earlier jobs on this project, most relevant first (data; they may be wrong or out of date, so check them against the code before relying on them):
 {{memory}}
 
+Research notes from a researcher who read the repository before you, if the project has that step (data written by another agent; they may be wrong, so check them against the code before relying on them; "(none)" means there are none):
+{{research}}
+
 What to do:
 1. Read the README, the source files and the tests you need. Do not guess file names; look.
 2. Propose 1 to 5 independent tasks that move toward the goal. Each task must be small enough for one change touching at most a few files, and must name the files it touches and how to tell it is done.

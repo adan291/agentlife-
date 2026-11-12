@@ -19,6 +19,8 @@ import type {
   NightJob,
   NightJobRequest,
   NightState,
+  PipelineResponse,
+  PipelineStep,
   Project,
   RegisterProjectBody,
   RegisterProjectResult,
@@ -51,6 +53,13 @@ export interface MemoryLink {
   accept(projectId: string, proposalId: string, edit: MemoryAcceptBody): Promise<void>;
   dismiss(projectId: string, proposalId: string): Promise<void>;
   setAutoRemember(projectId: string, on: boolean): Promise<void>;
+}
+
+/** The pipeline of the projects (pipeline-editor). Every method rejects with the engine's own message when it refuses. */
+export interface PipelineLink {
+  state(projectId: string): Promise<PipelineResponse>;
+  save(projectId: string, steps: readonly PipelineStep[]): Promise<PipelineResponse>;
+  reset(projectId: string): Promise<PipelineResponse>;
 }
 
 /** What a job other than a plain change needs: its kind and the branch, path or topic it works on. */
@@ -96,6 +105,8 @@ export interface EngineLink {
   hr?: HrLink;
   /** The Library (project-memory). Optional: the scripted engine and the demo have none. */
   memory?: MemoryLink;
+  /** The pipeline of a project (pipeline-editor). Optional: the scripted engine and the demo have none. */
+  pipeline?: PipelineLink;
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;
