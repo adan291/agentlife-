@@ -12,6 +12,6 @@
   - Review desk, test lab, library shelf on project floors (and the office room until floors exist); forms with branch picker, path and topic
   - _Requirements: 2.1, 2.2_
 
-- [ ] 4. End-to-end tests per kind
+- [x] 4. End-to-end tests per kind
   - One scripted job per kind with FakeRuntime, through world-server and engine
   - _Requirements: 4.2_
