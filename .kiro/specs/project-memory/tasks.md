@@ -4,7 +4,7 @@
   - JSONL store per project, schema, leak scan and sanitize, caps
   - _Requirements: 1.1, 1.2, 5.1_
 
-- [ ] 2. Learning and retrieval
+- [x] 2. Learning and retrieval
   - Post-job proposal with a cheap model (Ollama first), accept / auto-remember, keyword retrieval, memory block in role prompts
   - _Requirements: 2.1, 2.2, 3.1, 3.2, 5.1_
 

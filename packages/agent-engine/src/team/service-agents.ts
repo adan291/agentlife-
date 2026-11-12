@@ -14,6 +14,11 @@ export function serviceAgentName(id: ServiceAgentId): string {
   return `agentlife-${id}`;
 }
 
+/** The persona of a service agent, for the local model, which has no agent file. */
+export function serviceAgentPersona(id: ServiceAgentId): string {
+  return TEMPLATES[id].persona;
+}
+
 const TEMPLATES: Record<ServiceAgentId, Template> = {
   "import-review": {
     id: "import-review",

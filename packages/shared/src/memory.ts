@@ -57,3 +57,31 @@ export type MemoryDraft = z.infer<typeof MemoryDraftSchema>;
 export const MEMORY_REJECTIONS = ["empty", "too_long", "path_or_secret", "secret", "duplicate", "full"] as const;
 export const MemoryRejectionSchema = z.enum(MEMORY_REJECTIONS);
 export type MemoryRejection = z.infer<typeof MemoryRejectionSchema>;
+
+// ---- Engine HTTP (and the messages that carry the same shapes to the client) ----
+
+/** `GET /projects/:id/memory`: the Library of a project and what is waiting for the user. */
+export const MemoryStateSchema = z.object({
+  /** Newest first. */
+  entries: z.array(MemoryEntrySchema).max(MEMORY_ENTRIES_MAX),
+  /** Suggested by finished jobs, not stored yet. Newest first. */
+  proposals: z.array(MemoryProposalSchema).max(MEMORY_PENDING_MAX),
+  autoRemember: z.boolean(),
+  /** Jobs whose lessons are still being written, so the report can say "thinking" instead of "nothing to remember". */
+  learning: z.array(MemorySourceTaskSchema).max(20),
+});
+export type MemoryState = z.infer<typeof MemoryStateSchema>;
+
+/** `PATCH /projects/:id/memory/:entryId`. At least one field. */
+export const MemoryUpdateBodySchema = z
+  .object({ kind: MemoryKindSchema.optional(), text: z.string().max(2000).optional() })
+  .refine((b) => b.kind !== undefined || b.text !== undefined, { message: "nothing to change" });
+export type MemoryUpdateBody = z.infer<typeof MemoryUpdateBodySchema>;
+
+/** `POST /projects/:id/memory/proposals/:proposalId/accept`: the user may edit the proposal first. */
+export const MemoryAcceptBodySchema = z.object({ kind: MemoryKindSchema.optional(), text: z.string().max(2000).optional() });
+export type MemoryAcceptBody = z.infer<typeof MemoryAcceptBodySchema>;
+
+/** `PUT /projects/:id/memory/settings`. */
+export const MemorySettingsBodySchema = z.object({ autoRemember: z.boolean() });
+export type MemorySettingsBody = z.infer<typeof MemorySettingsBodySchema>;

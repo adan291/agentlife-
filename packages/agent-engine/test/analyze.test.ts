@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LimitsConfig } from "../src/config.ts";
 import type { StepContext } from "../src/jobs/steps.ts";
 import { dataPaths } from "../src/paths.ts";
+import { MemoryStore } from "../src/memory/store.ts";
 import type { AgentRuntime, RuntimeEvent, RuntimeInput } from "../src/runtimes/types.ts";
 import { analyzeStep } from "../src/steps/analyze.ts";
 import type { PipelineDeps } from "../src/steps/deps.ts";
@@ -166,6 +167,17 @@ describe("analyzeStep", () => {
     expect(readFileSync(path.join(input.cwd, "src", "todo.ts"), "utf8").length).toBeGreaterThan(0);
     const log = store.readRunLog("task-1", "analyze");
     expect(log.map((r) => r["kind"])).toEqual(["progress", "output", "usage"]);
+  });
+
+  it("gives the Architect the project's memory, and says (none) without one", async () => {
+    const memory = new MemoryStore({ dir: path.join(root, "data", "memory"), secrets: [] });
+    memory.add("demo", { kind: "convention", text: "Tests live next to the module as name.test.ts.", sourceTaskId: "task-0" });
+    const withMemory = new ScriptedRuntime([block({ tasks: [TASK] })]);
+    await analyzeStep({ ...deps(withMemory), memory }, ctx());
+    expect(withMemory.inputs[0]!.prompt).toContain("```text\n- [convention] Tests live next to the module as name.test.ts.\n```");
+    const without = new ScriptedRuntime([block({ tasks: [TASK] })]);
+    await analyzeStep(deps(without), ctx());
+    expect(without.inputs[0]!.prompt).toContain("```text\n(none)\n```");
   });
 
   it("retries once with the validation error and succeeds", async () => {

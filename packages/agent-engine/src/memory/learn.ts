@@ -98,6 +98,7 @@ export class MemoryLearner {
   private readonly o: MemoryLearnerOptions;
   private readonly log: Logger;
   private readonly running = new Set<Promise<void>>();
+  private readonly learning = new Map<string, string>();
 
   constructor(opts: MemoryLearnerOptions) {
     this.o = opts;
@@ -107,11 +108,20 @@ export class MemoryLearner {
   /** Learns from a finished job in the background. Never throws. */
   start(job: FinishedJob): void {
     if (!worthLearning(job)) return;
+    this.learning.set(job.taskId, job.repoId);
     const p: Promise<void> = this.learn(job)
       .then(() => undefined)
       .catch((e: unknown) => this.log.warn("learning from the job failed", { taskId: job.taskId, error: e instanceof Error ? e.message : String(e) }))
-      .finally(() => this.running.delete(p));
+      .finally(() => {
+        this.running.delete(p);
+        this.learning.delete(job.taskId);
+      });
     this.running.add(p);
+  }
+
+  /** Ids of the jobs of a project whose lessons are being written right now. */
+  learningOf(projectId: string): string[] {
+    return [...this.learning].filter(([, repo]) => repo === projectId).map(([taskId]) => taskId);
   }
 
   /** Resolves when the lessons being learned have been stored or given up. */

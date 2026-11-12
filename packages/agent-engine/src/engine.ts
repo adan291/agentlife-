@@ -11,7 +11,7 @@ import { createCrewRelay, createCrewRoute } from "./crew.ts";
 import { createBuildBoardRoutes } from "./build-board.ts";
 import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
-import type { Steps } from "./jobs/steps.ts";
+import type { FinishedJob, Steps } from "./jobs/steps.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import { ProjectRegistry } from "./projects/registry.ts";
 import { createBranchesRoute, createDeliverRoute, createProjectRoutes, deliverJob } from "./projects/routes.ts";
@@ -45,7 +45,10 @@ import { agentHr, projectFactsReader, TeamSuggester, type FactsReader, type HrAg
 import { agentImportReviewer } from "./team/import-review.ts";
 import { loadCatalogueSources, type FetchFn } from "./team/import.ts";
 import { ImportService, type ImportReviewer } from "./team/imports.ts";
-import { installServiceAgents, serviceAgentName } from "./team/service-agents.ts";
+import { installServiceAgents, serviceAgentName, serviceAgentPersona } from "./team/service-agents.ts";
+import { MemoryLearner } from "./memory/learn.ts";
+import { createMemoryRoutes } from "./memory/routes.ts";
+import { MemoryStore } from "./memory/store.ts";
 
 export interface EngineOptions {
   config?: EngineConfig;
@@ -88,6 +91,20 @@ export interface EngineOptions {
     /** How the size and stack of a project are read for a suggestion. Default: the registry and `git ls-files`. */
     facts?: FactsReader;
   };
+  /**
+   * The Library (project-memory). The store and its routes are always there. Lessons are written after a job only with the
+   * real pipeline (the Night intern: local model, else the cheap one) or with the `runtime` a test passes.
+   */
+  memory?: {
+    /** Default: `<dataDir>/memory`. */
+    dir?: string;
+    /** Runs the librarian instead of the Night intern. */
+    runtime?: AgentRuntime;
+    /** The model asked first. Default with the intern: the model of the `night-intern` template. */
+    model?: string;
+    /** Exact secret values to refuse in a note (tests). */
+    secrets?: readonly string[];
+  };
   /** Trusted imports (hr-desk). Fields are for tests; the real process reads `config/catalogue-sources.json`. */
   imports?: {
     /** Default: `AGENTLIFE_IMPORTS_FILE` or `<dataDir>/catalogue-imports.json`. */
@@ -123,6 +140,7 @@ export interface Engine {
   projects: ProjectRegistry;
   team: TeamService;
   imports: ImportService;
+  memory: { store: MemoryStore; learner: MemoryLearner | undefined };
   night: { store: NightStore; scheduler: NightScheduler; summaries: SummaryStore };
   server: http.Server;
   config: EngineConfig;
@@ -228,6 +246,21 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     ? new InternRuntime({ local: new OllamaRuntime(), fallback: serviceRuntime, onFallback: (m) => logger.warn(m) })
     : undefined;
   const notes = new JobNotes();
+  const memory = new MemoryStore({ dir: opts.memory?.dir ?? paths.memory, logger, ...(opts.memory?.secrets ? { secrets: opts.memory.secrets } : {}) });
+  const librarianRuntime = opts.memory?.runtime ?? intern;
+  const librarianModel = opts.memory?.model ?? (opts.memory?.runtime ? undefined : catalogue.get("night-intern")?.defaultModel);
+  const learner = librarianRuntime
+    ? new MemoryLearner({
+        store: memory,
+        runtime: librarianRuntime,
+        agent: serviceAgentName("memory"),
+        system: serviceAgentPersona("memory"),
+        cwd: path.join(paths.root, "librarian"),
+        rawLogPath: path.join(paths.runs, "librarian.raw.jsonl"),
+        logger,
+        ...(librarianModel ? { model: librarianModel } : {}),
+      })
+    : undefined;
   const importReviewer =
     opts.imports?.reviewer ??
     (serviceRuntime
@@ -285,7 +318,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     const models = roleModels(config);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team, ...(intern ? { intern } : {}), notes })
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team, memory, ...(intern ? { intern } : {}), notes })
       : createRuntimeSteps({ runtimes, store, logger, activity, models, team });
   }
   const ambient =
@@ -299,6 +332,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     limits: config.limits,
     logger,
     activity,
+    ...(learner ? { onFinished: (job: FinishedJob) => learner.start(job) } : {}),
     ...(ambient ? { ambient } : {}),
     ...(opts.reportTimeoutMs ? { reportTimeoutMs: opts.reportTimeoutMs } : {}),
   });
@@ -354,13 +388,17 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
       createCrewRoute(crewRelay),
       ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
-      ...createProjectRoutes(projects, runner, store, (id) => team.remove(id)),
+      ...createProjectRoutes(projects, runner, store, (id) => {
+        team.remove(id);
+        memory.removeProject(id);
+      }),
       createDeliverRoute(deliverDeps),
       createBranchesRoute({ registry: projects, paths }),
       createCatalogueRoute(catalogue),
       ...createTeamRoutes(team, teamModels),
       ...createImportRoutes(imports),
       createSuggestRoute(suggester),
+      ...createMemoryRoutes({ store: memory, hasProject: (id) => projects.has(id), ...(learner ? { learner } : {}) }),
       ...createNightRoutes({ store: nightStore, config: nightConfig, summaries: nightSummaries, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],
@@ -374,6 +412,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     projects,
     team,
     imports,
+    memory: { store: memory, learner },
     night: { store: nightStore, scheduler: nightScheduler, summaries: nightSummaries },
     server,
     config,
