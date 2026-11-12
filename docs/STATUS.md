@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-12 (project-memory 3/3 on feat/project-memory, needs review + verification, not merged; hr-desk 4.3 fixed with option A on feat/hr-desk, needs re-verification, not merged; night-shift, job-types and build-board merged; hotel-floors merged)
+Updated: 2026-11-12 evening (project-memory verified PASS and merged into main locally, not pushed; conductor stopped: security scan finds 2 items in commit 43feeca, user to decide; hr-desk, night-shift, job-types, build-board and hotel-floors merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -36,6 +36,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here, so either side c
 
 - 2026-11-12 00:15 (Discord): user asked for a summary of progress; Crew read STATUS and the session log and replied. No changes to the project.
 - 2026-11-12 (IDE): user chose option A for hr-desk requirement 4.3 (every hired member visible on its floor). Done on feat/hr-desk: standing spots for members without a desk, protocol, gateway and client changes, tests, decision D12. Pending: re-verification, merge, browser look at the floor with a full team.
+- 2026-11-12 18:00 (IDE): Kiro Crew update to 0.12.2 had broken the app (backend missing). Data backed up to %LOCALAPPDATA%\kirocrew-data-backup-20261112-1835, uninstalled, reinstalled interactively from Downloads\KiroCrew-Setup.exe (AWS signature valid): backend runs, data and steering intact. Conductor: project-memory PASS and merged into main (local), then STOP on the security scan (fake email + home path in 43feeca, test file). Asked the user: accept in security-allow.json or rewrite local history (Kiro recommends rewrite, with backup). Pending: that decision, then relaunch the conductor (list-mode, pipeline-editor).
 
 ## Next (decided 2026-11-11)
 1. Done: demo (S11-S13) and the security clean-up.
@@ -71,7 +72,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | build-board | 2 / 2 | feat/build-board | Done, not merged: needs review + verification. Not looked at in a browser |
 | job-types | 4 / 4 | feat/job-types | Done, not merged: needs review + verification. Engine (kinds, pipelines, path rules, branch review, branch list, prompts, reports), world-server and client (review desk, test lab, library shelf, forms, stepper per kind) and an e2e test per kind. Not looked at in a browser; no live run with kiro-cli |
 | night-shift | 4 / 4 | feat/night-shift | Done, not merged: needs review + verification. Engine (schedule, window, scheduler, pre-approval, audit-deps, morning summary, Discord), gateway (lobby mailbox, night board, night clock) and client (night board panel, dimmed rooms, moon clock, desk candles). Not looked at in a browser; no live night. Decisions in the spec's design.md |
-| project-memory | 3 / 3 | feat/project-memory | Done, not merged: needs review + verification. The Library: store, librarian after a job, ranked memory block in the role prompts, Library panel on the shelf, "Remember this?" in the report. Not looked at in a browser; no live run. Decisions in the spec's design.md |
+| project-memory | 3 / 3 | main (local) | Done, verified PASS, merged locally; push blocked until the 43feeca scan findings are decided. The Library: store, librarian after a job, ranked memory block in the role prompts, Library panel on the shelf, "Remember this?" in the report. Not looked at in a browser; no live run. Decisions in the spec's design.md |
 | list-mode | 0 / 3 | — | List view and command palette (row 7) |
 | demo-replay | 7 / 7 | main | Done. Replay mode, Pages workflow, demo build guard, Playwright demo smoke test (passes, Edge), Kiroween polish, README/kiro-usage/video script. Not published yet |
 
