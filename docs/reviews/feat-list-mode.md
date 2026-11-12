@@ -1,45 +1,52 @@
-# Review: feat/list-mode
+# Review: feat/list-mode (second review)
 
 Spec: `.kiro/specs/list-mode` (requirements 1.1-3.1, design.md, D13 in `docs/risks-and-decisions.md`).
-Commits: 6 on top of `main` (c5e463d .. b465864). Diff: 26 files, +2662 / -42.
+Commits: 8 on top of `main`. Diff: 28 files, +2791 / -41.
+This review replaces the earlier one of the same branch, which asked for changes.
 
-## Verdict: request changes
+## Verdict: approve
 
-Reason: `pnpm check` could not be run during this review (the permission prompt for the command was not answered, so the call did not run). The result below is from reading the code only. Also one data bug (below).
+Conditions: the Playwright spec `e2e/list-mode.spec.ts` was not run in this review (the command was refused by the permission prompt). Its last FAIL was a strict-mode heading race; commit `d60e3aa` changed the checks to `.first()`. Run it once before merge: `$env:E2E_CHANNEL='msedge'; pnpm --filter @agentlife/client e2e list-mode`.
+
+## Previous blockers, status
+
+1. `startedAt` on long timelines: fixed. `overviewOf` takes the first entry of the untrimmed timeline (`packages/world-server/src/overview.ts`), and `overview.test.ts` "keeps the start of a job whose timeline is longer than the overview carries" covers it.
+2. Checks not run: `pnpm check` now passes (shared 230, world-server 178, client 527, agent-engine 646 + 7 skipped, scripts 16). The Edge e2e is still open, see the condition above.
+3. Property test for `overviewOf`: present. `overview.test.ts` checks one entry per project floor, protocol validity, and that the JSON carries no paths or free text.
 
 ## Blocking
 
-1. **Job start time is wrong when the timeline is trimmed.** `packages/world-server/src/overview.ts`, `overviewOf`: `startedAt: timeline[0]!.ts` takes the first entry of the slice `timeline.slice(-OVERVIEW_TIMELINE_MAX)`, not the job's first entry. Once a job has more states than `OVERVIEW_TIMELINE_MAX`, the row shows the time of a later state as the start. Fix: keep `startedAt` on the floor (set on `task.created` in `gateway.ts`) or take the first entry of the untrimmed timeline. Add a test with a long timeline.
-
-2. **Checks not run.** `pnpm check`, the Edge Playwright `e2e` and `e2e:demo` are reported as passing in `docs/STATUS.md`, but this review could not reproduce them. The reviewer must run them before a verdict of approve.
+None.
 
 ## Requirements
 
-- 1.1, 1.2, 1.3 (list view, rows for every project, actions without walking): code present (`ui/list-view.ts`, `ui/list-model.ts`, `ui/actions.ts`, `goTo(..., "list")`, `showPanel`). Not verified in a browser or against a real engine with two projects (STATUS says so).
-- 2.1, 2.2 (palette, fuzzy, commands mapped to existing messages): code present (`ui/command-palette.ts`, `ui/commands.ts`, `ui/fuzzy.ts`).
-- 3.1 (tests): unit tests exist (`client/test/list-mode.test.ts`, `fuzzy.test.ts`, `world-server/test/overview.test.ts`, `shared/test/overview-protocol.test.ts`) and `e2e/list-mode.spec.ts`. The fast-check property tests asked for by tech.md are not in the list: `fuzzy.test.ts` has properties, but the overview has none. Add one for `overviewOf` (no paths, no text in JSON; one entry per project floor).
+- 1.1 to 1.3 (list view, one row per project, every hotel action from the list): code and unit tests present. `show_panel` and `go_to via "list"` are the server side; the client moves first, then runs the same panel message.
+- 2.1, 2.2 (palette, fuzzy search, keyboard use, shortcut shown): code and tests present.
+- 3.1 (tests): unit tests cover ranking, dispatch, rendering of every job state, and the view keys. Property tests exist for fuzzy ranking and `overviewOf`. Playwright: see the condition above.
 
-## Boundaries and security (checked)
+## Boundaries and security (checked by reading the diff)
 
-- Client talks only to the world-server: new messages `overview_watch`, `show_panel`, `go_to.via` all go through the existing socket.
-- World-server does not call a model: `overview.ts` is pure over the floor state.
-- Engine vocabulary: no change in `agent-engine`.
-- Overview content: no paths, report bodies, goals or activity text (`overviewOf` builds from ids, names, states, counts, verdicts, times). Matches design.md.
-- `go_to via "list"` only skips the elevator check. Floor checks (`hotel.has`, own-floor rule) still run.
-- `show_panel` is limited to the user's floor and to panels that the floor has furniture for. It goes through the same token bucket as every message (`gateway.ts`, the bucket is checked before parsing).
-- No `innerHTML` / `insertAdjacentHTML` in the new client files (grep). Project names reach the DOM through text nodes.
-- Windows portability: no path or bash use in the diff.
+- Client talks only to the world-server; the new messages (`overview_watch`, `show_panel`, `go_to.via`) use the existing socket.
+- The world-server does not call a model; `overview.ts` is a pure function over the floor state.
+- `agent-engine` is not changed by this branch.
+- The overview carries ids, names, states, counts, verdicts and times. Goals, report bodies, plans and paths are not in it (tested).
+- `go_to via "list"` skips only the elevator check. Floor checks and the rate limit still run. This is decision D13.
+- `show_panel` only opens panels the user's own floor has furniture for.
+- No `innerHTML` or `insertAdjacentHTML` in the new client files; project names reach the DOM as text.
+- No path or bash use in the diff (Windows portability).
 
-## Missing or weak tests
+## Human checks (not verifiable from the code)
 
-- No property-based test for `overviewOf` (see requirement 3.1 above).
-- No test for `startedAt` on a long job (blocking item 1).
-- The Playwright list test uses the scripted engine with one floor; no run with two registered projects.
+- List layout and colours in a browser: long project names, many projects, 360 px width with the "List" and "Commands" buttons.
+- Palette overlay: contrast, selected row, shortcut label.
+- A real engine with two registered projects: start a job from the list on another floor, approve it from the palette, open the report.
+- A night job scheduled for a project shows in its row (the scripted engine has no night shift).
+- Recorded demo: the list says it needs the live hotel; the palette keeps "Go to" and "Toggle view" only.
 
 ## Non-blocking suggestions
 
-1. `gateway.ts`, `pushFloors` calls `scheduleOverview()` before the change check; harmless, but a comment would say why.
-2. `rememberNight` runs on every night clock poll and on every night read; it only matters when the counts change, which the code already checks.
-3. The `timeline` on the floor is unbounded in memory. It resets on each `task.created`, so the size stays small; a cap in the gateway would make that explicit.
-4. `list-view.ts` is 283 lines. Split the row rendering from the event wiring when the next list feature lands.
-5. Document in `docs/kiro-usage.md` or the README that the list needs the live hotel (the replay transport ignores `overview_watch`).
+1. `e2e/list-mode.spec.ts:104`: the check after "open report" asserts the heading "Mailbox" again. It does not show that the report opened. The next assertion (report body visible) does that job, so either assert the "Report" heading or drop the heading line.
+2. `gateway.ts`: the `clock` option of `GatewayOptions` lost its doc comment when the debounce comment replaced it.
+3. `gateway.ts`: `pushFloors` calls `scheduleOverview()` before the change check. A comment would say that the check happens later.
+4. `list-view.ts` is about 280 lines. Split the row rendering from the event wiring when the next list feature lands.
+5. Note in the README or `docs/kiro-usage.md` that the list needs the live hotel, because the replay transport ignores `overview_watch`.
