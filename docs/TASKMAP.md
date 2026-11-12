@@ -14,7 +14,7 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 4 | `job-types` | S20 S21 | no | done | Review my branch, write tests, document: each from its own furniture |
 | 5 | `night-shift` | S22 S23 | yes | needs-check | Schedule jobs for the night; morning summary in the mailbox and on Discord |
 | 6 | `hr-desk` | S17 S18 S24 | yes | needs-check | HR office: hire, rename, change model, fire; trusted imports; local Ollama intern |
-| 7 | `project-memory` | S25 | no | todo | The Library: what agents learned, used in every next job |
+| 7 | `project-memory` | S25 | no | done | The Library: what agents learned, used in every next job |
 | 8 | `list-mode` | S26 | no | todo | List view and command palette for daily use |
 | 9 | `pipeline-editor` | S19 | no | todo | Choose and order roles per project with fixed safety rules |
 | 10 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
