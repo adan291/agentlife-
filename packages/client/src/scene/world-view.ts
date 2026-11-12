@@ -42,7 +42,12 @@ export interface WorldViewHooks {
 interface AvatarEntry {
   view: AvatarView;
   overlay: AvatarOverlay;
+  /** The ghost was let go: it hides itself when its walk to the elevator ends (hr-desk). */
+  leaving?: boolean;
 }
+
+/** Where the HR ghost stands in the HR office, next to its desk. */
+const HR_GHOST_TILE = { x: 7, y: 1 } as const;
 
 /**
  * The visible world: room, furniture, avatars and their overlays, plus mouse input.
@@ -80,6 +85,10 @@ export class WorldView {
   /** Candles on the agents' desks: lit at night while the agent works. */
   private readonly candles = new Map<AgentId, DeskCandle>();
   private night = false;
+  /** Name of the team member at each desk of a project floor (`team_view`); absent: the role name. */
+  private readonly seatNames = new Map<AgentId, string>();
+  /** The HR agent behind its desk in the HR office; decorative, not part of the simulation. */
+  private hrGhost: AvatarEntry | null = null;
   /** Slow wisps drifting through the room. */
   private motes: MoteLayer | null = null;
 
@@ -146,7 +155,15 @@ export class WorldView {
 
   private agentTip(agent: AgentId) {
     const s = this.agentStatus.get(agent);
-    return agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
+    const tip = agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
+    const name = this.seatNames.get(agent);
+    return name && name !== tip.title ? { ...tip, title: `${name} (${tip.title})` } : tip;
+  }
+
+  /** The HR agent thinks while it works out a proposal (the HR desk asked it). */
+  setHrThinking(thinking: boolean): void {
+    if (thinking) this.hrGhost?.overlay.setState("thinking", "Working out a team");
+    else this.hrGhost?.overlay.setState("idle");
   }
 
   setZoom(z: Zoom): void {
@@ -191,7 +208,21 @@ export class WorldView {
         if (label) entry?.overlay.setName(builderTagName("Builder", label));
         break;
       }
+      case "team_view":
+        this.applyTeamView(msg.members);
+        break;
+      case "agent_presence": {
+        const entry = this.avatars.get(msg.agentId);
+        if (!entry) break;
+        entry.leaving = !msg.present;
+        if (msg.present) this.setAvatarVisible(entry, true);
+        break;
+      }
+      case "hr_suggestion":
+        this.setHrThinking(false);
+        break;
       case "error":
+        if (msg.code === "hr_error" || msg.code === "engine_unavailable") this.setHrThinking(false);
         this.hooks.onError?.(msg.code, msg.message);
         break;
       default:
@@ -218,10 +249,18 @@ export class WorldView {
     for (const c of this.candles.values()) c.update(now, this.reducedMotion);
     for (const f of this.flames) f.update(now, this.reducedMotion);
     this.motes?.update(now, this.reducedMotion);
-    for (const { view, overlay } of this.avatars.values()) {
+    for (const entry of this.avatars.values()) {
+      const { view, overlay } = entry;
       view.update(now);
+      // A ghost that was let go disappears once it has reached the elevator.
+      if (entry.leaving && !view.walking) this.setAvatarVisible(entry, false);
       overlay.update(now, view.feetX, view.feetY);
       overlay.container.zIndex = view.feetY;
+    }
+    if (this.hrGhost) {
+      this.hrGhost.view.update(now);
+      this.hrGhost.overlay.update(now, this.hrGhost.view.feetX, this.hrGhost.view.feetY);
+      this.hrGhost.overlay.container.zIndex = this.hrGhost.view.feetY;
     }
   }
 
@@ -264,6 +303,7 @@ export class WorldView {
     }
 
     this.models = msg.models ?? {};
+    this.seatNames.clear();
     // A project floor writes its name over the elevator and the board.
     this.objects.addChild(buildSigns(msg.room, (x, y) => room.heightmap.height(x, y) ?? 0));
     this.agentStatus.clear();
@@ -281,10 +321,35 @@ export class WorldView {
       this.overlays.addChild(overlay.container);
       this.avatars.set(a.id, { view, overlay });
     }
+    if (msg.room.kind === "hr") this.addHrGhost();
 
     if (!this.zoomChosen) this.chooseAutoZoom();
     this.layout();
     this.tick(Date.now());
+  }
+
+  private setAvatarVisible(entry: AvatarEntry, visible: boolean): void {
+    entry.view.sprite.visible = visible;
+    entry.overlay.container.visible = visible;
+  }
+
+  /** Names and models of the team members at the desks (`team_view`). */
+  private applyTeamView(members: readonly { agentId: AgentId; name: string; model?: string | undefined }[]): void {
+    for (const m of members) {
+      this.seatNames.set(m.agentId, m.name);
+      if (m.model) this.models[m.agentId] = m.model;
+      this.avatars.get(m.agentId)?.overlay.setName(m.name);
+    }
+  }
+
+  /** The HR office has an HR agent behind its desk. It is scenery: the simulation does not know it. */
+  private addHrGhost(): void {
+    const view = new AvatarView("hr", "hr", this.sprites, { ...HR_GHOST_TILE }, 4);
+    const overlay = new AvatarOverlay("HR", ROLE_COLOURS.hr, this.sprites, true);
+    overlay.setState("idle");
+    this.objects.addChild(view.sprite);
+    this.overlays.addChild(overlay.container);
+    this.hrGhost = { view, overlay };
   }
 
   /** Picks 1x or 2x from the stage size (only used while the user has not chosen a zoom). */
@@ -309,6 +374,8 @@ export class WorldView {
     this.hoveredItem = null;
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
+    this.hrGhost?.overlay.destroy();
+    this.hrGhost = null;
     for (const c of this.objects.removeChildren()) c.destroy();
     this.furni = [];
     this.monitors.clear();
@@ -344,6 +411,15 @@ export class WorldView {
     const h = this.hit(e);
     if (!h) return;
     this.hoveredItem = null;
+    if (this.hrGhost?.view.sprite.getBounds().containsPoint(e.global.x, e.global.y)) {
+      this.app.canvas.style.cursor = "default";
+      h.room.setHover(null);
+      this.hooks.tooltip?.hover("agent:hr", e.global.x, e.global.y, () => ({
+        title: "HR",
+        lines: ["Suggests a team for a project when you ask at the HR desk. It only proposes; you decide."],
+      }));
+      return;
+    }
     const agent = this.agentAt(e.global.x, e.global.y);
     if (agent) {
       this.app.canvas.style.cursor = "default";

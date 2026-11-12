@@ -10,6 +10,7 @@ import {
   TeamMemberSchema,
   TeamModelsResponseSchema,
   TeamResponseSchema,
+  TeamSuggestionSchema,
   UpdateMemberBodySchema,
 } from "@agentlife/shared";
 import { NotFoundError } from "../errors.ts";
@@ -18,6 +19,7 @@ import type { Catalogue } from "./catalogue.ts";
 import type { ImportService } from "./imports.ts";
 import type { ModelDirectory } from "./models.ts";
 import type { TeamService } from "./service.ts";
+import type { TeamSuggester } from "./suggest.ts";
 
 const MAX_ID_CHARS = 100;
 
@@ -82,6 +84,15 @@ export function createImportRoutes(imports: ImportService): Route[] {
       },
     },
   ];
+}
+
+/** `POST /projects/:id/team/suggest`: the HR agent's proposal for a project's team. Nothing is hired by asking. */
+export function createSuggestRoute(suggester: TeamSuggester): Route {
+  return {
+    method: "POST",
+    pattern: /^\/projects\/([^/]+)\/team\/suggest$/,
+    handle: async ({ res, params }) => sendJson(res, 200, TeamSuggestionSchema, await suggester.suggest(idOf(params[0]))),
+  };
 }
 
 /**

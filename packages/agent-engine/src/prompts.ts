@@ -19,7 +19,7 @@ export const KIND_PROMPT_NAMES = [
 export type PromptName = (typeof KIND_PROMPT_NAMES)[number];
 
 /** Templates of the hotel's own agents (not a pipeline role): the import review and the HR agent. */
-export const SERVICE_PROMPT_NAMES = ["import-review"] as const;
+export const SERVICE_PROMPT_NAMES = ["import-review", "hr-suggest"] as const;
 export type ServicePromptName = (typeof SERVICE_PROMPT_NAMES)[number];
 
 /** The template a role uses in a job of this kind. `change` (and an unknown kind) uses the role's own template. */

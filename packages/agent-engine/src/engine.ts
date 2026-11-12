@@ -37,7 +37,8 @@ import { kiroCliModelLister, loadTeamRules, ModelDirectory } from "./team/models
 import { TeamService } from "./team/service.ts";
 import { TeamStore } from "./team/store.ts";
 import { loadTiers } from "./team/tiers.ts";
-import { createCatalogueRoute, createImportRoutes, createTeamRoutes } from "./team/routes.ts";
+import { createCatalogueRoute, createImportRoutes, createSuggestRoute, createTeamRoutes } from "./team/routes.ts";
+import { agentHr, projectFactsReader, TeamSuggester, type FactsReader, type HrAgent } from "./team/suggest.ts";
 import { agentImportReviewer } from "./team/import-review.ts";
 import { loadCatalogueSources, type FetchFn } from "./team/import.ts";
 import { ImportService, type ImportReviewer } from "./team/imports.ts";
@@ -79,6 +80,10 @@ export interface EngineOptions {
     models?: ModelDirectory;
     /** Where agent files of customised teams are written and how they are checked. Default: only with the real pipeline. */
     agents?: { kiroHome: string; validate?: AgentValidator };
+    /** The HR agent. Default: the HR service agent with the real pipeline, none otherwise (the fixed rules choose). */
+    hrAgent?: HrAgent;
+    /** How the size and stack of a project are read for a suggestion. Default: the registry and `git ls-files`. */
+    facts?: FactsReader;
   };
   /** Trusted imports (hr-desk). Fields are for tests; the real process reads `config/catalogue-sources.json`. */
   imports?: {
@@ -214,17 +219,37 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     },
     logger,
   });
+  const serviceRuntime = real ? new KiroCliRuntime({ kiroHome: paths.kiroHome }) : undefined;
   const importReviewer =
     opts.imports?.reviewer ??
-    (real
+    (serviceRuntime
       ? agentImportReviewer({
-          runtime: new KiroCliRuntime({ kiroHome: paths.kiroHome }),
+          runtime: serviceRuntime,
           agent: serviceAgentName("import-review"),
           model: teamModels.preferred("claude-haiku-5.5"),
           cwd: path.join(paths.root, "import-review"),
           rawLogPath: path.join(paths.runs, "import-review.raw.jsonl"),
         })
       : undefined);
+  const hrAgent =
+    opts.team?.hrAgent ??
+    (serviceRuntime
+      ? agentHr({
+          runtime: serviceRuntime,
+          agent: serviceAgentName("hr"),
+          model: teamModels.preferred("claude-haiku-5.5"),
+          cwd: path.join(paths.root, "hr"),
+          rawLogPath: path.join(paths.runs, "hr.raw.jsonl"),
+        })
+      : undefined);
+  const suggester = new TeamSuggester({
+    team,
+    catalogue,
+    models: teamModels,
+    facts: opts.team?.facts ?? projectFactsReader(projects),
+    logger,
+    ...(hrAgent ? { agent: hrAgent } : {}),
+  });
   const imports = new ImportService({
     file: opts.imports?.file ?? process.env["AGENTLIFE_IMPORTS_FILE"] ?? path.join(paths.root, "catalogue-imports.json"),
     sources: opts.imports?.sources ?? loadCatalogueSources(),
@@ -327,6 +352,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       createCatalogueRoute(catalogue),
       ...createTeamRoutes(team, teamModels),
       ...createImportRoutes(imports),
+      createSuggestRoute(suggester),
       ...createNightRoutes({ store: nightStore, config: nightConfig, summaries: nightSummaries, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],

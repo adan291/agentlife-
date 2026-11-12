@@ -4,7 +4,7 @@ import type { Dir } from "../geometry/dir.ts";
 import { findPath } from "../geometry/pathfind.ts";
 import type { PathGrid, Tile } from "../geometry/pathfind.ts";
 import { buildPathGrid, resolveAnchor, roomAgents, splitAgentId, useTile } from "../room.ts";
-import type { AgentId, RoomDef } from "../room.ts";
+import type { AgentId, RoomDef, SemanticAnchor } from "../room.ts";
 import type { AgentEvent, AgentState } from "../events.ts";
 import { PROTOCOL_VERSION } from "../version.ts";
 import type { AvatarId, Avatar, ClientMsg, ServerMsg, WelcomeMsg } from "../protocol.ts";
@@ -199,6 +199,14 @@ export class WorldSim {
       default:
         return [];
     }
+  }
+
+  /** Sends an agent to a named place outside of any job (a team change: the elevator, back to its desk). Returns the walk. */
+  sendAgentTo(agentId: AgentId, anchor: SemanticAnchor): ServerMsg[] {
+    const agent = this.avatars.get(agentId);
+    const a = resolveAnchor(this.room, anchor, agentId);
+    if (!agent || !a || !this.agentStates.has(agentId)) return [];
+    return this.walkTo(agent, { x: a.x, y: a.y }, a.dir as Dir, [], false);
   }
 
   /** Remove and return deferred messages whose time has come, oldest first. */

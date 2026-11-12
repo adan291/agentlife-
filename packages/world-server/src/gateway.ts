@@ -3,10 +3,12 @@ import type { RawData, WebSocket } from "ws";
 import {
   ACTIVITY_BUFFER_SIZE,
   ClientMsgSchema,
+  HR_ROOM,
   LOBBY_ROOM,
   MAX_MESSAGES_PER_SECOND,
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
+  SEATED_ROLES,
   ServerMsgSchema,
   morningReportId,
   morningTitle,
@@ -24,14 +26,17 @@ import type {
   ErrorCode,
   FloorStatus,
   Hotel,
+  HrAction,
   JobState,
   MorningSummary,
   NightState,
   Project,
   RegisterProjectBody,
   Report,
+  SeatedRole,
   ServerMsg,
   StepName,
+  TeamMember,
   WelcomeMsg,
 } from "@agentlife/shared";
 import type { EngineLink, StartJobOptions } from "./engine-link.ts";
@@ -414,6 +419,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       // The form lists the hotel's projects, so they travel with the schedule.
       await sendProjects(ws);
       await sendNight(ws);
+    } else if (panel === "hr") {
+      await sendHr(ws);
     }
   };
 
@@ -437,6 +444,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
     // The progress stepper of a reloaded client needs the running job.
     if (f?.currentTaskId) enqueue(() => sendJobUpdate(roomId));
+    // A project floor shows who sits at each desk, and keeps the ghosts that have left by the elevator out of the room.
+    const projectId = projectIdOfRoom(roomId);
+    if (projectId !== undefined && engine?.hr) {
+      for (const role of SEATED_ROLES) if (absent.has(`${roomId}|${role}`)) send(ws, { type: "agent_presence", agentId: role, present: false });
+      const view = teamViewMsg(projectId);
+      if (view) send(ws, view);
+      enqueue(() => refreshTeam(projectId, false));
+    }
     pushFloors(true);
   };
 
@@ -466,6 +481,175 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const deliver = (roomId: string, msgs: ServerMsg[]) => {
     if (msgs.length === 0) return;
     enqueue(() => sendSim(roomId, msgs));
+  };
+
+  // ---- the HR office and the people at the desks ----
+
+  interface Seat {
+    memberId: string;
+    name: string;
+    model?: string;
+  }
+  type Seats = Map<SeatedRole, Seat>;
+  /** Who works each desk according to the engine, and who the room shows (a ghost that is being replaced keeps its name until the new one walks in). */
+  const seatsNow = new Map<string, Seats>();
+  const seatsShown = new Map<string, Seats>();
+  /** `<roomId>|<role>` of the ghosts that have left by the elevator and are not back yet. */
+  const absent = new Set<string>();
+  const swapTimers = new Set<NodeJS.Timeout>();
+  /** The label the room uses for a desk nobody was hired for. */
+  const DEFAULT_SEAT_NAME: Record<SeatedRole, string> = { architect: "Architect", developer: "Developer", qa: "QA" };
+
+  const seatsOf = (members: readonly TeamMember[]): Seats => {
+    const out: Seats = new Map();
+    for (const role of SEATED_ROLES) {
+      const m = members.find((x) => x.role === role);
+      out.set(role, m ? { memberId: m.id, name: m.displayName, model: m.model } : { memberId: "", name: DEFAULT_SEAT_NAME[role] });
+    }
+    return out;
+  };
+
+  const teamViewMsg = (projectId: string): ServerMsg | undefined => {
+    const shown = seatsShown.get(projectId);
+    if (!shown) return undefined;
+    return {
+      type: "team_view",
+      roomId: projectRoomId(projectId),
+      members: SEATED_ROLES.map((role) => {
+        const s = shown.get(role)!;
+        return { agentId: role, name: s.name, ...(s.model ? { model: s.model } : {}) };
+      }),
+    };
+  };
+
+  const pushTeamView = (projectId: string): void => {
+    const msg = teamViewMsg(projectId);
+    if (msg) toUser(projectRoomId(projectId), msg);
+  };
+
+  /** Time a ghost needs to walk to a place, from the `walk` message the sim answered with. */
+  const walkMs = (msgs: readonly ServerMsg[]): number => {
+    const w = msgs.find((m) => m.type === "walk");
+    return w && w.type === "walk" ? w.path.length * w.msPerTile : 0;
+  };
+
+  /** The ghost at this desk was let go (or replaced): it walks to the elevator and leaves; its successor comes back through it. */
+  const startSwap = (projectId: string, role: SeatedRole): void => {
+    const roomId = projectRoomId(projectId);
+    const key = `${roomId}|${role}`;
+    if (absent.has(key)) return; // the coming-back step reads the newest team
+    absent.add(key);
+    const out = hotel.sim(roomId)?.sendAgentTo(role, "door") ?? [];
+    deliver(roomId, [...out, { type: "agent_presence", agentId: role, present: false }]);
+    const timer = setTimeout(
+      () => {
+        swapTimers.delete(timer);
+        enqueue(() => {
+          absent.delete(key);
+          const seat = seatsNow.get(projectId)?.get(role);
+          if (seat) seatsShown.get(projectId)?.set(role, seat);
+          const back = hotel.sim(roomId)?.sendAgentTo(role, "home") ?? [];
+          deliver(roomId, [{ type: "agent_presence", agentId: role, present: true }, ...back]);
+          pushTeamView(projectId);
+        });
+      },
+      walkMs(out) + 700,
+    );
+    timer.unref();
+    swapTimers.add(timer);
+  };
+
+  /**
+   * Reads a project's team and shows it in the room: names and models on the ghosts, and, when `announce` is set and
+   * somebody else now sits at a desk, the old ghost leaves and the new one walks in. Never throws.
+   */
+  const refreshTeam = async (projectId: string, announce: boolean): Promise<void> => {
+    const hr = engine?.hr;
+    if (!hr || !hotel.has(projectRoomId(projectId))) return;
+    let team;
+    try {
+      team = await hr.team(projectId);
+    } catch {
+      return;
+    }
+    const next = seatsOf(team.members);
+    seatsNow.set(projectId, next);
+    const shown = seatsShown.get(projectId);
+    if (!shown) {
+      seatsShown.set(projectId, new Map(next));
+    } else {
+      for (const role of SEATED_ROLES) {
+        const n = next.get(role)!;
+        const s = shown.get(role)!;
+        if (n.memberId === s.memberId || !announce) shown.set(role, n);
+        else startSwap(projectId, role);
+      }
+    }
+    pushTeamView(projectId);
+  };
+
+  const sendHr = async (ws: WebSocket): Promise<void> => {
+    if (!engine?.hr) return sendError(ws, "engine_unavailable", "the HR office needs the real engine");
+    try {
+      send(ws, { type: "hr", state: await engine.hr.state() });
+    } catch (e) {
+      sendError(ws, "engine_unavailable", errorText(e, "cannot read the HR desk"));
+    }
+  };
+
+  /** Runs one HR action for the user in the HR office, then sends the desk's new state. */
+  const hrAct = async (ws: WebSocket, act: HrAction): Promise<void> => {
+    const hr = engine?.hr;
+    if (!hr) return sendError(ws, "engine_unavailable", "the HR office needs the real engine");
+    if (userRoom() !== HR_ROOM) return sendError(ws, "bad_message", "the HR desk is in the HR office");
+    try {
+      // Know who sits at the desks before the change, so a change of person can be shown.
+      if (act.action === "hire" || act.action === "update" || act.action === "fire" || act.action === "apply") await refreshTeam(act.projectId, false);
+      switch (act.action) {
+        case "hire":
+          await hr.hire(act.projectId, { templateId: act.templateId, displayName: act.displayName, ...(act.model ? { model: act.model } : {}) });
+          await refreshTeam(act.projectId, true);
+          break;
+        case "update":
+          await hr.update(act.projectId, act.memberId, {
+            ...(act.displayName === undefined ? {} : { displayName: act.displayName }),
+            ...(act.model === undefined ? {} : { model: act.model }),
+          });
+          await refreshTeam(act.projectId, true);
+          break;
+        case "fire":
+          await hr.fire(act.projectId, act.memberId);
+          await refreshTeam(act.projectId, true);
+          break;
+        case "import":
+          await hr.importTemplate(act.url);
+          break;
+        case "approve_import":
+          await hr.approveImport(act.id, act.hash);
+          break;
+        case "reject_import":
+          await hr.rejectImport(act.id);
+          break;
+        case "suggest": {
+          send(ws, { type: "hr_suggestion", suggestion: await hr.suggest(act.projectId) });
+          return;
+        }
+        case "apply":
+          // Each pick is a hire; the member it replaces leaves afterwards, so the team never lacks a role.
+          try {
+            for (const pick of act.picks) {
+              await hr.hire(act.projectId, { templateId: pick.templateId, displayName: pick.displayName, model: pick.model });
+              if (pick.replacesId) await hr.fire(act.projectId, pick.replacesId);
+            }
+          } finally {
+            await refreshTeam(act.projectId, true);
+          }
+          break;
+      }
+    } catch (e) {
+      sendError(ws, "hr_error", errorText(e, "the HR desk could not do that"));
+    }
+    await sendHr(ws);
   };
 
   // ---- engine events ----
@@ -873,6 +1057,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       } else if (msg.type === "night_move") {
         const { id, direction } = msg;
         void nightCommand(ws, (link) => link.moveNightJob?.(id, direction) ?? Promise.resolve());
+      } else if (msg.type === "hr_state") {
+        void sendHr(ws);
+      } else if (msg.type === "hr_do") {
+        void hrAct(ws, msg.act);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;
@@ -900,6 +1088,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           new Promise<void>((done) => {
             clearInterval(tick);
             clearInterval(nightPoll);
+            for (const t of swapTimers) clearTimeout(t);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();
             wss.close(() => done());

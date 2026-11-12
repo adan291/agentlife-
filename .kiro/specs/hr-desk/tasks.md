@@ -12,7 +12,7 @@
   - Sources allowlist, parsing with dropped fields, caps and leak scan, security-agent review, user approval bound to the content hash
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 5.2_
 
-- [ ] 4. HR office, HR ghost and panel
+- [x] 4. HR office, HR ghost and panel
   - HR room furniture and panel (catalogue, teams, import queue), HR agent team suggestion (applied by the user), hired agents appear on their floor, fired agents leave by the elevator
   - _Requirements: 4.1, 4.2, 4.3_
 

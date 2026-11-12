@@ -32,6 +32,11 @@ export class AvatarView {
     this.update(Date.now());
   }
 
+  /** True while a walk is under way (a walk that has just ended is folded in by the next `update`). */
+  get walking(): boolean {
+    return this.walk !== null;
+  }
+
   /** Start a walk; it begins from the last tile fully reached, like the server's simulation. */
   setWalk(path: readonly Tile[], msPerTile: number, startedAt: number, now: number): void {
     this.settle(now);

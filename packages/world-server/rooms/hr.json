@@ -18,6 +18,7 @@
     { "itemId": "cobweb_1", "defId": "cobweb", "x": 0, "y": 0, "dir": 4 },
     { "itemId": "plant_1", "defId": "plant", "x": 1, "y": 0, "dir": 4 },
     { "itemId": "lamp_1", "defId": "lamp", "x": 3, "y": 0, "dir": 4 },
+    { "itemId": "hr_desk_1", "defId": "hr_desk", "x": 4, "y": 0, "dir": 4 },
     { "itemId": "plant_2", "defId": "plant", "x": 9, "y": 0, "dir": 4 },
     { "itemId": "elevator_1", "defId": "elevator", "x": 0, "y": 6, "dir": 2 },
     { "itemId": "sofa_1", "defId": "sofa", "x": 4, "y": 7, "dir": 0 },

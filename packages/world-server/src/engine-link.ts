@@ -6,6 +6,9 @@ import type {
   BuildBoard,
   BuildReport,
   DeliveryInfo,
+  HireBody,
+  HrState,
+  ImportView,
   JobDetails,
   JobKind,
   JobView,
@@ -17,7 +20,25 @@ import type {
   RegisterProjectBody,
   RegisterProjectResult,
   Repo,
+  TeamMember,
+  TeamResponse,
+  TeamSuggestion,
+  UpdateMemberBody,
 } from "@agentlife/shared";
+
+/** The HR office's side of the engine: the catalogue, the teams, the imports and the HR agent. Every method rejects with the engine's own message when it refuses. */
+export interface HrLink {
+  /** Everything the HR desk panel shows. */
+  state(): Promise<HrState>;
+  team(projectId: string): Promise<TeamResponse>;
+  hire(projectId: string, body: HireBody): Promise<TeamMember>;
+  update(projectId: string, memberId: string, body: UpdateMemberBody): Promise<TeamMember>;
+  fire(projectId: string, memberId: string): Promise<void>;
+  importTemplate(url: string): Promise<ImportView>;
+  approveImport(id: string, hash: string): Promise<ImportView>;
+  rejectImport(id: string): Promise<void>;
+  suggest(projectId: string): Promise<TeamSuggestion>;
+}
 
 /** What a job other than a plain change needs: its kind and the branch, path or topic it works on. */
 export interface StartJobOptions {
@@ -58,6 +79,8 @@ export interface EngineLink {
   addNightJob?(job: NightJobRequest): Promise<NightJob>;
   removeNightJob?(id: string): Promise<void>;
   moveNightJob?(id: string, direction: "up" | "down"): Promise<void>;
+  /** The HR office (hr-desk). Optional: the scripted engine and the demo have none. */
+  hr?: HrLink;
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;
