@@ -165,7 +165,7 @@ test("the elevator takes the user to a project floor, and a reload returns there
   await expect(page.locator(".al-floor-label")).toHaveText("haunted-todo");
   await expect(page.locator(".al-team-row:not([hidden])")).toHaveCount(3);
   await expect(page.locator(".al-doors")).toHaveAttribute("data-phase", "open");
-  expect(await page.evaluate(() => localStorage.getItem("agentlife-floor"))).toBe("project:haunted-todo");
+  expect(await page.evaluate(() => sessionStorage.getItem("agentlife-floor"))).toBe("project:haunted-todo");
 });
 
 test("a reload returns to the floor the user was on", async ({ page }) => {
@@ -175,7 +175,7 @@ test("a reload returns to the floor the user was on", async ({ page }) => {
     sessionStorage.setItem("seeded", "1");
     localStorage.clear();
     localStorage.setItem("agentlife-guide-seen", "1");
-    localStorage.setItem("agentlife-floor", "project:haunted-todo");
+    sessionStorage.setItem("agentlife-floor", "project:haunted-todo");
   });
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/");

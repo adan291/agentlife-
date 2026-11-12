@@ -110,8 +110,17 @@ let currentRoomName = "";
 let floorList: FloorStatus[] = [];
 /** Item id of the elevator in the current room: the HUD shortcut walks the avatar there. */
 let elevatorItemId: string | undefined;
-/** Only a live connection remembers the floor; the demo always starts on the recorded floor. */
-const floorStorage = live && typeof localStorage !== "undefined" ? localStorage : undefined;
+/**
+ * Only a live connection remembers the floor; the demo always starts on the recorded floor.
+ * sessionStorage: a reload of the same tab goes back to the floor, a new visit starts in the lobby.
+ */
+const floorStorage = live && typeof sessionStorage !== "undefined" ? sessionStorage : undefined;
+// Older builds kept the floor in localStorage; drop it so it cannot linger.
+try {
+  if (typeof localStorage !== "undefined") localStorage.removeItem("agentlife-floor");
+} catch {
+  // Storage blocked: nothing to clean.
+}
 /** The floor the user was on before the page was loaded; they go back there once the floor list is known. */
 let rememberedFloor: string | null = live ? loadFloor(floorStorage) : null;
 let restored = !live;

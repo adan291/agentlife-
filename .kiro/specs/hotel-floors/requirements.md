@@ -37,7 +37,7 @@ Depends on project-registry (projects, Reception). All user-facing text in Engli
 
 #### Acceptance Criteria
 1. THE HUD SHALL show the current floor name and an "Elevator" shortcut.
-2. Reloading the page SHALL return the user to the floor they were on (localStorage) if it still exists.
+2. Reloading the page SHALL return the user to the floor they were on (sessionStorage, so a new visit starts in the lobby) if it still exists.
 3. The demo (replay) build SHALL work with the recorded rooms: the recorded run includes the room ids, and the replay shows the floors that were recorded.
 
 ### Requirement 5: Tests

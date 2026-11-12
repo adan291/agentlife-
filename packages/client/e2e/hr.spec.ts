@@ -14,7 +14,7 @@ async function openHrOffice(page: Page): Promise<string[]> {
     sessionStorage.setItem("seeded", "1");
     localStorage.clear();
     localStorage.setItem("agentlife-guide-seen", "1");
-    localStorage.setItem("agentlife-floor", "hr");
+    sessionStorage.setItem("agentlife-floor", "hr");
   });
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/");

@@ -138,7 +138,7 @@ test("the board shows the editor above the job card, and Save sends the pipeline
   await page.addInitScript(() => {
     localStorage.clear();
     localStorage.setItem("agentlife-guide-seen", "1");
-    localStorage.setItem("agentlife-floor", "project:haunted-todo");
+    sessionStorage.setItem("agentlife-floor", "project:haunted-todo");
   });
   const sent: unknown[] = [];
   const state = { ...STATE, members: [...STATE.members, REX] };
