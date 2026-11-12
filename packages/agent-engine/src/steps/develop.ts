@@ -74,7 +74,7 @@ export async function developStep(deps: PipelineDeps, ctx: StepContext, input: D
   try {
     const raw = await git(wt, ["diff", "--cached", "--raw", "-z", "--no-abbrev", ...DIFF_FLAGS, base], gitOpts);
     const numstat = await git(wt, ["diff", "--cached", "--numstat", "-z", ...DIFF_FLAGS, base], gitOpts);
-    verdict = validateDiff(wt, parseGitDiff(raw, numstat), deps.limits, patchBytes, kind);
+    verdict = validateDiff(wt, parseGitDiff(raw, numstat), deps.limits, patchBytes, kind, ctx.pathRule);
   } catch (e) {
     if (e instanceof DiffRejectedError) throw e;
     verdict = { ok: false as const, reason: `cannot read the diff: ${e instanceof Error ? e.message : String(e)}` };

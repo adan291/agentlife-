@@ -9,6 +9,10 @@ import type {
   JobDetails,
   JobKind,
   JobView,
+  MorningSummary,
+  NightJob,
+  NightJobRequest,
+  NightState,
   Project,
   RegisterProjectBody,
   RegisterProjectResult,
@@ -46,6 +50,14 @@ export interface EngineLink {
   /** Construction board of the lobby: how AGENT LIFE itself is being built. Optional: the scripted engine has none. */
   getBuildBoard?(): Promise<BuildBoard>;
   getBuildReport?(spec: string): Promise<BuildReport>;
+  /** Morning summaries of the night shift, newest first (lobby mailbox). Optional: the scripted engine has none. */
+  getNightSummaries?(): Promise<MorningSummary[]>;
+  /** Night board: the schedule with the window and limits. Optional: the scripted engine has no night shift. */
+  getNight?(): Promise<NightState>;
+  /** Schedules a night job. Rejects with the engine's message when it refuses (unknown project, full schedule, ...). */
+  addNightJob?(job: NightJobRequest): Promise<NightJob>;
+  removeNightJob?(id: string): Promise<void>;
+  moveNightJob?(id: string, direction: "up" | "down"): Promise<void>;
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;

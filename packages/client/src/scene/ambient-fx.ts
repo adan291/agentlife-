@@ -1,7 +1,10 @@
 import { Container, Graphics } from "pixi.js";
-import type { PlacedFurni } from "@agentlife/shared";
+import { footprintSize } from "@agentlife/shared";
+import type { FurniDef, PlacedFurni } from "@agentlife/shared";
 import { FURNI_COLOURS, PALETTE } from "../palette.ts";
 import { P } from "./iso-draw.ts";
+import type { Pt } from "./iso-draw.ts";
+import { deskCandlePoint } from "./recipes.ts";
 import type { Bounds } from "./room-view.ts";
 
 /**
@@ -119,6 +122,63 @@ export class MoteLayer {
       this.g.circle(m.x, m.y, m.radius * 2.4).fill({ color: m.colour, alpha: m.alpha * 0.25 });
       this.g.circle(m.x, m.y, m.radius).fill({ color: m.colour, alpha: m.alpha });
     }
+  }
+
+  destroy(): void {
+    this.container.destroy({ children: true });
+  }
+}
+
+/** A desk candle burns at night, and only while the agent at the desk works (night-shift, requirement 5.1). */
+export function candleLit(night: boolean, working: boolean): boolean {
+  return night && working;
+}
+
+const WAX = 0xf2e6c9;
+const FLAME = 0xffd27a;
+const FLAME_CORE = 0xffe9a8;
+
+/**
+ * A candle on an agent's desk, beside the monitor. Hidden by day and while the agent is not working. Its halo flickers
+ * like the lamps do (steady when motion is reduced). Drawn on top of the desk sprite.
+ */
+export class DeskCandle {
+  readonly container = new Container();
+  private readonly g = new Graphics();
+  private readonly at: Pt;
+  private readonly seed: number;
+  private lit = false;
+
+  constructor(placed: PlacedFurni, def: FurniDef, origin: { x: number; y: number }, zIndex: number) {
+    const { w, l } = footprintSize(def, placed.dir);
+    this.at = deskCandlePoint({ w, l, dir: placed.dir, height: def.height });
+    this.seed = placed.x * 7.31 + placed.y * 19.17;
+    this.container.position.set(origin.x, origin.y);
+    this.container.zIndex = zIndex;
+    this.container.addChild(this.g);
+    this.container.visible = false;
+  }
+
+  get isLit(): boolean {
+    return this.lit;
+  }
+
+  setLit(lit: boolean): void {
+    this.lit = lit;
+    this.container.visible = lit;
+    if (!lit) this.g.clear();
+  }
+
+  update(now: number, reduced: boolean): void {
+    if (!this.lit) return;
+    const k = flicker(now, this.seed, reduced);
+    const [x, y] = this.at;
+    const g = this.g;
+    g.clear();
+    g.ellipse(x, y - 7, 18 * (0.8 + 0.4 * k), 11 * (0.8 + 0.4 * k)).fill({ color: FURNI_COLOURS.lampGlow, alpha: 0.16 * k });
+    g.ellipse(x, y - 7, 7, 5).fill({ color: FLAME_CORE, alpha: 0.22 * k });
+    g.rect(x - 1.5, y - 6, 3, 6).fill(WAX);
+    g.ellipse(x, y - 8.5, 1.6, 2.6 * (0.85 + 0.3 * k)).fill(FLAME);
   }
 
   destroy(): void {

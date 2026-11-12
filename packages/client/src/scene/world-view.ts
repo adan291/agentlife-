@@ -17,7 +17,7 @@ import type { Zoom } from "./zoom.ts";
 import { agentTooltip } from "../ui/tooltip.ts";
 import { WorkModel } from "../ui/work.ts";
 import { MonitorFx } from "./monitor-fx.ts";
-import { FlameFx, MoteLayer, isFlameItem } from "./ambient-fx.ts";
+import { DeskCandle, FlameFx, MoteLayer, candleLit, isFlameItem } from "./ambient-fx.ts";
 import { FOCUS_MS, easeToward, rootPositionFor } from "./camera.ts";
 import type { Point } from "./camera.ts";
 import { prefersReducedMotion } from "./glow.ts";
@@ -77,6 +77,9 @@ export class WorldView {
   private readonly monitors = new Map<AgentId, MonitorFx>();
   /** Flickering halos on the lamps. */
   private flames: FlameFx[] = [];
+  /** Candles on the agents' desks: lit at night while the agent works. */
+  private readonly candles = new Map<AgentId, DeskCandle>();
+  private night = false;
   /** Slow wisps drifting through the room. */
   private motes: MoteLayer | null = null;
 
@@ -101,6 +104,16 @@ export class WorldView {
 
   get zoom(): Zoom {
     return this.zoomLevel;
+  }
+
+  /** The night window is open (night-shift): the desks of working agents get a lit candle. */
+  setNight(open: boolean): void {
+    this.night = open;
+    this.refreshCandles();
+  }
+
+  private refreshCandles(): void {
+    for (const [id, candle] of this.candles) candle.setLit(candleLit(this.night, this.agentStatus.get(id)?.state === "working"));
   }
 
   /** Pending approvals as a number and an unread report as a dot, above the mailbox. */
@@ -167,6 +180,7 @@ export class WorldView {
       case "agent_state":
         this.agentStatus.set(msg.agentId, { state: msg.state, text: msg.text });
         this.monitors.get(msg.agentId)?.setActive(msg.state === "working");
+        this.candles.get(msg.agentId)?.setLit(candleLit(this.night, msg.state === "working"));
         this.avatars.get(msg.agentId)?.overlay.setState(msg.state, msg.text);
         if (msg.agentId === "builder" && msg.state === "idle") this.avatars.get("builder")?.overlay.setName(builderTagName("Builder", null));
         break;
@@ -201,6 +215,7 @@ export class WorldView {
     }
     this.badge?.update(now, this.reducedMotion, this.mailboxAttentionSince);
     for (const m of this.monitors.values()) m.update(now, this.reducedMotion);
+    for (const c of this.candles.values()) c.update(now, this.reducedMotion);
     for (const f of this.flames) f.update(now, this.reducedMotion);
     this.motes?.update(now, this.reducedMotion);
     for (const { view, overlay } of this.avatars.values()) {
@@ -236,6 +251,9 @@ export class WorldView {
         const mfx = new MonitorFx(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
         this.objects.addChild(mfx.container);
         this.monitors.set(desk[1] as AgentId, mfx);
+        const candle = new DeskCandle(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.3);
+        this.objects.addChild(candle.container);
+        this.candles.set(desk[1] as AgentId, candle);
       }
       if (fv.def.interaction === "mailbox") {
         const p = tileToScreen({ x: placed.x, y: placed.y, z });
@@ -251,6 +269,7 @@ export class WorldView {
     this.agentStatus.clear();
     for (const a of msg.agents) this.agentStatus.set(a.agentId, { state: a.state, text: a.text });
     for (const a of msg.agents) this.monitors.get(a.agentId)?.setActive(a.state === "working");
+    this.refreshCandles();
     const status = new Map(msg.agents.map((a) => [a.agentId, a]));
     for (const a of msg.avatars) {
       const role: RoleKey = typeof a.id === "string" ? a.id : "user";
@@ -293,6 +312,7 @@ export class WorldView {
     for (const c of this.objects.removeChildren()) c.destroy();
     this.furni = [];
     this.monitors.clear();
+    this.candles.clear();
     this.flames = []; // their containers were destroyed with the objects layer
     this.motes?.destroy();
     this.motes = null;

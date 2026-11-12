@@ -12,6 +12,9 @@ export const PIPELINES: Readonly<Record<JobKind, readonly JobState[]>> = {
   "write-tests": ["created", "analyzing", "awaiting_plan_approval", "developing", "testing", "reviewing", "report_ready"],
   // Documentation has no test step: the review is the check.
   document: ["created", "analyzing", "awaiting_plan_approval", "developing", "reviewing", "report_ready"],
+  // Night shift: read-only, no model. The sandbox lists outdated and vulnerable packages, so the state is `testing`
+  // (the step that runs a command in Docker) and the report is built from that output.
+  "audit-deps": ["created", "testing", "report_ready"],
 };
 
 /** A job is read-only when no step of its pipeline writes files. */
@@ -51,6 +54,7 @@ const TABLES: Readonly<Record<JobKind, Readonly<Record<JobState, readonly JobSta
   "review-branch": buildTransitions(PIPELINES["review-branch"]),
   "write-tests": buildTransitions(PIPELINES["write-tests"]),
   document: buildTransitions(PIPELINES["document"]),
+  "audit-deps": buildTransitions(PIPELINES["audit-deps"]),
 };
 
 /** The transition table of a kind. `change` uses the single table of the state machine unchanged. */

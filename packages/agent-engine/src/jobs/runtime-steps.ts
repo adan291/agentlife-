@@ -126,6 +126,15 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
       const findings = review.notes.slice(0, BRANCH_FINDINGS_MAX).map((text) => ({ severity: "low" as const, text }));
       return { review: { verdict: review.verdict, risk: review.risk, findings }, diff: "(simulated branch diff)\n", base: "main" };
     },
+    async auditDeps() {
+      return {
+        outdated: [{ name: "example-package", current: "1.0.0", wanted: "1.0.0", latest: "1.2.0" }],
+        vulnerabilities: [],
+        outdatedOk: true,
+        auditOk: true,
+        notes: ["Simulated audit: no package was inspected."],
+      };
+    },
     async report(_ctx, input) {
       return fallbackReport(input);
     },

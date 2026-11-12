@@ -27,6 +27,7 @@ try {
     port: Number(process.env["PORT"] ?? 8788),
     token: token || undefined,
     fakeDelayMs: Number(process.env["FAKE_DELAY_MS"] ?? 800),
+    night: { run: true },
   });
   const stop = (): void => {
     void engine.close().then(() => process.exit(0));

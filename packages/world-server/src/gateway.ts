@@ -8,6 +8,8 @@ import {
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   ServerMsgSchema,
+  morningReportId,
+  morningTitle,
   projectIdOfRoom,
   projectRoomId,
   splitAgentId,
@@ -23,6 +25,8 @@ import type {
   FloorStatus,
   Hotel,
   JobState,
+  MorningSummary,
+  NightState,
   Project,
   RegisterProjectBody,
   Report,
@@ -56,6 +60,8 @@ export interface GatewayOptions {
   allowedOrigins?: readonly string[];
   /** Milliseconds between checks for deferred sim messages. */
   tickMs?: number;
+  /** Milliseconds between looks at the engine's night shift (summaries, window). Default 60000. */
+  nightPollMs?: number;
   /** Clock for the rate limiter. */
   clock?: () => number;
 }
@@ -266,6 +272,85 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  // ---- night shift: morning summaries in the lobby mailbox ----
+
+  /** Summaries written within this long count as news when the gateway first sees them; older ones are history. */
+  const FRESH_SUMMARY_MS = 24 * 60 * 60 * 1000;
+  /** Summary reports the user has not opened the lobby mailbox for yet. */
+  const unopenedSummaries = new Set<string>();
+
+  /**
+   * Copies the engine's morning summaries into the lobby mailbox. A summary that is new, and recent, is announced like a
+   * delivered report (badge, toast) when the user is in the lobby, and again on the next welcome into the lobby until
+   * the mailbox is opened. Never throws.
+   */
+  const syncSummaries = async (): Promise<void> => {
+    if (!engine?.getNightSummaries) return;
+    let list: MorningSummary[];
+    try {
+      list = await engine.getNightSummaries();
+    } catch {
+      return; // keep what the mailbox has
+    }
+    const lobby = floorOf(LOBBY_ROOM);
+    const news: Report[] = [];
+    for (const s of [...list].reverse()) {
+      const id = morningReportId(s.nightKey);
+      const report: Report = { reportId: id, taskId: id, title: morningTitle(s.nightKey), markdown: s.markdown, ts: s.writtenAt, kind: "night" };
+      const known = lobby.reports.has(id);
+      lobby.reports.set(id, report);
+      if (!known && Date.now() - s.writtenAt < FRESH_SUMMARY_MS) news.push(report);
+    }
+    for (const r of news) {
+      unopenedSummaries.add(r.reportId);
+      toUser(LOBBY_ROOM, { type: "report", report: r });
+    }
+    if (news.length > 0) {
+      lobby.unread = "report_ready";
+      pushFloors();
+    }
+  };
+
+  // ---- night shift: the night board and the night look ----
+
+  let lastClock = "";
+  /** Tells the client whether the night window is open (dimmed rooms, moon clock). Sent when it changed, or when forced. Never throws. */
+  const pushNightClock = async (force = false): Promise<void> => {
+    if (!engine?.getNight || !current) return;
+    let state: NightState;
+    try {
+      state = await engine.getNight();
+    } catch {
+      return;
+    }
+    const msg: ServerMsg = { type: "night_clock", open: state.open, start: state.config.start, end: state.config.end };
+    const key = JSON.stringify(msg);
+    if (!force && key === lastClock) return;
+    lastClock = key;
+    if (current) send(current.ws, msg);
+  };
+
+  const sendNight = async (ws: WebSocket): Promise<void> => {
+    if (!engine?.getNight) return sendError(ws, "engine_unavailable", "the night shift needs the real engine");
+    try {
+      send(ws, { type: "night", state: await engine.getNight() });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot read the night schedule");
+    }
+  };
+
+  /** Add, remove or move a night job. The board is in the lobby, so the user must be there; the answer is the new schedule. */
+  const nightCommand = async (ws: WebSocket, run: (link: EngineLink) => Promise<void>): Promise<void> => {
+    if (!engine?.getNight) return sendError(ws, "engine_unavailable", "the night shift needs the real engine");
+    if (userRoom() !== LOBBY_ROOM) return sendError(ws, "bad_message", "the night board is in the lobby");
+    try {
+      await run(engine);
+    } catch (e) {
+      sendError(ws, "night_error", errorText(e, "the night schedule was not changed"));
+    }
+    await sendNight(ws);
+  };
+
   /** The repositories the computer of a floor can start a job on: the floor's own project. */
   const sendRepos = async (ws: WebSocket, roomId: string) => {
     if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
@@ -310,8 +395,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     } else if (panel === "reception") {
       await sendProjects(ws);
     } else if (panel === "mailbox") {
+      // The lobby's mailbox holds the morning summaries; ask the engine so a summary written a moment ago is there.
+      if (roomId === LOBBY_ROOM) await syncSummaries();
       for (const a of f.approvals.values()) send(ws, { type: "approval", approval: a });
       for (const r of f.reports.values()) send(ws, { type: "report", report: r, resend: true });
+      if (roomId === LOBBY_ROOM) unopenedSummaries.clear();
       if (f.unread) {
         f.unread = null;
         pushFloors();
@@ -322,6 +410,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       pushFloors(true);
     } else if (panel === "build") {
       await sendBuildBoard(ws);
+    } else if (panel === "night") {
+      // The form lists the hotel's projects, so they travel with the schedule.
+      await sendProjects(ws);
+      await sendNight(ws);
     }
   };
 
@@ -336,6 +428,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of f?.approvals.values() ?? []) if (a.status === "pending") send(ws, { type: "approval", approval: a });
+    // A morning summary nobody opened yet is announced again to a client that just arrived in the lobby.
+    if (roomId === LOBBY_ROOM) {
+      for (const id of unopenedSummaries) {
+        const report = f?.reports.get(id);
+        if (report) send(ws, { type: "report", report });
+      }
+    }
     // The progress stepper of a reloaded client needs the running job.
     if (f?.currentTaskId) enqueue(() => sendJobUpdate(roomId));
     pushFloors(true);
@@ -550,6 +649,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       }
     })();
     enqueue(syncProjects);
+    enqueue(syncSummaries);
   }
 
   // ---- client commands ----
@@ -689,6 +789,17 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
   refreshModels();
 
+  // The night shift writes its summary while nobody is connected, or while the user works on another floor; the window
+  // opens and closes by the clock. One look a minute covers both.
+  const nightPoll =
+    engine?.getNightSummaries || engine?.getNight
+      ? setInterval(() => {
+          enqueue(syncSummaries);
+          enqueue(() => pushNightClock());
+        }, options.nightPollMs ?? 60_000)
+      : undefined;
+  nightPoll?.unref();
+
   wss.on("connection", (ws) => {
     // One user session in the MVP: a second connection replaces the first.
     if (current) current.ws.close(4000, "replaced by a newer connection");
@@ -696,7 +807,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     current = { ws, userId: you, activityAll: false };
     sendWelcome(ws, hotel.roomOf(you) ?? LOBBY_ROOM, welcome);
     // A project registered since the last connection gets its floor now.
-    if (engine) enqueue(syncProjects);
+    if (engine) {
+      enqueue(syncProjects);
+      enqueue(syncSummaries);
+      enqueue(() => pushNightClock(true));
+    }
     refreshModels();
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);
@@ -747,6 +862,17 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void sendBuildBoard(ws);
       } else if (msg.type === "build_report") {
         void sendBuildReport(ws, msg.spec);
+      } else if (msg.type === "night_state") {
+        void sendNight(ws);
+      } else if (msg.type === "night_add") {
+        const job = msg.job;
+        void nightCommand(ws, async (link) => void (await link.addNightJob?.(job)));
+      } else if (msg.type === "night_remove") {
+        const id = msg.id;
+        void nightCommand(ws, (link) => link.removeNightJob?.(id) ?? Promise.resolve());
+      } else if (msg.type === "night_move") {
+        const { id, direction } = msg;
+        void nightCommand(ws, (link) => link.moveNightJob?.(id, direction) ?? Promise.resolve());
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;
@@ -773,6 +899,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         close: () =>
           new Promise<void>((done) => {
             clearInterval(tick);
+            clearInterval(nightPoll);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();
             wss.close(() => done());

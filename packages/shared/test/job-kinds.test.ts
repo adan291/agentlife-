@@ -37,8 +37,14 @@ describe("StartJobBody kinds", () => {
     expect(bad.error?.issues[0]?.path).toEqual(["target"]);
   });
 
-  it("lists the four kinds of the spec", () => {
-    expect([...JOB_KINDS].sort()).toEqual(["change", "document", "review-branch", "write-tests"]);
+  it("lists the kinds of the spec", () => {
+    expect([...JOB_KINDS].sort()).toEqual(["audit-deps", "change", "document", "review-branch", "write-tests"]);
+  });
+
+  it("an audit takes no target, like a change", () => {
+    expect(StartJobBodySchema.safeParse({ repoId: "r", goal: "g", kind: "audit-deps" }).success).toBe(true);
+    expect(StartJobBodySchema.safeParse({ repoId: "r", goal: "g", kind: "audit-deps", target: "x" }).success).toBe(false);
+    expect(targetProblem("audit-deps", "x")).toMatch(/no target/);
   });
 });
 

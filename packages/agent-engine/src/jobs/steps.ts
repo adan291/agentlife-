@@ -1,4 +1,6 @@
 import type { BranchReview, JobKind, Plan, Review } from "@agentlife/shared";
+import type { AuditResult } from "./audit.ts";
+import type { PathRule } from "./kinds.ts";
 
 export interface StepContext {
   taskId: string;
@@ -13,6 +15,8 @@ export interface StepContext {
   /** The job's kind and target. Absent kind means `change`. */
   kind?: JobKind;
   target?: string;
+  /** A scope the change must stay inside, set when a night-shift pre-approval approved the plan. */
+  pathRule?: PathRule;
   /** What the step works on, for `agent.work` (plan task title). Absent in tests; a default is used then. */
   title?: string;
 }
@@ -48,6 +52,8 @@ export interface ReportInput {
   branchReview?: BranchReview;
   /** `review-branch` jobs: the branch the diff was taken against. */
   comparedWith?: string;
+  /** `audit-deps` jobs: what `npm outdated` and `npm audit` listed. */
+  audit?: AuditResult;
   /** Set when the job failed (timeout, error, restart). */
   failureReason?: string;
   /** Commit and branch of the user's project that the job started from. Set by the report step for registered projects. */
@@ -68,5 +74,10 @@ export interface Steps {
    * step finds it, and returns the findings with the diff that was reviewed. A runtime without it cannot run that kind.
    */
   reviewBranch?(ctx: StepContext, input: { branch: string }): Promise<{ review: BranchReview; diff: string; base: string }>;
+  /**
+   * `audit-deps` jobs: lists outdated and vulnerable packages of the project, read-only and with no model. A runtime
+   * without it cannot run that kind.
+   */
+  auditDeps?(ctx: StepContext): Promise<AuditResult>;
   report(ctx: StepContext, input: ReportInput): Promise<{ title: string; markdown: string }>;
 }

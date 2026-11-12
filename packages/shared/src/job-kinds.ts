@@ -4,7 +4,7 @@ import { z } from "zod";
  * What a job does (job-types spec). `change` is the original flow; an absent kind always means `change`.
  * The engine owns the pipeline of each kind; clients only choose the kind.
  */
-export const JobKindSchema = z.enum(["change", "review-branch", "write-tests", "document"]);
+export const JobKindSchema = z.enum(["change", "review-branch", "write-tests", "document", "audit-deps"]);
 export type JobKind = z.infer<typeof JobKindSchema>;
 export const JOB_KINDS = JobKindSchema.options;
 
@@ -38,7 +38,7 @@ export function isSafeTopic(target: string): boolean {
 
 /** Why `target` does not fit `kind`, or undefined when it does. */
 export function targetProblem(kind: JobKind, target: string | undefined): string | undefined {
-  if (kind === "change") return target === undefined ? undefined : "a change job takes no target";
+  if (kind === "change" || kind === "audit-deps") return target === undefined ? undefined : `a ${kind} job takes no target`;
   if (target === undefined || target === "") {
     return kind === "review-branch" ? "choose a branch" : kind === "write-tests" ? "name a path or module" : "name a topic or path";
   }
@@ -57,5 +57,15 @@ export function jobKindLabel(kind: JobKind): string {
       return "Test writing";
     case "document":
       return "Documentation";
+    case "audit-deps":
+      return "Dependency audit";
   }
+}
+
+/**
+ * True when the job can change files of the project: it plans, waits for approval and has a Developer step.
+ * The engine derives the same from its pipelines; a test keeps the two in step.
+ */
+export function kindWritesFiles(kind: JobKind): boolean {
+  return kind === "change" || kind === "write-tests" || kind === "document";
 }

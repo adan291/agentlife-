@@ -82,6 +82,16 @@ export function verdictBadge(doc: Document, verdict: ReportVerdict | undefined):
   return badge;
 }
 
+/** The badge of a report: the verdict of a job, or "Night" for the morning summary (it has no verdict). */
+export function reportBadge(doc: Document, report: Pick<Report, "verdict" | "markdown" | "kind">): HTMLElement {
+  if (report.kind !== "night") return verdictBadge(doc, reportVerdict(report));
+  const badge = doc.createElement("span");
+  badge.className = "al-badge";
+  badge.dataset["verdict"] = "night";
+  badge.textContent = "☾ Night";
+  return badge;
+}
+
 export interface ReportViewerActions {
   back(): void;
   /** Fetch the job's branch into the user's repository ("Deliver as branch"). */
@@ -147,7 +157,7 @@ export function renderReportViewer(doc: Document, report: Report, actions: Repor
   const when = doc.createElement("span");
   when.className = "al-muted";
   when.textContent = report.ts === undefined ? "" : formatTime(report.ts);
-  head.append(verdictBadge(doc, reportVerdict(report)), title, when);
+  head.append(reportBadge(doc, report), title, when);
 
   const facts = reportFacts(report.markdown);
   const list = doc.createElement("ul");

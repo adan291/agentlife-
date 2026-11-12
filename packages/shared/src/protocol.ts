@@ -5,6 +5,7 @@ import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts"
 import { FloorStatusSchema } from "./floors.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
+import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, RoomDefSchema } from "./room.ts";
 
@@ -21,7 +22,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent ids are strings, so they never collide. */
@@ -116,6 +117,8 @@ export const ReportSchema = z.object({
   ts: z.number().int().nonnegative().optional(),
   /** Absent: not a job on a registered project, or the engine does not know. */
   delivery: ReportDeliverySchema.optional(),
+  /** `night`: the morning summary of the night shift (lobby mailbox). It has no verdict and no job. */
+  kind: z.literal("night").optional(),
 });
 export type Report = z.infer<typeof ReportSchema>;
 
@@ -127,6 +130,7 @@ export const ErrorCodeSchema = z.enum([
   "engine_unavailable",
   "project_error",
   "delivery_failed",
+  "night_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -176,6 +180,14 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("build_board") }),
   /** Construction board: the verifier report of a spec. Answered with `build_report`. */
   z.object({ type: z.literal("build_report"), spec: SpecNameSchema }),
+  /** Night board (lobby): ask for the schedule. Answered with `night`. */
+  z.object({ type: z.literal("night_state") }),
+  /** Night board: schedule a job. Answered with `night` or `error` (`night_error`). */
+  z.object({ type: z.literal("night_add"), job: NightJobInputSchema }),
+  /** Night board: remove a job from the schedule. */
+  z.object({ type: z.literal("night_remove"), id: z.string().min(1).max(40) }),
+  /** Night board: move a scheduled job one place up or down. */
+  z.object({ type: z.literal("night_move"), id: z.string().min(1).max(40), ...NightMoveBodySchema.shape }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -233,6 +245,10 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   /** Construction board data (the engine's `GET /build/board`) and a verifier report. */
   z.object({ type: z.literal("build_board"), board: BuildBoardSchema }),
   z.object({ type: z.literal("build_report"), report: BuildReportSchema }),
+  /** Night board data (the engine's `GET /night`). */
+  z.object({ type: z.literal("night"), state: NightStateSchema }),
+  /** Whether the night window is open, for the dimmed rooms and the moon clock. Sent after `welcome` and when it changes. */
+  z.object({ type: z.literal("night_clock"), open: z.boolean(), start: NightHhmmSchema, end: NightHhmmSchema }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

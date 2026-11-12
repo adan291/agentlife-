@@ -5,7 +5,7 @@ import type { PanelData } from "./panel-state.ts";
 import { createSelect } from "./select.ts";
 
 /** The job kinds that have their own furniture besides the computer. */
-export type FurnitureKind = Exclude<JobKind, "change">;
+export type FurnitureKind = Exclude<JobKind, "change" | "audit-deps">;
 
 export interface KindFormActions {
   startJob(repoId: string, goal: string, kind: FurnitureKind, target: string): void;

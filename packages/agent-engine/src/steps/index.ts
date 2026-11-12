@@ -1,5 +1,6 @@
 import type { Steps } from "../jobs/steps.ts";
 import { analyzeStep } from "./analyze.ts";
+import { auditDepsStep } from "./audit-deps.ts";
 import type { PipelineDeps } from "./deps.ts";
 import { developStep } from "./develop.ts";
 import { reportStep } from "./report.ts";
@@ -15,6 +16,7 @@ export function createPipelineSteps(deps: PipelineDeps): Steps {
     test: (ctx) => testStep(deps, ctx),
     review: (ctx, input) => reviewStep(deps, ctx, input),
     reviewBranch: (ctx, input) => reviewBranchStep(deps, ctx, input),
+    auditDeps: (ctx) => auditDepsStep(deps, ctx),
     report: (ctx, input) => reportStep(deps, ctx, input),
   };
 }
