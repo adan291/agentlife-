@@ -2,10 +2,12 @@ import type {
   AgentEvent,
   AgentId,
   ApprovalDecision,
+  BranchesResponse,
   BuildBoard,
   BuildReport,
   DeliveryInfo,
   JobDetails,
+  JobKind,
   JobView,
   Project,
   RegisterProjectBody,
@@ -13,13 +15,22 @@ import type {
   Repo,
 } from "@agentlife/shared";
 
+/** What a job other than a plain change needs: its kind and the branch, path or topic it works on. */
+export interface StartJobOptions {
+  kind: JobKind;
+  target?: string | undefined;
+}
+
 /**
  * How the world-server talks to an agent engine. The fake engine (scripted) and the real HTTP/SSE
  * client implement the same interface, so switching does not touch the gateway or the client.
  */
 export interface EngineLink {
   listRepos(): Promise<Repo[]>;
-  startJob(repoId: string, goal: string): Promise<{ taskId: string }>;
+  /** `options` is absent for a plain change. An engine that cannot run the other kinds rejects them. */
+  startJob(repoId: string, goal: string, options?: StartJobOptions): Promise<{ taskId: string }>;
+  /** Local branches of a registered project, for the review desk. Optional: a link without it has no branch picker. */
+  listBranches?(projectId: string): Promise<BranchesResponse>;
   resolveApproval(approvalId: string, decision: ApprovalDecision, note?: string): Promise<void>;
   getJob(taskId: string): Promise<JobView>;
   /** The job card: job view plus artifact contents (each capped by `ARTIFACT_VIEW_MAX_CHARS`). */

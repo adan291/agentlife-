@@ -8,7 +8,7 @@
   - `GET /projects/:id/branches`; prompts for review, tests and docs; report sections by kind; no delivery for review-branch
   - _Requirements: 2.2, 3.1, 3.2_
 
-- [ ] 3. Client and world: furniture and forms per kind
+- [x] 3. Client and world: furniture and forms per kind
   - Review desk, test lab, library shelf on project floors (and the office room until floors exist); forms with branch picker, path and topic
   - _Requirements: 2.1, 2.2_
 

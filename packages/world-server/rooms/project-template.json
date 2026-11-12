@@ -29,10 +29,13 @@
   "furni": [
     { "itemId": "cobweb_1", "defId": "cobweb", "x": 0, "y": 0, "dir": 4 },
     { "itemId": "plant_3", "defId": "plant", "x": 1, "y": 0, "dir": 4 },
+    { "itemId": "review_desk_1", "defId": "review_desk", "x": 2, "y": 0, "dir": 4 },
     { "itemId": "lamp_1", "defId": "lamp", "x": 3, "y": 0, "dir": 4 },
     { "itemId": "computer_desk_1", "defId": "computer_desk", "x": 4, "y": 0, "dir": 4 },
     { "itemId": "chair_1", "defId": "chair", "x": 5, "y": 1, "dir": 0 },
+    { "itemId": "test_lab_1", "defId": "test_lab", "x": 6, "y": 0, "dir": 4 },
     { "itemId": "mailbox_1", "defId": "mailbox", "x": 7, "y": 0, "dir": 4 },
+    { "itemId": "library_shelf_1", "defId": "library_shelf", "x": 8, "y": 0, "dir": 4 },
     { "itemId": "board_1", "defId": "board", "x": 9, "y": 0, "dir": 4 },
     { "itemId": "plant_1", "defId": "plant", "x": 11, "y": 0, "dir": 4 },
     { "itemId": "desk_architect", "defId": "agent_desk", "x": 0, "y": 2, "dir": 2 },

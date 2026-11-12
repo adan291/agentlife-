@@ -1,6 +1,8 @@
 import type { ClientMsg, PanelName, ServerMsg } from "@agentlife/shared";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
+import { createKindPanel } from "./kind-forms.ts";
+import type { KindFormActions } from "./kind-forms.ts";
 import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { renderFloorList } from "./elevator.ts";
@@ -97,6 +99,9 @@ const TITLES: Record<PanelName, string> = {
   directory: "Floors",
   door: "Door",
   build: "Construction board",
+  review: "Review desk",
+  tests: "Test lab",
+  library: "Library",
 };
 
 /** The door panel is never shown in practice: the server turns a door into a floor change. */
@@ -150,6 +155,15 @@ export function createPanels(
 
   const state = new PanelState();
   const computer = createComputerPanel(document, { startJob: (repoId, goal) => send({ type: "start_job", repoId, goal }) }, hooks.lockedGoal);
+  const kindActions: KindFormActions = {
+    startJob: (repoId, goal, kind, target) => send({ type: "start_job", repoId, goal, kind, target }),
+  };
+  const locked = hooks.lockedGoal !== undefined;
+  const kindPanels = {
+    review: createKindPanel(document, "review-branch", kindActions, locked),
+    tests: createKindPanel(document, "write-tests", kindActions, locked),
+    library: createKindPanel(document, "document", kindActions, locked),
+  };
   const reception = createReceptionPanel(document, {
     register: (body) => send({ type: "register_project", ...body }),
     remove: (projectId) => send({ type: "remove_project", projectId }),
@@ -244,7 +258,9 @@ export function createPanels(
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
-        : state.open === "reception"
+        : state.open === "review" || state.open === "tests" || state.open === "library"
+          ? kindPanels[state.open](state.data, state.engineError)
+          : state.open === "reception"
           ? reception(state.data, { registration: state.registration, engineError: state.engineError, locked: hooks.projectsLocked }, render)
           : state.open === "mailbox"
             ? {

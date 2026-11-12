@@ -13,7 +13,7 @@ import type {
   StepRecord,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink } from "./engine-link.ts";
+import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 
 export const FAKE_REPO: Repo = {
   id: "haunted-todo",
@@ -117,7 +117,10 @@ export class FakeEngineLink implements EngineLink {
     return Promise.reject(new Error("The built-in project cannot be removed."));
   }
 
-  startJob(repoId: string, goal: string): Promise<{ taskId: string }> {
+  startJob(repoId: string, goal: string, options?: StartJobOptions): Promise<{ taskId: string }> {
+    if (options && options.kind !== "change") {
+      return Promise.reject(new Error("The scripted engine only runs change jobs. Start the real engine for this kind of job."));
+    }
     if (repoId !== FAKE_REPO.id) return Promise.reject(new Error(`repo '${repoId}' is not allowlisted`));
     const taskId = `task-${++this.taskCounter}`;
     const approvalId = `appr-${taskId}`;

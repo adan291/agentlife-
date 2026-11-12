@@ -1,5 +1,5 @@
 import { ROLE_INFO } from "@agentlife/shared";
-import type { AgentId, JobState, JobView } from "@agentlife/shared";
+import type { AgentId, JobKind, JobState, JobView } from "@agentlife/shared";
 import { ROLE_COLOURS } from "../palette.ts";
 import { formatDuration } from "./duration.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
@@ -23,7 +23,9 @@ export interface StepperStep {
   note?: string;
 }
 
-const STEPS: readonly { key: StepKey; label: string; agentId: AgentId; states: readonly JobState[] }[] = [
+type StepDef = { key: StepKey; label: string; agentId: AgentId; states: readonly JobState[] };
+
+const STEPS: readonly StepDef[] = [
   { key: "plan", label: "Plan", agentId: "architect", states: ["created", "analyzing"] },
   { key: "approve", label: "Approve", agentId: "architect", states: ["awaiting_plan_approval"] },
   { key: "build", label: "Build", agentId: "developer", states: ["developing"] },
@@ -32,26 +34,49 @@ const STEPS: readonly { key: StepKey; label: string; agentId: AgentId; states: r
   { key: "report", label: "Report", agentId: "architect", states: ["report_ready"] },
 ];
 
+/** The steps of each kind of job, in order: they follow the pipeline the engine runs (job-types spec). */
+const KIND_STEPS: Record<JobKind, readonly StepKey[]> = {
+  change: ["plan", "approve", "build", "test", "review", "report"],
+  "write-tests": ["plan", "approve", "build", "test", "review", "report"],
+  document: ["plan", "approve", "build", "review", "report"],
+  "review-branch": ["review", "test", "report"],
+};
+
+/** A kind that calls a step something else. */
+const KIND_LABELS: Partial<Record<JobKind, Partial<Record<StepKey, string>>>> = {
+  document: { plan: "Research" },
+};
+
+/** The steps of a job of this kind (an absent kind is a change). */
+export function stepsFor(kind: JobKind | undefined): readonly StepDef[] {
+  const k = kind ?? "change";
+  return KIND_STEPS[k].map((key) => {
+    const def = STEPS.find((s) => s.key === key)!;
+    const label = KIND_LABELS[k]?.[key];
+    return label ? { ...def, label } : def;
+  });
+}
+
 /** Index of the step a job state belongs to, or -1 for states that end the job. */
-function stepIndexOf(state: JobState): number {
-  return STEPS.findIndex((s) => s.states.includes(state));
+function stepIndexOf(steps: readonly StepDef[], state: JobState): number {
+  return steps.findIndex((s) => s.states.includes(state));
 }
 
 /** Step the job was in right before it entered `endState` (failed, cancelled); 0 when unknown. */
-function stepBefore(timeline: JobView["timeline"], endState: JobState): number {
+function stepBefore(steps: readonly StepDef[], timeline: JobView["timeline"], endState: JobState): number {
   const at = timeline.findIndex((e) => e.state === endState);
   for (let i = at - 1; i >= 0; i--) {
-    const idx = stepIndexOf(timeline[i]!.state);
+    const idx = stepIndexOf(steps, timeline[i]!.state);
     if (idx >= 0) return idx;
   }
   return 0;
 }
 
 /** Time spent in each step: the gaps between a state entry and the next entry, summed over retries. */
-function durations(timeline: JobView["timeline"]): (number | undefined)[] {
-  const out: (number | undefined)[] = STEPS.map(() => undefined);
+function durations(steps: readonly StepDef[], timeline: JobView["timeline"]): (number | undefined)[] {
+  const out: (number | undefined)[] = steps.map(() => undefined);
   for (let i = 0; i + 1 < timeline.length; i++) {
-    const idx = stepIndexOf(timeline[i]!.state);
+    const idx = stepIndexOf(steps, timeline[i]!.state);
     if (idx < 0) continue;
     const span = Math.max(0, timeline[i + 1]!.ts - timeline[i]!.ts);
     out[idx] = (out[idx] ?? 0) + span;
@@ -60,31 +85,32 @@ function durations(timeline: JobView["timeline"]): (number | undefined)[] {
 }
 
 /**
- * Maps a job to the six steps Plan, Approve, Build, Test, Review, Report. Empty when there is no job.
+ * Maps a job to the steps of its kind: Plan, Approve, Build, Test, Review, Report for a change. Empty when there is no job.
  * A job whose timeline has `failed` ends with a failure report (the engine goes failed -> report_ready -> delivered),
  * so the failure is read from the timeline, not from the final state.
  */
 export function stepperFor(job: JobView | null): StepperStep[] {
   if (!job) return [];
+  const steps = stepsFor(job.kind);
   const timeline = job.timeline;
-  const spans = durations(timeline);
+  const spans = durations(steps, timeline);
   const failedAtTimeline = timeline.some((e) => e.state === "failed");
 
   let failedAt = -1;
   let note: string | undefined;
   let current = -1;
   if (failedAtTimeline || job.state === "failed") {
-    failedAt = stepBefore(timeline, "failed");
+    failedAt = stepBefore(steps, timeline, "failed");
     note = "Failed";
   } else if (job.state === "cancelled") {
-    failedAt = stepBefore(timeline, "cancelled");
+    failedAt = stepBefore(steps, timeline, "cancelled");
     const text = timeline.find((e) => e.state === "cancelled")?.text;
     note = text && /reject/i.test(text) ? "Plan rejected" : "Cancelled";
   } else if (job.state !== "delivered") {
-    current = Math.max(0, stepIndexOf(job.state));
+    current = Math.max(0, stepIndexOf(steps, job.state));
   }
 
-  return STEPS.map((s, i): StepperStep => {
+  return steps.map((s, i): StepperStep => {
     let status: StepStatus;
     if (failedAt >= 0) status = i < failedAt ? "done" : i === failedAt ? "failed" : "pending";
     else if (current >= 0) status = i < current ? "done" : i === current ? "current" : "pending";
@@ -179,7 +205,7 @@ export function stepTitle(step: StepperStep): string {
 const CSS = `
 .al-stepper-wrap { display: flex; justify-content: center; width: min(100%, ${STEPPER_MAX_PX}px); min-width: 0; max-width: 100%; overflow: hidden; }
 .al-stepper-wrap[hidden] { display: none; }
-.al-stepper { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--al-s1); width: 100%; min-width: 0; margin: 0; padding: 0; list-style: none; overflow: hidden; font: var(--al-font, 14px)/1.2 monospace; color: ${UI_COLOURS.text}; box-sizing: border-box; }
+.al-stepper { display: grid; grid-template-columns: repeat(var(--al-steps, 6), minmax(0, 1fr)); gap: var(--al-s1); width: 100%; min-width: 0; margin: 0; padding: 0; list-style: none; overflow: hidden; font: var(--al-font, 14px)/1.2 monospace; color: ${UI_COLOURS.text}; box-sizing: border-box; }
 .al-stepper > li { min-width: 0; display: flex; }
 .al-stepper-compact { display: none; padding: var(--al-s1) var(--al-s2); border: 1px solid transparent; border-radius: var(--al-radius); background: none; font: var(--al-font, 14px)/1.4 monospace; color: var(--al-step-colour, ${UI_COLOURS.text}); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; cursor: pointer; }
 .al-stepper-compact[data-status="current"] { font-weight: bold; border-color: var(--al-step-colour); }
@@ -233,10 +259,11 @@ export function createStepper(onYourTurn: () => void, host: HTMLElement = docume
   host.appendChild(wrap);
 
   /** Labels or icons, from the width the top bar gives the stepper and the text size. */
+  let stepCount = 6;
   const fit = () => {
     const width = Math.min(host.clientWidth, STEPPER_MAX_PX);
     const font = parseFloat(getComputedStyle(root).fontSize) || 14;
-    root.dataset["icons"] = String(!stepperFitsLabels(width, font));
+    root.dataset["icons"] = String(!stepperFitsLabels(width, font, stepCount));
   };
   if (typeof ResizeObserver !== "undefined") new ResizeObserver(fit).observe(host);
   fit();
@@ -246,6 +273,8 @@ export function createStepper(onYourTurn: () => void, host: HTMLElement = docume
     update(job) {
       const steps = stepperFor(job);
       wrap.hidden = steps.length === 0;
+      stepCount = Math.max(1, steps.length);
+      root.style.setProperty("--al-steps", String(stepCount));
       const items = steps.map((s) => {
         const li = document.createElement("li");
         const el = document.createElement("button");

@@ -1,7 +1,9 @@
-import type { Approval, BuildBoard, BuildReport, FloorStatus, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
+  /** Review desk: the local branches of the floor's project, once the server answered. */
+  branches?: BranchesResponse | null;
   /** Reception: every project, the built-in one first. */
   projects: Project[];
   job: JobView | null;
@@ -14,7 +16,7 @@ export interface PanelData {
 /** Pure state behind the panels: which one is open and the latest data from the server. */
 export class PanelState {
   open: PanelName | null = null;
-  data: PanelData = { repos: [], projects: [], job: null, approvals: [], reports: [], details: null };
+  data: PanelData = { repos: [], branches: null, projects: [], job: null, approvals: [], reports: [], details: null };
   /** Every floor with its live status (elevator panel and lobby directory). */
   floors: FloorStatus[] = [];
   /** Room the user is in, from the latest `welcome`. */
@@ -47,6 +49,7 @@ export class PanelState {
         this.data.reports = [];
         this.data.details = null;
         this.data.repos = [];
+        this.data.branches = null;
         return true;
       case "floors":
         this.floors = msg.floors;
@@ -71,6 +74,10 @@ export class PanelState {
         return this.open === "build";
       case "repos":
         this.data.repos = msg.repos;
+        this.engineError = null;
+        return true;
+      case "branches":
+        this.data.branches = { current: msg.current, branches: msg.branches };
         this.engineError = null;
         return true;
       case "projects":

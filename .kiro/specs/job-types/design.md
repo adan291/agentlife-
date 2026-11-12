@@ -51,3 +51,13 @@ Known limit: the test image of a registered project is built from the lockfile o
 ## Prompts
 
 `prompts/` gets `architect-tests`, `architect-docs`, `developer-tests`, `developer-docs`, `qa-tests`, `qa-docs` and `qa-branch`. `templateFor(role, kind)` picks the file. They carry the same untrusted-content rule as the existing ones and state the path rule of the kind, which the engine enforces anyway.
+
+## Furniture and forms (task 3, 2026-11-12)
+
+- Three new furniture definitions, each with its own interaction and panel: `review_desk` (`review`), `test_lab` (`tests`), `library_shelf` (`library`). They are 1x1, stand on the north wall of `rooms/project-template.json` in the free tiles at x=2, 6 and 8, and face south. The office room (`rooms/office.json`) is not changed: floors exist now, so nothing loads it.
+- Client messages: `start_job` gets optional `kind` and `target`, validated with `targetProblem` where the message is parsed (a bad target never reaches the engine). New `list_branches` (no payload, answered for the user's floor) and server message `branches` (`projectId`, `current`, `branches`).
+- The gateway sends, before `open_panel`: the repository for all three panels, and the branches for the review desk. A failed or missing branch list is an `engine_unavailable` error, which the form shows instead of the picker. `open_panel` does not clear that error for these three panels (it does for the computer, as before).
+- `EngineLink.startJob(repoId, goal, options?)` takes `{ kind, target }` for the kinds other than `change`; `HttpEngineLink` sends them only then, so a change request is byte for byte as before. `EngineLink.listBranches?` is optional. The scripted engine runs changes only and rejects the other kinds with a message; it has no branch list.
+- `JobView` (client-facing) has optional `kind` and `target`, copied from the export. The stepper uses them: a change and test writing show the six steps, documentation shows Research, Approve, Build, Review, Report, and a branch review shows Review, Test, Report (no plan, nothing to approve). The strip sets `--al-steps` for its column count.
+- The forms live in `ui/kind-forms.ts`. The user does not write a goal for a branch review or a test/doc job: the client builds a one-line goal (`Review branch x`, `Write tests for x`, `Document x`, plus optional notes) and sends the target separately. The branch picker lists only the names the engine returned; it starts on the first branch that is not the checked-out one (the base of the review).
+- Demo (replay): the three panels open and say the desk is off in the recorded demo; a `start_job` with a kind other than `change` is refused with an error.
