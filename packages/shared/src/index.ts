@@ -21,4 +21,5 @@ export * from "./floors.ts";
 export * from "./night.ts";
 export * from "./team.ts";
 export * from "./hr.ts";
+export * from "./memory.ts";
 export * from "./world/hotel.ts";

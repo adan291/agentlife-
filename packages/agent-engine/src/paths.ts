@@ -15,6 +15,8 @@ export interface DataPaths {
   worktrees: string;
   /** Run logs and artifacts, one directory per task id. */
   runs: string;
+  /** The Library: `<projectId>.jsonl` per project (project-memory). */
+  memory: string;
 }
 
 export function dataPaths(dataDir: string = DEFAULT_DATA_DIR): DataPaths {
@@ -24,6 +26,7 @@ export function dataPaths(dataDir: string = DEFAULT_DATA_DIR): DataPaths {
     repos: path.join(dataDir, "repos"),
     worktrees: path.join(dataDir, "worktrees"),
     runs: path.join(dataDir, "runs"),
+    memory: path.join(dataDir, "memory"),
   };
 }
 

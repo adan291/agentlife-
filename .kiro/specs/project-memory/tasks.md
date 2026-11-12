@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Memory store and safety
+- [x] 1. Memory store and safety
   - JSONL store per project, schema, leak scan and sanitize, caps
   - _Requirements: 1.1, 1.2, 5.1_
 
