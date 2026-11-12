@@ -31,6 +31,8 @@ import { createPipelineSteps } from "./steps/index.ts";
 import { LlmRuntime } from "./runtimes/llm.ts";
 import type { AgentRuntime, Role } from "./runtimes/types.ts";
 import { Store, type StoreOptions } from "./store.ts";
+import { Catalogue } from "./team/catalogue.ts";
+import { createCatalogueRoute } from "./team/routes.ts";
 
 export interface EngineOptions {
   config?: EngineConfig;
@@ -58,6 +60,8 @@ export interface EngineOptions {
   projectsFile?: string;
   /** A ready registry (tests that build their own pipeline steps share it with the engine). */
   projects?: ProjectRegistry;
+  /** The templates that can be hired. Default: `config/catalogue`. */
+  catalogue?: Catalogue;
   /**
    * Night shift. The routes and the schedule file are always there; the scheduler that starts night jobs runs only when
    * `run` is true (the real process), so tests never start a job because of a schedule that sits in `data/night.json`.
@@ -170,6 +174,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   runner.recover();
   const crewRelay = createCrewRelay({ append: (ev) => store.appendEvent(ev) });
   const deliverDeps = { registry: projects, paths, store, logger };
+  const catalogue = opts.catalogue ?? new Catalogue();
   const nightConfig = opts.night?.config ?? loadNightConfig();
   const nightStore = new NightStore({
     file: opts.night?.file ?? process.env["AGENTLIFE_NIGHT_FILE"] ?? path.join(paths.root, "night.json"),
@@ -222,6 +227,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       ...createProjectRoutes(projects, runner, store),
       createDeliverRoute(deliverDeps),
       createBranchesRoute({ registry: projects, paths }),
+      createCatalogueRoute(catalogue),
       ...createNightRoutes({ store: nightStore, config: nightConfig, summaries: nightSummaries, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],
