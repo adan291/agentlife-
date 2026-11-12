@@ -22,7 +22,8 @@ import { noopLogger, type Logger } from "../log.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
 import { createStepTracker, defaultWorkTitle } from "../work.ts";
-import { assertTransitionFor, canTransitionFor, hasTestStep } from "./kinds.ts";
+import { assertTransitionFor, canTransitionFor, hasApproval, hasTestStep, type PathRule } from "./kinds.ts";
+import { auditLine, auditVerdict } from "./audit.ts";
 import type { PlanTask, ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
 import { isTerminal } from "./transitions.ts";
 
@@ -46,6 +47,7 @@ const PLAN_WORDS: Record<JobKind, { reading: string; analysing: string; chatter:
   "review-branch": { reading: "Reading the repo", analysing: "Analysing the repo", chatter: "analysing the repository", summary: "Plan for" },
   "write-tests": { reading: "Reading the code to test", analysing: "Planning the tests", chatter: "planning tests", summary: "Test plan for" },
   document: { reading: "Researching the topic", analysing: "Researching the topic", chatter: "researching a topic", summary: "Documentation plan for" },
+  "audit-deps": { reading: "Reading the repo", analysing: "Analysing the repo", chatter: "analysing the repository", summary: "Plan for" },
 };
 
 /** What the review step is given when the pipeline has no test step (`document`). Never shown as a test result. */
@@ -55,6 +57,19 @@ export interface StartOptions {
   kind?: JobKind;
   /** Branch (`review-branch`), path or module (`write-tests`), topic or path (`document`). */
   target?: string;
+  /**
+   * Night shift (requirement 2.1): decides whether the plan may be approved without the user. A plan inside the scope is
+   * approved at once and the change is held to the same scope; a plan outside it leaves the approval pending with the
+   * reason in its summary, and nothing is built. Only for kinds that have an approval step.
+   */
+  preApproval?: PreApproval;
+}
+
+export interface PreApproval {
+  /** `{ ok: true }` when every file of the plan is inside the scope. A throw counts as `ok: false`. */
+  check(plan: Plan): { ok: true } | { ok: false; reason: string };
+  /** The scope as a path rule. Applied to the Developer's diff of a job that this pre-approval approved. */
+  paths: PathRule;
 }
 
 export interface RunnerOptions {
@@ -74,6 +89,9 @@ interface Active {
   id: string;
   kind: JobKind;
   target?: string;
+  preApproval?: PreApproval;
+  /** Set when a pre-approval approved the plan: the Developer's diff must stay inside it. */
+  pathRule?: PathRule;
   ac: AbortController;
   pending?: { approvalId: string; resolve: (d: ApprovalDecision) => void } | undefined;
   data: Omit<ReportInput, "goal" | "verdict">;
@@ -159,6 +177,12 @@ export class JobRunner {
     if (kind === "review-branch" && !this.steps.reviewBranch) {
       throw new ConflictError("unsupported_kind", "this engine cannot review branches");
     }
+    if (kind === "audit-deps" && !this.steps.auditDeps) {
+      throw new ConflictError("unsupported_kind", "this engine cannot audit dependencies");
+    }
+    if (opts.preApproval && !hasApproval(kind)) {
+      throw new ConflictError("no_approval", `a ${kind} job has no approval step to pre-approve`);
+    }
     if (this.activeJobOn(repoId)) throw new ConflictError("busy", "this project already has a job");
     const id = this.newId();
     this.store.appendEvent({
@@ -169,7 +193,15 @@ export class JobRunner {
       ...(kind === "change" ? {} : { kind, ...(opts.target ? { target: opts.target } : {}) }),
     });
     const data: Active["data"] = kind === "change" ? {} : { kind, ...(opts.target ? { target: opts.target } : {}) };
-    const a: Active = { id, kind, ...(opts.target ? { target: opts.target } : {}), ac: new AbortController(), data, done: Promise.resolve() };
+    const a: Active = {
+      id,
+      kind,
+      ...(opts.target ? { target: opts.target } : {}),
+      ...(opts.preApproval ? { preApproval: opts.preApproval } : {}),
+      ac: new AbortController(),
+      data,
+      done: Promise.resolve(),
+    };
     this.active.set(id, a);
     a.done = this.drive(a, repoId, goal);
     this.finished.set(id, a.done);
@@ -422,9 +454,49 @@ export class JobRunner {
 
   private async pipeline(a: Active, repoId: string, goal: string): Promise<void> {
     if (a.kind === "review-branch") return this.reviewBranchPipeline(a, repoId, goal);
+    if (a.kind === "audit-deps") return this.auditPipeline(a, repoId, goal);
     const planned = await this.planAndApprove(a, repoId, goal);
     if (!planned) return;
     await this.buildAndReview(a, repoId, goal, planned.plan, planned.task);
+  }
+
+  /** The pre-approval verdict for a plan. A policy that throws never approves. Undefined when the job has no policy. */
+  private preApprove(a: Active, plan: Plan): { ok: true } | { ok: false; reason: string } | undefined {
+    if (!a.preApproval) return undefined;
+    try {
+      const verdict = a.preApproval.check(plan);
+      if (verdict.ok) a.pathRule = a.preApproval.paths;
+      return verdict;
+    } catch (e) {
+      this.log.warn("pre-approval failed", { taskId: a.id, error: errorText(e) });
+      return { ok: false, reason: "the scope could not be checked" };
+    }
+  }
+
+  /**
+   * `audit-deps`: the sandbox lists outdated and vulnerable packages, then the report. No model, nothing is written and
+   * nothing needs approval, so the job is never deliverable.
+   */
+  private async auditPipeline(a: Active, repoId: string, goal: string): Promise<void> {
+    const id = a.id;
+    const T = this.limits.timeoutsMs;
+    const auditDeps = this.steps.auditDeps?.bind(this.steps);
+    if (!auditDeps) throw new Error("this engine cannot audit dependencies");
+
+    this.transition(id, "testing");
+    this.goto(id, "qa", "computer");
+    this.agent(id, "qa", "working", "Auditing dependencies");
+    this.note(id, "qa", "Auditing dependencies");
+    this.others(id, ["qa"]);
+    const audit = await this.runStep(a, repoId, goal, "test", T.test, "Dependency audit", (c) => auditDeps(c));
+    a.data.audit = audit;
+    this.note(id, "qa", auditLine(audit));
+    this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "audit", title: "Dependency audit", filename: "audit.json", content: JSON.stringify(audit, null, 2) });
+
+    const verdict: Verdict = auditVerdict(audit);
+    this.agent(id, "qa", "done", "Audit finished");
+    this.transition(id, "report_ready", `verdict:${verdict}`);
+    await this.finish(a, goal, verdict);
   }
 
   /** Steps 1 and 2 of `change`, `write-tests` and `document`: the plan (or research) and the human approval. */
@@ -456,11 +528,12 @@ export class JobRunner {
       content: JSON.stringify(plan, null, 2),
     });
 
-    // 2. Human approval. Nothing below runs before resolveApproval.
+    // 2. Human approval. Nothing below runs before resolveApproval, or before a pre-approval that covers the plan.
     this.transition(id, "awaiting_plan_approval");
     this.goto(id, "architect", "mailbox");
     this.agent(id, "architect", "waiting_approval", "Plan ready for approval");
     this.others(id, ["architect"]);
+    const pre = this.preApprove(a, plan);
     const approvalId = `appr-${id}`;
     this.store.appendEvent({
       type: "approval.requested",
@@ -471,17 +544,28 @@ export class JobRunner {
       summary: trunc(
         `${words.summary}: ${goal}\n` +
           plan.tasks.map((t, i) => `${i + 1}. ${t.title} (risk: ${t.risk})`).join("\n") +
-          `\nApproving builds task 1: ${task.title}`,
+          `\nApproving builds task 1: ${task.title}` +
+          (pre?.ok ? `\nNight shift: approved automatically, the plan stays inside the pre-approved scope.` : "") +
+          (pre && !pre.ok ? `\nNight shift: not approved automatically (${pre.reason}). Nothing is built until you decide.` : ""),
         4000,
       ),
       // One option per plan task. The decision itself stays approve/reject; the first task is built.
       options: plan.tasks.map((t) => trunc(`${t.id}: ${t.title}`, 200)),
     });
-    const decision = await new Promise<ApprovalDecision>((resolve, reject) => {
-      if (signal.aborted) return reject(signal.reason);
-      a.pending = { approvalId, resolve };
-      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-    });
+    let decision: ApprovalDecision;
+    if (pre?.ok) {
+      signal.throwIfAborted();
+      this.store.appendEvent({ type: "approval.resolved", taskId: id, agentId: "architect", approvalId, decision: "approve" });
+      this.note(id, "architect", "Plan approved automatically (night shift)");
+      decision = "approve";
+    } else {
+      if (pre) this.note(id, "architect", "Plan outside the pre-approved scope, waiting for you");
+      decision = await new Promise<ApprovalDecision>((resolve, reject) => {
+        if (signal.aborted) return reject(signal.reason);
+        a.pending = { approvalId, resolve };
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    }
     if (decision === "reject") {
       this.note(id, "architect", "Plan rejected");
       this.transition(id, "cancelled", "Plan rejected");
@@ -665,7 +749,7 @@ export class JobRunner {
     }
     try {
       const result = await Promise.race([
-        fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title, kind: a.kind, ...(a.target ? { target: a.target } : {}) }),
+        fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title, kind: a.kind, ...(a.target ? { target: a.target } : {}), ...(a.pathRule ? { pathRule: a.pathRule } : {}) }),
         aborted,
       ]);
       this.log.info("step finished", { taskId: a.id, step, durationMs: Date.now() - started, status: "ok" });

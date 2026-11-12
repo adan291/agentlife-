@@ -40,6 +40,8 @@ const KIND_STEPS: Record<JobKind, readonly StepKey[]> = {
   "write-tests": ["plan", "approve", "build", "test", "review", "report"],
   document: ["plan", "approve", "build", "review", "report"],
   "review-branch": ["review", "test", "report"],
+  // Night shift only: a command in the sandbox, then the report.
+  "audit-deps": ["test", "report"],
 };
 
 /** A kind that calls a step something else. */

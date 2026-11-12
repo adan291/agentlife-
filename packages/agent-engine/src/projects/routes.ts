@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BranchesResponseSchema, DeliveryInfoSchema, OkResponseSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "@agentlife/shared";
+import { BranchesResponseSchema, DeliveryInfoSchema, OkResponseSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema, kindWritesFiles, type DeliveryInfo } from "@agentlife/shared";
 import { ConflictError, NotFoundError } from "../errors.ts";
 import type { JobRunner } from "../jobs/runner.ts";
 import type { Logger } from "../log.ts";
@@ -20,9 +20,33 @@ export interface DeliverRouteDeps {
 }
 
 /**
- * `POST /tasks/:id/deliver`: fetches the job's branch into the user's repository (see `deliverBranch`), then records
- * `delivery.done`. Only a job that has reached `report_ready` or `delivered` can be delivered.
+ * Delivers the job's branch to the user's repository (see `deliverBranch`), then records `delivery.done`. Only a job
+ * that has reached `report_ready` or `delivered` can be delivered, and not a branch review. The delivery route and the
+ * night shift (when the user asked for a branch) both use this.
  */
+export async function deliverJob(deps: DeliverRouteDeps, taskId: string): Promise<DeliveryInfo> {
+  const job = taskId.length > MAX_ID_CHARS ? undefined : deps.store.getJob(taskId);
+  if (!job) throw new NotFoundError("unknown task");
+  const kind = job.kind ?? "change";
+  if (!kindWritesFiles(kind)) {
+    throw new ConflictError("not_deliverable", kind === "review-branch" ? "A branch review changes nothing, so there is nothing to deliver." : "This kind of job changes nothing, so there is nothing to deliver.");
+  }
+  if (job.state !== "report_ready" && job.state !== "delivered") {
+    throw new ConflictError("job_not_finished", `The job is ${job.state}; wait for its report.`);
+  }
+  const info = await deliverBranch({
+    registry: deps.registry,
+    paths: deps.paths,
+    taskId,
+    repoId: job.repoId,
+    alreadyDelivered: job.delivery,
+    ...(deps.logger ? { logger: deps.logger } : {}),
+  });
+  deps.store.appendEvent({ type: "delivery.done", taskId, branch: info.branch, commit: info.commit });
+  return info;
+}
+
+/** `POST /tasks/:id/deliver`: see `deliverJob`. */
 export function createDeliverRoute(deps: DeliverRouteDeps): Route {
   return {
     method: "POST",
@@ -34,24 +58,7 @@ export function createDeliverRoute(deps: DeliverRouteDeps): Route {
       } catch {
         throw new NotFoundError("bad id");
       }
-      const job = taskId.length > MAX_ID_CHARS ? undefined : deps.store.getJob(taskId);
-      if (!job) throw new NotFoundError("unknown task");
-      if ((job.kind ?? "change") === "review-branch") {
-        throw new ConflictError("not_deliverable", "A branch review changes nothing, so there is nothing to deliver.");
-      }
-      if (job.state !== "report_ready" && job.state !== "delivered") {
-        throw new ConflictError("job_not_finished", `The job is ${job.state}; wait for its report.`);
-      }
-      const info = await deliverBranch({
-        registry: deps.registry,
-        paths: deps.paths,
-        taskId,
-        repoId: job.repoId,
-        alreadyDelivered: job.delivery,
-        ...(deps.logger ? { logger: deps.logger } : {}),
-      });
-      deps.store.appendEvent({ type: "delivery.done", taskId, branch: info.branch, commit: info.commit });
-      sendJson(res, 200, DeliveryInfoSchema, info);
+      sendJson(res, 200, DeliveryInfoSchema, await deliverJob(deps, taskId));
     },
   };
 }

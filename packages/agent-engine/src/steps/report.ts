@@ -140,7 +140,7 @@ export function coverageOf(log: string, target?: string): string | undefined {
   return undefined;
 }
 
-const TARGET_LABEL: Record<JobKind, string> = { change: "Target", "review-branch": "Branch", "write-tests": "Target", document: "Topic" };
+const TARGET_LABEL: Record<JobKind, string> = { change: "Target", "review-branch": "Branch", "write-tests": "Target", document: "Topic", "audit-deps": "Target" };
 
 function fileList(files: readonly PatchFile[]): string[] {
   const shown = files.slice(0, 20).map((f) => `- ${inlineCode(f.path, 200)} (${f.status}, +${f.added} -${f.deleted})`);
@@ -248,6 +248,60 @@ function buildBranchReport(input: ReportInput, facts: readonly StepFact[]): { ti
 }
 
 /**
+ * Report of an `audit-deps` job (night-shift, requirement 3.3): the vulnerable packages by severity, then the outdated
+ * ones. Package names come from the project's dependency tree, so they only appear in code spans.
+ */
+function buildAuditReport(input: ReportInput, facts: readonly StepFact[]): { title: string; markdown: string } {
+  const audit = input.audit;
+  const out: string[] = ["# AGENT LIFE report", "", "## Summary", ""];
+  out.push(`- **Goal:** ${inlineCode(input.goal)}`);
+  out.push(`- **Kind:** ${jobKindLabel("audit-deps")}`);
+  out.push(`- **Verdict:** ${input.verdict === "pass" ? "PASS (no high or critical vulnerability listed)" : "FAIL"}`);
+  if (audit) {
+    out.push(`- **Vulnerable packages:** ${audit.auditOk ? audit.vulnerabilities.length : "unknown"}`);
+    out.push(`- **Outdated packages:** ${audit.outdatedOk ? audit.outdated.length : "unknown"}`);
+  }
+  out.push("");
+
+  if (input.failureReason) out.push("## Failure", "", codeBlock(input.failureReason.slice(0, 2000)), "");
+
+  if (audit?.notes.length) {
+    out.push("## Notes", "");
+    for (const n of audit.notes) out.push(`- ${n}`);
+    out.push("");
+  }
+
+  out.push("## Vulnerabilities", "");
+  if (!audit || !audit.auditOk) {
+    out.push("No list was produced.");
+  } else if (audit.vulnerabilities.length === 0) {
+    out.push("None listed.");
+  } else {
+    for (const v of audit.vulnerabilities) {
+      const extra = [v.range ? `range ${inlineCode(v.range, 100)}` : undefined, v.fix ? `fix: ${inlineCode(v.fix, 100)}` : undefined].filter((p): p is string => p !== undefined);
+      out.push(`- **${v.severity}:** ${inlineCode(v.name, 214)}${extra.length ? ` (${extra.join(", ")})` : ""}`);
+    }
+  }
+  out.push("");
+
+  out.push("## Outdated packages", "");
+  if (!audit || !audit.outdatedOk) {
+    out.push("No list was produced.");
+  } else if (audit.outdated.length === 0) {
+    out.push("None listed.");
+  } else {
+    for (const p of audit.outdated) {
+      const versions = [p.current ? `current ${inlineCode(p.current, 60)}` : undefined, p.wanted ? `wanted ${inlineCode(p.wanted, 60)}` : undefined, p.latest ? `latest ${inlineCode(p.latest, 60)}` : undefined].filter((v): v is string => v !== undefined);
+      out.push(`- ${inlineCode(p.name, 214)}${versions.length ? `: ${versions.join(", ")}` : ""}`);
+    }
+  }
+  out.push("");
+
+  out.push(...factsSection(facts));
+  return { title: reportTitle(input.goal), markdown: out.join("\n") + "\n" };
+}
+
+/**
  * Builds report.md (requirement 8.1) in the Markdown subset the mailbox renders: headings, flat lists,
  * fenced code, bold and code spans. Text from the user or a model only appears in code spans, fenced
  * blocks and the plain-text title, so the report never carries Markdown or HTML of its own making.
@@ -255,6 +309,7 @@ function buildBranchReport(input: ReportInput, facts: readonly StepFact[]): { ti
 export function buildReport(input: ReportInput, facts: readonly StepFact[] = []): { title: string; markdown: string } {
   const kind: JobKind = input.kind ?? "change";
   if (kind === "review-branch") return buildBranchReport(input, facts);
+  if (kind === "audit-deps") return buildAuditReport(input, facts);
   const out: string[] = [];
   out.push("# AGENT LIFE report", "");
 

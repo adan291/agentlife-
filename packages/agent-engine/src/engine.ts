@@ -14,9 +14,15 @@ import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { Steps } from "./jobs/steps.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import { ProjectRegistry } from "./projects/registry.ts";
-import { createBranchesRoute, createDeliverRoute, createProjectRoutes } from "./projects/routes.ts";
+import { createBranchesRoute, createDeliverRoute, createProjectRoutes, deliverJob } from "./projects/routes.ts";
 import { listBranches } from "./projects/branches.ts";
 import { allowedRoots } from "./projects/roots.ts";
+import { loadNightConfig } from "./night/config.ts";
+import { createNightRoutes } from "./night/routes.ts";
+import { NightScheduler } from "./night/scheduler.ts";
+import { NightStore } from "./night/store.ts";
+import { isTerminal } from "./jobs/transitions.ts";
+import type { NightConfig } from "@agentlife/shared";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
 import { createPipelineSteps } from "./steps/index.ts";
@@ -50,12 +56,25 @@ export interface EngineOptions {
   projectsFile?: string;
   /** A ready registry (tests that build their own pipeline steps share it with the engine). */
   projects?: ProjectRegistry;
+  /**
+   * Night shift. The routes and the schedule file are always there; the scheduler that starts night jobs runs only when
+   * `run` is true (the real process), so tests never start a job because of a schedule that sits in `data/night.json`.
+   */
+  night?: {
+    config?: NightConfig;
+    /** Default: `AGENTLIFE_NIGHT_FILE` or `<dataDir>/night.json`. */
+    file?: string;
+    run?: boolean;
+    tickMs?: number;
+    now?: () => number;
+  };
 }
 
 export interface Engine {
   store: Store;
   runner: JobRunner;
   projects: ProjectRegistry;
+  night: { store: NightStore; scheduler: NightScheduler };
   server: http.Server;
   config: EngineConfig;
   host: string;
@@ -144,6 +163,28 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   });
   runner.recover();
   const crewRelay = createCrewRelay({ append: (ev) => store.appendEvent(ev) });
+  const deliverDeps = { registry: projects, paths, store, logger };
+  const nightConfig = opts.night?.config ?? loadNightConfig();
+  const nightStore = new NightStore({
+    file: opts.night?.file ?? process.env["AGENTLIFE_NIGHT_FILE"] ?? path.join(paths.root, "night.json"),
+    logger,
+    ...(opts.night?.now ? { now: opts.night.now } : {}),
+  });
+  const nightScheduler = new NightScheduler({
+    store: nightStore,
+    config: nightConfig,
+    logger,
+    ...(opts.night?.now ? { now: opts.night.now } : {}),
+    port: {
+      hasProject: (id) => projects.has(id),
+      start: (repoId, goal, startOpts) => runner.start(repoId, goal, startOpts),
+      cancel: (taskId) => runner.cancel(taskId),
+      job: (taskId) => store.getJob(taskId),
+      openJobs: () => store.listJobs().filter((j) => !isTerminal(j.state)),
+      deliver: (taskId) => deliverJob(deliverDeps, taskId),
+    },
+  });
+  if (opts.night?.run) nightScheduler.start(opts.night.tickMs);
   const server = createEngineServer({
     store,
     runner,
@@ -158,8 +199,9 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       createCrewRoute(crewRelay),
       ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
       ...createProjectRoutes(projects, runner, store),
-      createDeliverRoute({ registry: projects, paths, store, logger }),
+      createDeliverRoute(deliverDeps),
       createBranchesRoute({ registry: projects, paths }),
+      ...createNightRoutes({ store: nightStore, config: nightConfig, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],
   });
@@ -170,11 +212,13 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     store,
     runner,
     projects,
+    night: { store: nightStore, scheduler: nightScheduler },
     server,
     config,
     host,
     port,
     close: async () => {
+      nightScheduler.stop();
       await closeServer(server);
       store.close();
     },

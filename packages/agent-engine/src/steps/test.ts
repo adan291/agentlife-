@@ -4,6 +4,7 @@ import { StepTimeoutError } from "../errors.ts";
 import { git } from "../git.ts";
 import type { StepContext, TestResult } from "../jobs/steps.ts";
 import { repoDir, resolveProject, worktreeDir, type PipelineDeps } from "./deps.ts";
+import type { ResolvedProject } from "../projects/registry.ts";
 import { buildRunnerImage, runnerImageTag } from "./runner-image.ts";
 
 export const RUNNER_IMAGE = "agentlife-runner:1";
@@ -175,6 +176,27 @@ export async function testStep(deps: PipelineDeps, ctx: StepContext, exec: Docke
   ctx.signal.throwIfAborted();
   if (project.stack === "unsupported-tests") return { passed: true, skipped: true, log: NO_TESTS_LOG };
 
+  const res = await runInSandbox(deps, ctx, { project, worktree, command: project.testCommand, exec });
+  return { passed: res.code === 0, log: truncateLog(res.output), ...(res.code === null ? {} : { exitCode: res.code }) };
+}
+
+export interface SandboxRun {
+  project: ResolvedProject;
+  /** Absolute host path of the checkout the command runs on (mounted read-only). */
+  worktree: string;
+  /** Written by the engine (the project's test command, the audit command), never by a model. */
+  command: string;
+  exec: DockerExec;
+}
+
+/**
+ * Runs one command of the engine's own in the project's sandbox image: no network, resource limits, a read-only mount
+ * of the checkout, a non-root user (see `buildRunArgs`). Checks Docker and the image first, builds the image of a
+ * registered project on first use, kills the container on timeout or cancellation. Returns the container's exit code
+ * and output; Docker problems, timeouts and cancellation are errors.
+ */
+export async function runInSandbox(deps: PipelineDeps, ctx: StepContext, run: SandboxRun): Promise<DockerRunResult> {
+  const { project, worktree, exec } = run;
   const info = await exec(["version", "--format", "{{.Server.Version}}"], { signal: ctx.signal });
   ctx.signal.throwIfAborted();
   if (info.spawnError) throw new DockerUnavailableError(`cannot start docker (${info.spawnError.message})`);
@@ -203,13 +225,13 @@ export async function testStep(deps: PipelineDeps, ctx: StepContext, exec: Docke
   const onStop = (): void => void killContainer();
   ac.signal.addEventListener("abort", onStop, { once: true });
   try {
-    const res = await exec(buildRunArgs({ taskId: ctx.taskId, worktree, testCommand: project.testCommand, image }), { signal: ac.signal });
+    const res = await exec(buildRunArgs({ taskId: ctx.taskId, worktree, testCommand: run.command, image }), { signal: ac.signal });
     if (ac.signal.aborted) {
       await killContainer();
       throw timedOut ? new StepTimeoutError("test") : ac.signal.reason;
     }
     if (res.spawnError) throw new DockerUnavailableError(`cannot start docker (${res.spawnError.message})`);
-    return { passed: res.code === 0, log: truncateLog(res.output), ...(res.code === null ? {} : { exitCode: res.code }) };
+    return res;
   } finally {
     clearTimeout(timer);
     ctx.signal.removeEventListener("abort", onAbort);
