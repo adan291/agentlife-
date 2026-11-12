@@ -13,6 +13,7 @@ import {
 } from "@agentlife/shared";
 import { git } from "../git.ts";
 import type { StepContext } from "../jobs/steps.ts";
+import { diffFiles, memoryBlock } from "../memory/retrieve.ts";
 import { readBranches } from "../projects/branches.ts";
 import { fence, loadPromptTemplate, renderPrompt } from "../prompts.ts";
 import { MAX_STORED_REJECTED_DIFF } from "./develop.ts";
@@ -139,6 +140,7 @@ export async function reviewBranchStep(
 
   const prompt = renderPrompt(loadPromptTemplate("qa-branch"), {
     goal: fence(ctx.goal),
+    memory: memoryBlock(deps.memory, ctx.repoId, { goal: `${ctx.goal} ${branch}`, files: diffFiles(diff) }, deps.logger),
     branch: fence(branch),
     base: fence(baseName),
     diff: fence(diffForPrompt(diff), "diff"),

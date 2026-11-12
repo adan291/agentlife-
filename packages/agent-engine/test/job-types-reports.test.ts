@@ -153,7 +153,7 @@ describe("report sections per kind", () => {
 // ---------------------------------------------------------------------------------------------------------------
 
 describe("prompts of the job kinds", () => {
-  const known = new Set(["goal", "task", "feedback", "diff", "testLog", "testStatus", "target", "branch", "base"]);
+  const known = new Set(["goal", "task", "feedback", "diff", "testLog", "testStatus", "target", "branch", "base", "memory"]);
   const NAMES = [...KIND_PROMPT_NAMES];
 
   it("lists the seven templates of the kinds", () => {

@@ -60,6 +60,16 @@ export interface ReportInput {
   basedOn?: { commit: string; branch: string };
 }
 
+/** What the runner knows when a job has its report: handed to `onFinished` (the Library learns from it). */
+export interface FinishedJob {
+  taskId: string;
+  repoId: string;
+  goal: string;
+  /** The facts the report was made from: plan, task, review, verdict, kind. */
+  input: ReportInput;
+  report: { title: string; markdown: string };
+}
+
 /**
  * The job steps. The runner owns state, events, artifacts and timeouts; steps only produce data.
  * `analyze` is the research step of `document` jobs and the planning step of `write-tests` jobs (they read `ctx.kind`).

@@ -6,6 +6,7 @@ import { FloorStatusSchema } from "./floors.ts";
 import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
+import { MemoryActionSchema, MemoryStateSchema } from "./memory.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, GuestIdSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
@@ -133,6 +134,7 @@ export const ErrorCodeSchema = z.enum([
   "delivery_failed",
   "night_error",
   "hr_error",
+  "memory_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -194,6 +196,10 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hr_state") }),
   /** HR desk: hire, rename, fire, import, approve, reject, ask for a proposal or apply one. Answered with `hr` (and `hr_suggestion`). */
   z.object({ type: z.literal("hr_do"), act: HrActionSchema }),
+  /** Library (project floor): ask for the memory of the project on the user's floor. Answered with `memory`. */
+  z.object({ type: z.literal("memory_state") }),
+  /** Library: edit or delete an entry, accept or dismiss a proposal, switch auto-remember. Answered with `memory` (or `error` `memory_error`). */
+  z.object({ type: z.literal("memory_do"), act: MemoryActionSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -259,6 +265,8 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hr"), state: HrStateSchema }),
   /** The HR agent's proposal for a project's team. The user applies it with `hr_do`; nothing was hired. */
   z.object({ type: z.literal("hr_suggestion"), suggestion: TeamSuggestionSchema }),
+  /** The Library of a project: its entries, the proposals of finished jobs and the auto-remember switch. */
+  z.object({ type: z.literal("memory"), projectId: z.string().min(1).max(100), state: MemoryStateSchema }),
   /**
    * Who sits at each desk of a project floor (the first member of each role) and who stands at the other spots
    * (`guests`: every other member). Sent after `welcome` and whenever it changes. A guest not listed is not on the floor.

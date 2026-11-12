@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, NightState, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg, TeamSuggestion } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg, TeamSuggestion } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -42,6 +42,9 @@ export class PanelState {
   suggestion: TeamSuggestion | null = null;
   /** Project the HR agent is working out a proposal for (a request is out); null when none. */
   hrBusy: string | null = null;
+  /** The Library of the project on the user's floor, and why it could not be read or changed. */
+  memory: MemoryState | null = null;
+  memoryError: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -59,6 +62,9 @@ export class PanelState {
         this.data.details = null;
         this.data.repos = [];
         this.data.branches = null;
+        // The Library belongs to the floor's project.
+        this.memory = null;
+        this.memoryError = null;
         return true;
       case "floors":
         this.floors = msg.floors;
@@ -74,6 +80,7 @@ export class PanelState {
           this.buildError = null;
         }
         if (msg.panel === "night") this.nightError = null;
+        if (msg.panel === "library") this.memoryError = null;
         if (msg.panel === "hr") {
           this.hrError = null;
           this.suggestion = null;
@@ -95,6 +102,12 @@ export class PanelState {
         this.suggestion = msg.suggestion;
         this.hrBusy = null;
         return this.open === "hr";
+      case "memory": {
+        // The periodic refresh re-renders only when something changed, so a note being edited keeps its focus.
+        const same = JSON.stringify(this.memory) === JSON.stringify(msg.state);
+        this.memory = msg.state;
+        return !same && (this.open === "library" || this.open === "mailbox");
+      }
       case "build_board":
         this.build = msg.board;
         this.buildError = null;
@@ -147,8 +160,13 @@ export class PanelState {
           this.hrBusy = null;
           return this.open === "hr";
         }
+        if (msg.code === "memory_error") {
+          this.memoryError = msg.message;
+          return this.open === "library" || this.open === "mailbox";
+        }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;
+          if (this.open === "library") this.memoryError = msg.message;
           if (this.open === "build") this.buildError = msg.message;
           if (this.open === "night") this.nightError = msg.message;
           if (this.open === "hr") {

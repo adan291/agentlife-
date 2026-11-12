@@ -24,7 +24,7 @@ import type { Store } from "../store.ts";
 import { createStepTracker, defaultWorkTitle } from "../work.ts";
 import { assertTransitionFor, canTransitionFor, hasApproval, hasTestStep, type PathRule } from "./kinds.ts";
 import { auditLine, auditVerdict } from "./audit.ts";
-import type { PlanTask, ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
+import type { FinishedJob, PlanTask, ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
 import { isTerminal } from "./transitions.ts";
 
 /** Develop runs at most this many times: the first try plus one retry after a QA fail (requirement 3.5). */
@@ -83,6 +83,11 @@ export interface RunnerOptions {
   reportTimeoutMs?: number;
   /** Writes milestone lines for the activity terminal. Without it no `agent.activity` events are emitted. */
   activity?: ActivityEmitter;
+  /**
+   * Called once a job has its report and is delivered, with what the report was made from (not for jobs recovered after a
+   * restart). The Library learns from it. Runs without being awaited; a throw or a rejection is logged and never changes the job.
+   */
+  onFinished?: (job: FinishedJob) => void | Promise<void>;
 }
 
 interface Active {
@@ -144,6 +149,7 @@ export class JobRunner {
   private readonly newId: () => string;
   private readonly reportTimeoutMs: number;
   private readonly activity: ActivityEmitter | undefined;
+  private readonly onFinished: RunnerOptions["onFinished"];
   private readonly maxJobs: number;
   private readonly active = new Map<string, Active>();
   private readonly finished = new Map<string, Promise<void>>();
@@ -160,6 +166,7 @@ export class JobRunner {
     this.newId = opts.newId ?? (() => `task-${randomUUID().slice(0, 8)}`);
     this.reportTimeoutMs = opts.reportTimeoutMs ?? DEFAULT_REPORT_TIMEOUT_MS;
     this.activity = opts.activity;
+    this.onFinished = opts.onFinished;
     this.maxJobs = opts.limits.maxConcurrentJobs ?? DEFAULT_MAX_CONCURRENT_JOBS;
   }
 
@@ -707,6 +714,17 @@ export class JobRunner {
     this.agent(id, "architect", "done", "Report ready");
     this.note(id, "architect", "Report ready");
     this.deliver(id, report);
+    this.announceFinished({ taskId: id, repoId: this.store.getJob(id)?.repoId ?? "", goal, input, report });
+  }
+
+  /** Hands a finished job to `onFinished` without waiting for it. */
+  private announceFinished(job: FinishedJob): void {
+    if (!this.onFinished || job.repoId === "") return;
+    try {
+      void Promise.resolve(this.onFinished(job)).catch((e: unknown) => this.log.warn("after-job hook failed", { taskId: job.taskId, error: errorText(e) }));
+    } catch (e) {
+      this.log.warn("after-job hook failed", { taskId: job.taskId, error: errorText(e) });
+    }
   }
 
   private deliver(id: string, report: { title: string; markdown: string } | undefined): void {

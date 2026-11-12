@@ -1,5 +1,8 @@
+import type { MemoryState } from "@agentlife/shared";
 import type { PanelData } from "./panel-state.ts";
 import { formatTime } from "./board.ts";
+import type { LibraryActions } from "./library.ts";
+import { renderRememberCard } from "./library.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { newestFirst, renderReportViewer, reportBadge, reportHeadline } from "./report-viewer.ts";
 
@@ -11,6 +14,8 @@ export interface MailboxActions {
   back(): void;
   /** "Deliver as branch" in the report viewer. */
   deliver?(taskId: string): void;
+  /** "Remember this?" in the report viewer. Absent in the recorded demo. */
+  remember?: Pick<LibraryActions, "accept" | "dismiss" | "setAuto">;
 }
 
 export interface MailboxView {
@@ -18,6 +23,10 @@ export interface MailboxView {
   reading: string | null;
   /** Reports delivered and not opened yet. */
   unread: ReadonlySet<string>;
+  /** The Library of the floor's project, for the "Remember this?" card of the open report. */
+  memory?: MemoryState | null;
+  /** Why the last change to the Library was refused. */
+  memoryError?: string | null;
 }
 
 const NO_VIEW: MailboxView = { reading: null, unread: new Set() };
@@ -25,7 +34,17 @@ const NO_VIEW: MailboxView = { reading: null, unread: new Set() };
 export function renderMailbox(doc: Document, data: PanelData, actions: MailboxActions, view: MailboxView = NO_VIEW): HTMLElement {
   if (view.reading) {
     const report = data.reports.find((r) => r.reportId === view.reading);
-    if (report) return renderReportViewer(doc, report, actions);
+    if (report) {
+      const remember = actions.remember && report.kind !== "night" ? renderRememberCard(doc, report.taskId, view.memory ?? null, actions.remember) : null;
+      if (remember && view.memoryError) {
+        const err = doc.createElement("p");
+        err.className = "al-error";
+        err.setAttribute("role", "alert");
+        err.textContent = view.memoryError;
+        remember.appendChild(err);
+      }
+      return renderReportViewer(doc, report, actions, remember);
+    }
   }
   const root = doc.createElement("div");
 

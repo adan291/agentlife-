@@ -29,6 +29,7 @@ import type {
   GuestId,
   Hotel,
   HrAction,
+  MemoryAction,
   JobState,
   MorningSummary,
   NightState,
@@ -397,6 +398,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const f = floorOf(roomId);
     if (panel === "computer" || panel === "tests" || panel === "library") {
       await sendRepos(ws, roomId);
+      if (panel === "library") await sendMemory(ws, true);
     } else if (panel === "review") {
       await sendRepos(ws, roomId);
       await sendBranches(ws, roomId);
@@ -405,6 +407,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     } else if (panel === "mailbox") {
       // The lobby's mailbox holds the morning summaries; ask the engine so a summary written a moment ago is there.
       if (roomId === LOBBY_ROOM) await syncSummaries();
+      else await sendMemory(ws, true);
       for (const a of f.approvals.values()) send(ws, { type: "approval", approval: a });
       for (const r of f.reports.values()) send(ws, { type: "report", report: r, resend: true });
       if (roomId === LOBBY_ROOM) unopenedSummaries.clear();
@@ -721,6 +724,52 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       sendError(ws, "hr_error", errorText(e, "the HR desk could not do that"));
     }
     await sendHr(ws);
+  };
+
+  // ---- the Library: what the team of a project remembers ----
+
+  /** The memory of the project on the user's floor. `quiet` skips the error when there is nothing to show (the mailbox asks for it too). */
+  const sendMemory = async (ws: WebSocket, quiet = false): Promise<void> => {
+    const room = userRoom();
+    const projectId = room === undefined ? undefined : projectIdOfRoom(room);
+    if (projectId === undefined) return quiet ? undefined : sendError(ws, "bad_message", "the Library is on a project's floor");
+    if (!engine?.memory) return quiet ? undefined : sendError(ws, "engine_unavailable", "the Library needs the real engine");
+    try {
+      send(ws, { type: "memory", projectId, state: await engine.memory.state(projectId) });
+    } catch (e) {
+      if (!quiet) sendError(ws, "engine_unavailable", errorText(e, "cannot read the Library"));
+    }
+  };
+
+  /** One change to the Library of the user's project, then its new state. A refusal is shown as `memory_error`. */
+  const memoryAct = async (ws: WebSocket, act: MemoryAction): Promise<void> => {
+    const room = userRoom();
+    const projectId = room === undefined ? undefined : projectIdOfRoom(room);
+    if (projectId === undefined) return sendError(ws, "bad_message", "the Library is on a project's floor");
+    const memory = engine?.memory;
+    if (!memory) return sendError(ws, "engine_unavailable", "the Library needs the real engine");
+    try {
+      switch (act.action) {
+        case "edit":
+          await memory.edit(projectId, act.entryId, { ...(act.kind ? { kind: act.kind } : {}), ...(act.text === undefined ? {} : { text: act.text }) });
+          break;
+        case "delete":
+          await memory.remove(projectId, act.entryId);
+          break;
+        case "accept":
+          await memory.accept(projectId, act.proposalId, { ...(act.kind ? { kind: act.kind } : {}), ...(act.text === undefined ? {} : { text: act.text }) });
+          break;
+        case "dismiss":
+          await memory.dismiss(projectId, act.proposalId);
+          break;
+        case "auto":
+          await memory.setAutoRemember(projectId, act.autoRemember);
+          break;
+      }
+    } catch (e) {
+      sendError(ws, "memory_error", errorText(e, "the Library could not do that"));
+    }
+    await sendMemory(ws);
   };
 
   // ---- engine events ----
@@ -1132,6 +1181,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void sendHr(ws);
       } else if (msg.type === "hr_do") {
         void hrAct(ws, msg.act);
+      } else if (msg.type === "memory_state") {
+        void sendMemory(ws);
+      } else if (msg.type === "memory_do") {
+        void memoryAct(ws, msg.act);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

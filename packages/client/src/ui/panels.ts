@@ -1,8 +1,10 @@
-import type { ClientMsg, HrAction, PanelName, ServerMsg } from "@agentlife/shared";
+import type { ClientMsg, HrAction, MemoryAction, PanelName, ServerMsg } from "@agentlife/shared";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
 import { createKindPanel } from "./kind-forms.ts";
 import type { KindFormActions } from "./kind-forms.ts";
+import { createLibraryPanel } from "./library.ts";
+import type { LibraryActions } from "./library.ts";
 import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { renderFloorList } from "./elevator.ts";
@@ -98,6 +100,13 @@ const CSS = `
 .al-night-chip[data-status="failed"], .al-night-chip[data-status="timed_out"] { color: ${UI_COLOURS.del}; border-color: ${UI_COLOURS.del}; }
 .al-night-chip[data-status="waiting"], .al-night-chip[data-status="running"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
 .al-night-check { display: flex; align-items: flex-start; gap: var(--al-s2); }
+.al-mem-list { list-style: none; margin: 0; padding: 0; }
+.al-mem-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.al-mem-kind[data-kind="decision"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
+.al-mem-kind[data-kind="pitfall"] { color: ${UI_COLOURS.del}; border-color: ${UI_COLOURS.del}; }
+.al-mem-kind[data-kind="convention"] { color: ${UI_COLOURS.add}; border-color: ${UI_COLOURS.add}; }
+.al-remember { border-color: var(--al-accent); }
+.al-mem-item { margin: var(--al-s2) 0; }
 .al-badge[data-verdict="night"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
 `;
 
@@ -123,8 +132,13 @@ const HR_LOCKED = "The HR desk is off in the recorded demo. Run AGENT LIFE on yo
 /** The night shift needs the real engine: the recorded demo shows this instead of the board. */
 const NIGHT_LOCKED = "The night shift is off in the recorded demo. Run AGENT LIFE on your computer to schedule jobs for the night.";
 
-/** While the night board is open it asks for fresh data this often (a job changes state while the user looks). */
-export const NIGHT_REFRESH_MS = 10_000;
+/** While the Library panel or a report with a "Remember this?" card is open and the librarian is still working, it asks this often. */
+export const MEMORY_REFRESH_MS = 4_000;
+
+/** The Library needs the real engine: the recorded demo shows this instead of the notes. */
+const LIBRARY_LOCKED = "The Library is off in the recorded demo. Run AGENT LIFE on your computer and the team will remember what it learns about your project.";
+
+/** While the night board is open it asks for fresh data this often (a job changes state while the user looks). */export const NIGHT_REFRESH_MS = 10_000;
 
 /** The door panel is never shown in practice: the server turns a door into a floor change. */
 function doorNote(doc: Document): HTMLElement {
@@ -188,6 +202,19 @@ export function createPanels(
     tests: createKindPanel(document, "write-tests", kindActions, locked),
     library: createKindPanel(document, "document", kindActions, locked),
   };
+  const memoryAct = (act: MemoryAction): void => {
+    state.memoryError = null;
+    send({ type: "memory_do", act });
+  };
+  const libraryActions: LibraryActions = {
+    edit: (entryId, patch) => memoryAct({ action: "edit", entryId, ...patch }),
+    remove: (entryId) => memoryAct({ action: "delete", entryId }),
+    accept: (proposalId, edit) => memoryAct({ action: "accept", proposalId, ...edit }),
+    dismiss: (proposalId) => memoryAct({ action: "dismiss", proposalId }),
+    setAuto: (autoRemember) => memoryAct({ action: "auto", autoRemember }),
+    openReport: (reportId) => openReport(reportId),
+  };
+  const libraryPanel = createLibraryPanel(document, libraryActions, kindPanels.library);
   const reception = createReceptionPanel(document, {
     register: (body) => send({ type: "register_project", ...body }),
     remove: (projectId) => send({ type: "remove_project", projectId }),
@@ -315,9 +342,29 @@ export function createPanels(
     clearInterval(nightInterval);
     nightInterval = undefined;
   };
+  /** The librarian reads a finished job for a while: ask again until it is done (only while its result is on screen). */
+  let memoryInterval: ReturnType<typeof setInterval> | undefined;
+  const syncMemoryTimer = () => {
+    const m = state.memory;
+    let waiting = false;
+    if (m && !locked) {
+      if (state.open === "library") waiting = m.learning.length > 0;
+      else if (state.open === "mailbox" && state.viewing) {
+        const report = state.data.reports.find((r) => r.reportId === state.viewing);
+        waiting = report !== undefined && m.learning.includes(report.taskId);
+      }
+    }
+    if (waiting) {
+      memoryInterval ??= setInterval(() => send({ type: "memory_state" }), MEMORY_REFRESH_MS);
+      return;
+    }
+    clearInterval(memoryInterval);
+    memoryInterval = undefined;
+  };
   const render = () => {
     syncBuildTimers();
     syncNightTimer();
+    syncMemoryTimer();
     if (!state.open) {
       root.hidden = true;
       onChange();
@@ -331,7 +378,9 @@ export function createPanels(
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
-        : state.open === "review" || state.open === "tests" || state.open === "library"
+        : state.open === "library"
+          ? libraryPanel(state.data, { memory: state.memory, error: state.memoryError, ...(locked ? { locked: LIBRARY_LOCKED } : {}) }, state.engineError, render)
+          : state.open === "review" || state.open === "tests"
           ? kindPanels[state.open](state.data, state.engineError)
           : state.open === "reception"
           ? reception(state.data, { registration: state.registration, engineError: state.engineError, locked: hooks.projectsLocked }, render)
@@ -344,12 +393,13 @@ export function createPanels(
                     decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }),
                     openReport: (reportId) => openReport(reportId),
                     deliver: (taskId) => send({ type: "deliver", taskId }),
+                    ...(locked ? {} : { remember: libraryActions }),
                     back: () => {
                       state.back();
                       render();
                     },
                   },
-                  { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set() },
+                  { reading: state.viewing, unread: hooks.unreadReports?.() ?? new Set(), memory: state.memory, memoryError: state.memoryError },
                 ),
               }
             : state.open === "elevator"
@@ -396,6 +446,8 @@ export function createPanels(
     if (state.open !== "mailbox") state.apply({ type: "open_panel", panel: "mailbox" });
     state.view(reportId);
     hooks.onReportOpened?.(reportId);
+    // The "Remember this?" card needs the Library's latest word (the librarian may have just finished).
+    if (!locked && state.roomId?.startsWith("project:")) send({ type: "memory_state" });
     render();
   };
 

@@ -1,5 +1,6 @@
 import { PlanSchema, type Plan } from "@agentlife/shared";
 import type { StepContext } from "../jobs/steps.ts";
+import { memoryBlock } from "../memory/retrieve.ts";
 import { fence, loadPromptTemplate, renderPrompt, templateFor } from "../prompts.ts";
 import { resolveProject, runRole, type PipelineDeps } from "./deps.ts";
 import { runStructured } from "./extract-json.ts";
@@ -42,6 +43,7 @@ export async function analyzeStep(deps: PipelineDeps, ctx: StepContext): Promise
   const kind = ctx.kind ?? "change";
   const prompt = renderPrompt(loadPromptTemplate(templateFor("architect", kind)), {
     goal: fence(ctx.goal),
+    memory: memoryBlock(deps.memory, ctx.repoId, { goal: ctx.goal, files: ctx.target ? [ctx.target] : [] }, deps.logger),
     ...(kind === "change" ? {} : { target: fence(ctx.target ?? "") }),
   });
   return runStructured({

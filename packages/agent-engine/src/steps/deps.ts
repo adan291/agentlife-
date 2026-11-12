@@ -3,6 +3,7 @@ import type { ActivityEmitter } from "../activity.ts";
 import type { LimitsConfig, RepoConfig } from "../config.ts";
 import type { StepContext } from "../jobs/steps.ts";
 import type { Logger } from "../log.ts";
+import type { MemoryStore } from "../memory/store.ts";
 import type { DataPaths } from "../paths.ts";
 import type { ProjectRegistry, ResolvedProject } from "../projects/registry.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
@@ -34,6 +35,8 @@ export interface PipelineDeps {
   intern?: AgentRuntime;
   /** What the report must mention about the job, e.g. that the intern fell back to another model. */
   notes?: JobNotes;
+  /** The Library of each project. Its notes go into the prompts of the three roles. Without it every prompt says "(none)". */
+  memory?: MemoryStore;
 }
 
 const SAFE_TASK_ID = /^[A-Za-z0-9_-]+$/;

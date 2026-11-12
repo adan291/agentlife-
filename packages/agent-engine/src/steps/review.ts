@@ -1,6 +1,7 @@
 import { ReviewSchema, type Plan, type Review } from "@agentlife/shared";
 import type { PlanTask, StepContext, TestResult } from "../jobs/steps.ts";
 import { fence, loadPromptTemplate, renderPrompt, templateFor } from "../prompts.ts";
+import { diffFiles, memoryBlock } from "../memory/retrieve.ts";
 import { runRole, worktreeDir, type PipelineDeps } from "./deps.ts";
 import { runStructured } from "./extract-json.ts";
 
@@ -63,6 +64,7 @@ export async function reviewStep(deps: PipelineDeps, ctx: StepContext, input: Re
   const cwd = worktreeDir(deps, ctx.taskId);
   const prompt = renderPrompt(loadPromptTemplate(templateFor("qa", ctx.kind ?? "change")), {
     goal: fence(ctx.goal),
+    memory: memoryBlock(deps.memory, ctx.repoId, { goal: `${ctx.goal} ${input.task.title}`, files: [...input.task.files, ...diffFiles(input.diff)] }, deps.logger),
     task: fence(JSON.stringify(input.task, null, 2), "json"),
     testStatus: testStatusText(input.test),
     testLog: fence(logTail(input.test.log)),
