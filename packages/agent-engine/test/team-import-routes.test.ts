@@ -136,14 +136,14 @@ describe("import routes", () => {
 });
 
 describe("service agents", () => {
-  it("the import-review and HR agents are made from the read-only tier and nothing else", async () => {
+  it("the import-review, HR and memory agents are made from the read-only tier and nothing else", async () => {
     const kiroHome = path.join(tmp, "kiro-home");
     const tiers = loadTiers();
     const checked: string[] = [];
     const written = await installServiceAgents({ kiroHome, tiers, validate: async (f) => void checked.push(f) });
-    expect(written).toEqual([serviceAgentName("import-review"), serviceAgentName("hr")]);
-    expect(checked).toHaveLength(2);
-    for (const name of ["agentlife-import-review", "agentlife-hr"]) {
+    expect(written).toEqual([serviceAgentName("import-review"), serviceAgentName("hr"), serviceAgentName("memory")]);
+    expect(checked).toHaveLength(3);
+    for (const name of ["agentlife-import-review", "agentlife-hr", "agentlife-memory"]) {
       const agent = AgentFileSchema.parse(JSON.parse(readFileSync(path.join(kiroHome, "agents", `${name}.json`), "utf8")));
       expect(agent.tools, name).toEqual(tiers["read-only"].tools);
       expect(agent.permissions, name).toEqual(tiers["read-only"].permissions);
@@ -151,6 +151,6 @@ describe("service agents", () => {
     }
     // An unchanged file is neither rewritten nor checked again.
     expect(await installServiceAgents({ kiroHome, tiers, validate: async (f) => void checked.push(f) })).toEqual([]);
-    expect(checked).toHaveLength(2);
+    expect(checked).toHaveLength(3);
   });
 });

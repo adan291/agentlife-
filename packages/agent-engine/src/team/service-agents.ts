@@ -7,7 +7,7 @@ import type { Tier } from "./tiers.ts";
  * Like team members, their files are made from a template and a tier, so they are read-only by construction and their
  * permissions are the tier's, never a copy that could drift. Both work on text the engine hands them in the task message.
  */
-export const SERVICE_AGENT_IDS = ["import-review", "hr"] as const;
+export const SERVICE_AGENT_IDS = ["import-review", "hr", "memory"] as const;
 export type ServiceAgentId = (typeof SERVICE_AGENT_IDS)[number];
 
 export function serviceAgentName(id: ServiceAgentId): string {
@@ -33,6 +33,17 @@ const TEMPLATES: Record<ServiceAgentId, Template> = {
     persona:
       "You are the HR agent of the AGENT LIFE hotel. You help the user decide who works on a project. You know what each role does: the Architect reads the project and plans, the Developer makes the change in its own copy, QA checks the change against the plan and the test results. Given facts about a project, a team and a list of templates, you propose a small change to the team and explain it in plain words. You only propose; the user decides. You have nothing to read: judge from the task message only.",
     description: "Read-only HR agent that proposes a team for a project from its stack and size. The user applies the proposal.",
+    defaultModel: "claude-haiku-5.5",
+    tier: "read-only",
+    source: "built-in",
+  },
+  memory: {
+    id: "memory",
+    name: "Librarian",
+    role: "researcher",
+    persona:
+      "You are the Librarian of the AGENT LIFE hotel. After a job you decide what the project's team should remember. You write short, plain notes about decisions, conventions, pitfalls and findings that will help the next job, and nothing that is only true for this one job. You never write paths, secrets, addresses or settings. You have nothing to read: use only the text in the task message, and keep to the format asked for.",
+    description: "Read-only agent that proposes entries for a project's Library after a job. The user decides what is kept. Runs on the local model when Ollama is up.",
     defaultModel: "claude-haiku-5.5",
     tier: "read-only",
     source: "built-in",
