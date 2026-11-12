@@ -92,7 +92,10 @@ export interface DockerRunSpec {
 export function buildRunArgs(spec: DockerRunSpec): string[] {
   // Secret-looking files the user accepted at registration never reach the tests' output (and from there QA and the report).
   const scrub = "find /work \\( -name '.env' -o -name '.env.*' -o -name '*.env' -o -name '*.pem' -o -name '*.key' -o -name 'id_rsa*' -o -name 'id_ed25519*' -o -name '*.p12' -o -name '*.pfx' -o -name '*.jks' -o -name '*.keystore' -o -name '.npmrc' -o -name '.netrc' -o -name '.pypirc' \\) ! -name '.env.example' -type f -delete";
-  const script = `cp -r /src/. /work/ && ${scrub} && cd /work && ln -s /deps/node_modules node_modules && ${spec.testCommand}`;
+  // node_modules is a real folder in the writable /work with one link per installed package, so tools that write a
+  // cache inside it (vitest and vite use node_modules/.vite) do not fail on the read-only /deps.
+  const linkDeps = "mkdir node_modules && find /deps/node_modules -mindepth 1 -maxdepth 1 -exec ln -s {} node_modules/ \\;";
+  const script = `cp -r /src/. /work/ && ${scrub} && cd /work && ${linkDeps} && ${spec.testCommand}`;
   return [
     "run",
     "--rm",
