@@ -12,7 +12,7 @@ Depends on project-registry (projects, Reception). All user-facing text in Engli
 
 #### Acceptance Criteria
 1. THE world SHALL hold several rooms: `lobby`, `hr` and one `project:<id>` room per registered project; room definitions are validated with `RoomDefSchema` as today.
-2. Project rooms SHALL be generated from a template (`rooms/project-template.json`, today's office layout) with the project name on a door sign and on the board; a new project gets its room as soon as it is registered, and a removed project's room disappears (users inside are moved to the lobby).
+2. Project rooms SHALL be generated from a template (`rooms/project-template.json`, today's office layout) with the project name on a plaque over the elevator (the floor's door); a new project gets its room as soon as it is registered, and a removed project's room disappears (users inside are moved to the lobby).
 3. THE lobby SHALL contain the Reception desk (moved from the office), the elevator, a door to the HR office, a directory board listing floors, and Kiroween decor.
 4. THE `WorldSim` SHALL be per room; avatars and agents belong to exactly one room at a time; messages are scoped to the user's current room.
 
