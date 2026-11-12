@@ -76,6 +76,7 @@ export interface GatewayOptions {
   nightPollMs?: number;
   /** Milliseconds the overview waits after a change before it is sent (changes within it are sent once). Default 300. */
   overviewDebounceMs?: number;
+  /** Clock for the rate limiter. */
   clock?: () => number;
 }
 

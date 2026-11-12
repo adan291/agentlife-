@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import fc from "fast-check";
 import WebSocket from "ws";
-import { ServerMsgSchema } from "@agentlife/shared";
+import { OVERVIEW_TIMELINE_MAX, OverviewFloorSchema, ServerMsgSchema } from "@agentlife/shared";
 import type { AgentEvent, ClientMsg, FloorInfo, JobState, OverviewFloor, Project, Report, ServerMsg } from "@agentlife/shared";
 import { EventQueue } from "../src/engine-link.ts";
 import type { EngineLink } from "../src/engine-link.ts";
@@ -88,6 +89,56 @@ describe("overviewOf", () => {
     expect(JSON.stringify(f)).not.toContain("SECRET BODY");
     const noVerdict = overviewOf(infos, new Map([["project:alpha", snapshot({ reports: new Map([["r", report({ reportId: "r" })]]) })]]))[0]!;
     expect(noVerdict.lastReport).toEqual({ reportId: "r", taskId: "t1" });
+  });
+
+  it("keeps the start of a job whose timeline is longer than the overview carries", () => {
+    const states: JobState[] = ["created", "analyzing", "developing", "testing", "reviewing"];
+    const timeline = Array.from({ length: OVERVIEW_TIMELINE_MAX + 25 }, (_, i) => ({ ts: 1000 + i, state: states[i % states.length]! }));
+    const f = overviewOf(infos, new Map([["project:alpha", snapshot({ currentTaskId: "t", jobState: "testing", timeline })]]))[0]!;
+    expect(f.job?.startedAt).toBe(1000);
+    expect(f.job?.timeline).toHaveLength(OVERVIEW_TIMELINE_MAX);
+    expect(f.job?.timeline.at(-1)).toEqual(timeline.at(-1));
+    expect(OverviewFloorSchema.safeParse(f).success).toBe(true);
+  });
+
+  it("property: one entry per project floor, valid for the protocol, and nothing but ids, names, states, counts and times", () => {
+    const stateArb = fc.constantFrom<JobState>("created", "analyzing", "awaiting_plan_approval", "developing", "testing", "reviewing", "report_ready", "delivered", "failed", "cancelled");
+    // Free text that must never reach the overview: goals, plan summaries, report bodies, paths.
+    const secret = "SECRET-" + "x".repeat(8);
+    const snapshotArb = fc.record({
+      jobState: fc.option(stateArb, { nil: undefined }),
+      withTask: fc.boolean(),
+      times: fc.array(fc.nat(1_000_000), { maxLength: 150 }),
+      pending: fc.nat(3),
+      reports: fc.nat(3),
+      unread: fc.constantFrom<"report_ready" | "failed" | null>("report_ready", "failed", null),
+    });
+    fc.assert(
+      fc.property(fc.array(snapshotArb, { minLength: 0, maxLength: 4 }), fc.array(fc.nat(5), { maxLength: 4 }), (snaps, nights) => {
+        const projects = infos.filter((i) => i.kind === "project");
+        const floors = new Map<string, FloorSnapshot>();
+        snaps.forEach((s, i) => {
+          const info = projects[i];
+          if (!info) return;
+          const approvals = new Map(
+            Array.from({ length: s.pending }, (_, n) => [`a${n}`, { approvalId: `a${n}`, taskId: "t", kind: "plan", summary: secret, status: "pending" as const }] as const),
+          );
+          const reports = new Map(Array.from({ length: s.reports }, (_, n) => [`r${n}`, report({ reportId: `r${n}`, ts: n, markdown: secret, title: secret })] as const));
+          const timeline = s.times.map((ts, n) => ({ ts, state: n === 0 ? ("created" as const) : (s.jobState ?? "created") }));
+          floors.set(info.roomId, snapshot({ approvals, reports, unread: s.unread, jobState: s.jobState, currentTaskId: s.withTask ? "task-1" : null, timeline, jobTarget: "feature/x" }));
+        });
+        const night = new Map(nights.map((n, i) => [projects[i]?.roomId.slice("project:".length) ?? `p${i}`, n] as const));
+        const list = overviewOf(infos, floors, night);
+        expect(list.map((f) => f.roomId)).toEqual(projects.map((p) => p.roomId));
+        for (const f of list) {
+          expect(OverviewFloorSchema.safeParse(f).success).toBe(true);
+          const json = JSON.stringify(f);
+          expect(json).not.toContain(secret);
+          expect(json).not.toMatch(/[A-Za-z]:\\|\/home\//);
+          if (f.job) expect(f.job.startedAt).toBe(floors.get(f.roomId)!.timeline![0]!.ts);
+        }
+      }),
+    );
   });
 
   it("counts the night jobs that still wait, per project", () => {

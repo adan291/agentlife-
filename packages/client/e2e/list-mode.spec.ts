@@ -68,7 +68,7 @@ test.describe("list view and command palette", () => {
     await row(page).locator("button", { hasText: /^New change$/ }).click();
     const panel = page.locator(".al-panel");
     await expect(panel).toBeVisible();
-    await expect(panel.locator("h3")).toHaveText("Computer");
+    await expect(panel.locator("h3").first()).toHaveText("Computer");
     await panel.locator("textarea").fill("Add a title check to addTodo");
     await panel.getByRole("button", { name: "Start job" }).click();
     await page.keyboard.press("Escape");
@@ -87,7 +87,7 @@ test.describe("list view and command palette", () => {
     // Approve plan: move to the floor, open the mailbox, press Approve.
     await runCommand(page, "approve plan");
     await expect(panel).toBeVisible();
-    await expect(panel.locator("h3")).toHaveText("Mailbox");
+    await expect(panel.locator("h3").first()).toHaveText("Mailbox");
     await expect(page.locator(".al-floor-label")).toHaveText("haunted-todo");
     await panel.getByRole("button", { name: "Approve" }).click();
     await page.keyboard.press("Escape");
@@ -101,7 +101,7 @@ test.describe("list view and command palette", () => {
     await expect(row(page)).toContainText("Done", { timeout: 40_000 });
     await expect(row(page)).toContainText("Last report:");
     await runCommand(page, "open report");
-    await expect(panel.locator("h3")).toHaveText("Mailbox");
+    await expect(panel.locator("h3").first()).toHaveText("Mailbox");
     await expect(panel.locator(".al-report, .al-report-body, .al-card").first()).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(row(page).locator(".al-list-chip")).toHaveText("Idle");

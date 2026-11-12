@@ -40,7 +40,10 @@ export function overviewOf(infos: readonly FloorInfo[], floors: ReadonlyMap<stri
     const projectId = info.roomId.slice("project:".length);
     const f = floors.get(info.roomId);
     const night = nightJobs.get(projectId) ?? 0;
-    const timeline = (f?.timeline ?? []).slice(-OVERVIEW_TIMELINE_MAX).map((e) => ({ ts: e.ts, state: e.state }));
+    const full = f?.timeline ?? [];
+    // The job started at its first entry, even when the list below is trimmed to the newest entries.
+    const startedAt = full[0]?.ts;
+    const timeline = full.slice(-OVERVIEW_TIMELINE_MAX).map((e) => ({ ts: e.ts, state: e.state }));
     const waiting = [...(f?.approvals.values() ?? [])].filter((a) => a.status === "pending").length;
     let last: Report | undefined;
     for (const r of f?.reports.values() ?? []) if (!last || (r.ts ?? 0) >= (last.ts ?? 0)) last = r;
@@ -49,14 +52,14 @@ export function overviewOf(infos: readonly FloorInfo[], floors: ReadonlyMap<stri
       projectId,
       name: info.name,
       ...floorStatusOf(f),
-      ...(f?.currentTaskId && f.jobState && timeline.length > 0
+      ...(f?.currentTaskId && f.jobState && startedAt !== undefined
         ? {
             job: {
               taskId: f.currentTaskId,
               ...(f.jobKind && f.jobKind !== "change" ? { kind: f.jobKind } : {}),
               ...(f.jobTarget ? { target: f.jobTarget } : {}),
               state: f.jobState,
-              startedAt: timeline[0]!.ts,
+              startedAt,
               timeline,
             },
           }
