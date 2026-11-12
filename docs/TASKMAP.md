@@ -16,7 +16,7 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 6 | `hr-desk` | S17 S18 S24 | yes | needs-check | HR office: hire, rename, change model, fire; trusted imports; local Ollama intern |
 | 7 | `project-memory` | S25 | no | done | The Library: what agents learned, used in every next job |
 | 8 | `list-mode` | S26 | no | done | List view and command palette for daily use |
-| 9 | `pipeline-editor` | S19 | no | todo | Choose and order roles per project with fixed safety rules |
+| 9 | `pipeline-editor` | S19 | no | done | Choose and order roles per project with fixed safety rules |
 | 10 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
