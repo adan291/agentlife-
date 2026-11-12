@@ -27,6 +27,7 @@
     { "itemId": "directory_board_1", "defId": "directory_board", "x": 5, "y": 0, "dir": 4 },
     { "itemId": "construction_board_1", "defId": "construction_board", "x": 7, "y": 0, "dir": 4 },
     { "itemId": "door_hr", "defId": "door", "x": 9, "y": 0, "dir": 4, "to": "hr" },
+    { "itemId": "night_board_1", "defId": "night_board", "x": 10, "y": 0, "dir": 4 },
     { "itemId": "plant_1", "defId": "plant", "x": 11, "y": 0, "dir": 4 },
     { "itemId": "plant_2", "defId": "plant", "x": 0, "y": 3, "dir": 4 },
     { "itemId": "lamp_2", "defId": "lamp", "x": 11, "y": 3, "dir": 4 },

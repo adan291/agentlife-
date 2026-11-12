@@ -116,6 +116,16 @@ export function deskGlowCentre(c: RecipeCtx): Pt {
   return P((m.x0 + m.x1) / 2, (m.y0 + m.y1) / 2, 1.72);
 }
 
+/**
+ * Where a candle stands on a desk, relative to the item's origin: on the desk top at the far end of the back edge,
+ * beside the monitor (which is shorter than the desk by 0.3 at each end), so it never covers the screen.
+ */
+export function deskCandlePoint(c: RecipeCtx): Pt {
+  const b = backRect(c, 0.14, 0.14);
+  const longX = b.x1 - b.x0 >= b.y1 - b.y0;
+  return longX ? P(b.x1 - 0.1, (b.y0 + b.y1) / 2, 1.7) : P((b.x0 + b.x1) / 2, b.y1 - 0.1, 1.7);
+}
+
 const mailbox: Recipe = (g) => {
   drawBoxes(g, [
     piece({ x0: -0.1, y0: -0.1, x1: 0.1, y1: 0.1 }, 0, 1.2, C.woodDark),
@@ -251,6 +261,26 @@ const libraryShelf: Recipe = (g, c) => {
   });
 };
 
+/** A small standing board with a moon and stars: where the night shift is planned. */
+const nightBoard: Recipe = (g, c) => {
+  const body = full(c, 0.12);
+  drawBoxes(g, [piece(full(c, 0.2), 0, 0.5, C.woodDark), piece(body, 0.5, 4.0, C.metal)]);
+  const face = frontFace(c, body, 0.08, 0.92, 0.8, 3.7);
+  if (face) fillPoly(g, face, C.screenOff);
+  const moon = frontFace(c, body, 0.3, 0.7, 1.7, 3.1);
+  if (moon) fillPoly(g, moon, C.lampGlow);
+  // Stars: a few small squares around the moon.
+  for (const [u, z] of [
+    [0.16, 3.3],
+    [0.8, 3.4],
+    [0.2, 1.1],
+    [0.76, 1.3],
+  ] as const) {
+    const star = frontFace(c, body, u, u + 0.06, z, z + 0.14);
+    if (star) fillPoly(g, star, C.screen);
+  }
+};
+
 /** A door in the wall with a lit sign above it. */
 const door: Recipe = (g, c) => {
   const slab = backRect(c, 0.12, 0.04);
@@ -358,6 +388,7 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   review_desk: reviewDesk,
   test_lab: testLab,
   library_shelf: libraryShelf,
+  night_board: nightBoard,
   door,
   chair,
   plant,

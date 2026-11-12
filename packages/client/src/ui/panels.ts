@@ -7,6 +7,7 @@ import { renderJobPanel } from "./job-panel.ts";
 import { renderMailbox } from "./mailbox.ts";
 import { renderFloorList } from "./elevator.ts";
 import { BUILD_EVENT_REFRESH_MS, BUILD_REFRESH_MS, isBuilderMessage, renderBuildBoard, renderBuildReport } from "./build-board.ts";
+import { createNightPanel } from "./night-board.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
 import { UI_COLOURS } from "./theme.ts";
@@ -88,6 +89,15 @@ const CSS = `
 .al-build-tasks li[data-done="true"] { color: ${UI_COLOURS.muted}; }
 .al-build-verdict[data-verdict="pass"] { color: ${UI_COLOURS.add}; }
 .al-build-verdict[data-verdict="fail"] { color: ${UI_COLOURS.del}; }
+.al-night-list { list-style: none; margin: 0; padding: 0; }
+.al-night-job[data-attention="true"] { border-color: var(--al-accent); box-shadow: inset 4px 0 0 var(--al-accent); }
+.al-night-job[data-status="running"] { border-color: var(--al-accent); }
+.al-night-goal { margin: var(--al-s1) 0; overflow-wrap: anywhere; }
+.al-night-chip[data-status="done"] { color: ${UI_COLOURS.add}; border-color: ${UI_COLOURS.add}; }
+.al-night-chip[data-status="failed"], .al-night-chip[data-status="timed_out"] { color: ${UI_COLOURS.del}; border-color: ${UI_COLOURS.del}; }
+.al-night-chip[data-status="waiting"], .al-night-chip[data-status="running"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
+.al-night-check { display: flex; align-items: flex-start; gap: var(--al-s2); }
+.al-badge[data-verdict="night"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
 `;
 
 const TITLES: Record<PanelName, string> = {
@@ -102,7 +112,14 @@ const TITLES: Record<PanelName, string> = {
   review: "Review desk",
   tests: "Test lab",
   library: "Library",
+  night: "Night shift",
 };
+
+/** The night shift needs the real engine: the recorded demo shows this instead of the board. */
+const NIGHT_LOCKED = "The night shift is off in the recorded demo. Run AGENT LIFE on your computer to schedule jobs for the night.";
+
+/** While the night board is open it asks for fresh data this often (a job changes state while the user looks). */
+export const NIGHT_REFRESH_MS = 10_000;
 
 /** The door panel is never shown in practice: the server turns a door into a floor change. */
 function doorNote(doc: Document): HTMLElement {
@@ -167,6 +184,20 @@ export function createPanels(
   const reception = createReceptionPanel(document, {
     register: (body) => send({ type: "register_project", ...body }),
     remove: (projectId) => send({ type: "remove_project", projectId }),
+  });
+  const nightPanel = createNightPanel(document, {
+    add: (job) => {
+      state.nightError = null;
+      send({ type: "night_add", job });
+    },
+    remove: (id) => {
+      state.nightError = null;
+      send({ type: "night_remove", id });
+    },
+    move: (id, direction) => {
+      state.nightError = null;
+      send({ type: "night_move", id, direction });
+    },
   });
 
   const root = document.createElement("div");
@@ -243,8 +274,18 @@ export function createPanels(
   };
 
   let lastViewKey = "";
+  let nightInterval: ReturnType<typeof setInterval> | undefined;
+  const syncNightTimer = () => {
+    if (state.open === "night" && !locked) {
+      nightInterval ??= setInterval(() => send({ type: "night_state" }), NIGHT_REFRESH_MS);
+      return;
+    }
+    clearInterval(nightInterval);
+    nightInterval = undefined;
+  };
   const render = () => {
     syncBuildTimers();
+    syncNightTimer();
     if (!state.open) {
       root.hidden = true;
       onChange();
@@ -254,7 +295,7 @@ export function createPanels(
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
-    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || (state.open === "mailbox" && state.viewing !== null));
+    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
@@ -285,7 +326,13 @@ export function createPanels(
                 ? { body: renderFloorList(document, state.floors, state.roomId) }
                 : state.open === "build"
                   ? { body: renderBuild() }
-                  : state.open === "door"
+                  : state.open === "night"
+                    ? nightPanel(
+                        state.data,
+                        { night: state.night, error: state.nightError, ...(locked ? { locked: NIGHT_LOCKED } : {}) },
+                        render,
+                      )
+                    : state.open === "door"
                   ? { body: doorNote(document) }
                   : {
                       body: renderJobPanel(document, state.data, state.viewing, {

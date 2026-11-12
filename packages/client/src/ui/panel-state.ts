@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, JobDetails, JobView, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, JobDetails, JobView, NightState, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -33,6 +33,9 @@ export class PanelState {
   buildViewing: string | null = null;
   /** Why the board has no data (the scripted engine has none). */
   buildError: string | null = null;
+  /** Night board data (lobby), and why a change or the whole board failed. The error is cleared when the panel opens. */
+  night: NightState | null = null;
+  nightError: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -64,7 +67,15 @@ export class PanelState {
           this.buildViewing = null;
           this.buildError = null;
         }
+        if (msg.panel === "night") this.nightError = null;
         return true;
+      case "night": {
+        // An error that came just before this message (a refused change) stays on screen. The periodic refresh
+        // re-renders only when something changed, so a form the user is typing in keeps its focus.
+        const same = JSON.stringify(this.night) === JSON.stringify(msg.state);
+        this.night = msg.state;
+        return !same && this.open === "night";
+      }
       case "build_board":
         this.build = msg.board;
         this.buildError = null;
@@ -108,9 +119,14 @@ export class PanelState {
         this.data.reports = upsert(this.data.reports, msg.report, (r) => r.reportId);
         return true;
       case "error":
+        if (msg.code === "night_error") {
+          this.nightError = msg.message;
+          return this.open === "night";
+        }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;
           if (this.open === "build") this.buildError = msg.message;
+          if (this.open === "night") this.nightError = msg.message;
           return true;
         }
         return false;

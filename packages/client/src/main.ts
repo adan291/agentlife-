@@ -18,6 +18,7 @@ import { MailboxState } from "./ui/mailbox-state.ts";
 import { createTerminal } from "./ui/terminal.ts";
 import { createTheme } from "./ui/theme.ts";
 import { createTooltip } from "./ui/tooltip.ts";
+import { createNightLook } from "./ui/night-look.ts";
 import { createShell } from "./ui/shell.ts";
 import { createStepper } from "./ui/stepper.ts";
 import { createTeamBar } from "./ui/team-bar.ts";
@@ -133,6 +134,7 @@ const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
 hud.setZoomLabel(world.zoom);
 
 const transition = createTransition(stageEl, prefersReducedMotion);
+const nightLook = createNightLook(stageEl, shell.topLeft);
 
 /** The user picked a floor in the elevator panel. */
 function goTo(roomId: string): void {
@@ -276,6 +278,9 @@ transport.onMessage((msg) => {
     enteredRoom(msg);
   } else if (msg.type === "floors") {
     floorsChanged(msg.floors);
+  } else if (msg.type === "night_clock") {
+    nightLook.set(msg);
+    world.setNight(msg.open);
   } else if (msg.type === "activity") {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {

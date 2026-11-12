@@ -26,6 +26,7 @@ import type {
   Hotel,
   JobState,
   MorningSummary,
+  NightState,
   Project,
   RegisterProjectBody,
   Report,
@@ -310,6 +311,46 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  // ---- night shift: the night board and the night look ----
+
+  let lastClock = "";
+  /** Tells the client whether the night window is open (dimmed rooms, moon clock). Sent when it changed, or when forced. Never throws. */
+  const pushNightClock = async (force = false): Promise<void> => {
+    if (!engine?.getNight || !current) return;
+    let state: NightState;
+    try {
+      state = await engine.getNight();
+    } catch {
+      return;
+    }
+    const msg: ServerMsg = { type: "night_clock", open: state.open, start: state.config.start, end: state.config.end };
+    const key = JSON.stringify(msg);
+    if (!force && key === lastClock) return;
+    lastClock = key;
+    if (current) send(current.ws, msg);
+  };
+
+  const sendNight = async (ws: WebSocket): Promise<void> => {
+    if (!engine?.getNight) return sendError(ws, "engine_unavailable", "the night shift needs the real engine");
+    try {
+      send(ws, { type: "night", state: await engine.getNight() });
+    } catch {
+      sendError(ws, "engine_unavailable", "cannot read the night schedule");
+    }
+  };
+
+  /** Add, remove or move a night job. The board is in the lobby, so the user must be there; the answer is the new schedule. */
+  const nightCommand = async (ws: WebSocket, run: (link: EngineLink) => Promise<void>): Promise<void> => {
+    if (!engine?.getNight) return sendError(ws, "engine_unavailable", "the night shift needs the real engine");
+    if (userRoom() !== LOBBY_ROOM) return sendError(ws, "bad_message", "the night board is in the lobby");
+    try {
+      await run(engine);
+    } catch (e) {
+      sendError(ws, "night_error", errorText(e, "the night schedule was not changed"));
+    }
+    await sendNight(ws);
+  };
+
   /** The repositories the computer of a floor can start a job on: the floor's own project. */
   const sendRepos = async (ws: WebSocket, roomId: string) => {
     if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
@@ -369,6 +410,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       pushFloors(true);
     } else if (panel === "build") {
       await sendBuildBoard(ws);
+    } else if (panel === "night") {
+      // The form lists the hotel's projects, so they travel with the schedule.
+      await sendProjects(ws);
+      await sendNight(ws);
     }
   };
 
@@ -744,8 +789,15 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
   refreshModels();
 
-  // The night shift writes its summary while nobody is connected, or while the user works on another floor.
-  const nightPoll = engine?.getNightSummaries ? setInterval(() => enqueue(syncSummaries), options.nightPollMs ?? 60_000) : undefined;
+  // The night shift writes its summary while nobody is connected, or while the user works on another floor; the window
+  // opens and closes by the clock. One look a minute covers both.
+  const nightPoll =
+    engine?.getNightSummaries || engine?.getNight
+      ? setInterval(() => {
+          enqueue(syncSummaries);
+          enqueue(() => pushNightClock());
+        }, options.nightPollMs ?? 60_000)
+      : undefined;
   nightPoll?.unref();
 
   wss.on("connection", (ws) => {
@@ -758,6 +810,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (engine) {
       enqueue(syncProjects);
       enqueue(syncSummaries);
+      enqueue(() => pushNightClock(true));
     }
     refreshModels();
 
@@ -809,6 +862,17 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void sendBuildBoard(ws);
       } else if (msg.type === "build_report") {
         void sendBuildReport(ws, msg.spec);
+      } else if (msg.type === "night_state") {
+        void sendNight(ws);
+      } else if (msg.type === "night_add") {
+        const job = msg.job;
+        void nightCommand(ws, async (link) => void (await link.addNightJob?.(job)));
+      } else if (msg.type === "night_remove") {
+        const id = msg.id;
+        void nightCommand(ws, (link) => link.removeNightJob?.(id) ?? Promise.resolve());
+      } else if (msg.type === "night_move") {
+        const { id, direction } = msg;
+        void nightCommand(ws, (link) => link.moveNightJob?.(id, direction) ?? Promise.resolve());
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

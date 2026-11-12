@@ -22,6 +22,7 @@ export type NightStatus = z.infer<typeof NightStatusSchema>;
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const HhmmSchema = z.string().regex(HHMM, "use HH:MM, 24 hours");
+export { HhmmSchema as NightHhmmSchema };
 
 /** The night window, in the local time of the machine that runs the engine. It may cross midnight (`22:00` to `06:00`). */
 export const NightConfigSchema = z
@@ -84,6 +85,8 @@ export const NightJobInputSchema = z
     if (scope && scope.some((p) => !isSafeScopePath(p))) issue("scopePaths", "use relative paths like src/ or README.md");
   });
 export type NightJobInput = z.input<typeof NightJobInputSchema>;
+/** A job request after the defaults were filled in: what travels from the client to the engine. */
+export type NightJobRequest = z.output<typeof NightJobInputSchema>;
 
 /** The goal of a night job: the one the user wrote, else a sentence built from the kind and target. */
 export function nightGoal(kind: JobKind, target: string | undefined, goal: string | undefined): string {

@@ -8,6 +8,8 @@ import {
   HealthResponseSchema,
   jobDetailsFromExport,
   MorningSummariesSchema,
+  NightJobSchema,
+  NightStateSchema,
   ProjectSchema,
   RegisterProjectResultSchema,
   RepoSchema,
@@ -24,6 +26,9 @@ import {
   type JobDetails,
   type JobView,
   type MorningSummary,
+  type NightJob,
+  type NightJobRequest,
+  type NightState,
   type Project,
   type RegisterProjectBody,
   type RegisterProjectResult,
@@ -127,6 +132,29 @@ export class HttpEngineLink implements EngineLink {
 
   async getNightSummaries(): Promise<MorningSummary[]> {
     return MorningSummariesSchema.parse(await this.request("GET", "/night/summaries")).summaries;
+  }
+
+  async getNight(): Promise<NightState> {
+    return NightStateSchema.parse(await this.request("GET", "/night"));
+  }
+
+  /** A refused job (`400`) carries the field and the reason in `issues`; the message names them. */
+  async addNightJob(job: NightJobRequest): Promise<NightJob> {
+    const { ok, status, json } = await this.requestRaw("POST", "/night/jobs", job);
+    if (!ok) {
+      const err = ErrorResponseSchema.safeParse(json);
+      const first = err.success ? err.data.issues?.[0] : undefined;
+      throw new Error(first ? `${first.path}: ${first.message}` : err.success ? (err.data.message ?? err.data.error) : `engine responded ${status}`);
+    }
+    return NightJobSchema.parse(json);
+  }
+
+  async removeNightJob(id: string): Promise<void> {
+    await this.request("DELETE", `/night/jobs/${encodeURIComponent(id)}`);
+  }
+
+  async moveNightJob(id: string, direction: "up" | "down"): Promise<void> {
+    await this.request("POST", `/night/jobs/${encodeURIComponent(id)}/move`, { direction });
   }
 
   async deliver(taskId: string): Promise<DeliveryInfo> {

@@ -12,6 +12,6 @@
   - Summary artifact to the lobby mailbox; notify with Ollama overview when enabled
   - _Requirements: 4.1, 4.2, 6.3_
 
-- [ ] 4. Client: night board and night look
+- [x] 4. Client: night board and night look
   - Lobby night board (add, reorder, remove, pre-approval scope, deliver toggle), dimmed rooms, candles, moon clock
   - _Requirements: 1.1, 5.1_
