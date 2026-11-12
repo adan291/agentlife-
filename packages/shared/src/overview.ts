@@ -41,6 +41,8 @@ export const OverviewFloorSchema = z.object({
     .optional(),
   /** Approvals of this floor that wait for the user. */
   waiting: z.number().int().nonnegative().max(1000),
+  /** Night jobs of this project that still wait for a night or for the user. Absent: none (or the engine has no night shift). */
+  night: z.number().int().positive().max(1000).optional(),
   /** The newest report in the floor's mailbox. */
   lastReport: z
     .object({

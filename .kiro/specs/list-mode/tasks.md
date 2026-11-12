@@ -8,6 +8,6 @@
   - `Ctrl+K`, fuzzy search, commands mapped to existing messages, keyboard navigation
   - _Requirements: 2.1, 2.2_
 
-- [ ] 3. Tests
+- [x] 3. Tests
   - Unit tests for matching and dispatch, Playwright for view switch and palette approve
   - _Requirements: 3.1_

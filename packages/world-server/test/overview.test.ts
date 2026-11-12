@@ -90,6 +90,13 @@ describe("overviewOf", () => {
     expect(noVerdict.lastReport).toEqual({ reportId: "r", taskId: "t1" });
   });
 
+  it("counts the night jobs that still wait, per project", () => {
+    const night = new Map([["alpha", 2]]);
+    const list = overviewOf(infos, new Map(), night);
+    expect(list[0]!.night).toBe(2);
+    expect(list[1]).not.toHaveProperty("night");
+  });
+
   it("shows a finished job with an unread report or failure, as the elevator does", () => {
     expect(floorStatusOf(snapshot({ jobState: "delivered", unread: "report_ready" }))).toEqual({ status: "report_ready" });
     expect(floorStatusOf(snapshot({ jobState: "delivered", unread: "failed" }))).toEqual({ status: "failed" });
@@ -200,6 +207,22 @@ describe("overview_watch", () => {
     e.push("task-alpha", { type: "agent.activity", agentId: "alpha:developer", text: "Reading: src/secret.ts" });
     await settle(200);
     expect(c.overviews()).toHaveLength(2);
+  });
+
+  it("tells how many night jobs wait for a project, from the engine's night shift", async () => {
+    const e = engineWith(["alpha", "beta"]);
+    const nightJob = (id: string, repoId: string, status: string) => ({ id, repoId, kind: "change", goal: "g", tier: "normal", preApprove: false, deliver: false, status, addedAt: 1 });
+    const state = {
+      config: { start: "01:00", end: "07:00", maxJobsPerNight: 4, maxJobMinutes: 20 },
+      open: false,
+      jobs: [nightJob("n1", "alpha", "scheduled"), nightJob("n2", "alpha", "waiting"), nightJob("n3", "alpha", "done"), nightJob("n4", "beta", "failed")],
+    };
+    const link: EngineLink = { ...e.link, getNight: () => Promise.resolve(state as never) };
+    const c = connect((await boot(link)).port);
+    await ready(c);
+    c.send({ type: "overview_watch", on: true });
+    await c.waitFor(() => c.latest("project:alpha")?.night === 2);
+    expect(c.latest("project:beta")).not.toHaveProperty("night");
   });
 
   it("stops when switched off, and a new connection starts switched off", async () => {

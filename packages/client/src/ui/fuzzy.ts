@@ -31,7 +31,7 @@ export function fuzzyScore(query: string, text: string): number | null {
     firstWord = Math.min(firstWord, at);
     return true;
   });
-  if (atWordStarts) return WORD_STARTS - firstWord * 10 - (t.length - q.length) * 0.1;
+  if (atWordStarts) return WORD_STARTS - firstWord * 10;
 
   const inside = t.indexOf(q);
   if (inside >= 0) return SUBSTRING - inside;

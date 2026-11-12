@@ -102,6 +102,8 @@ export function createCommandPalette(doc: Document, host: HTMLElement): CommandP
   const close = (): void => {
     if (!isOpen) return;
     isOpen = false;
+    // Hiding a focused element does not move the focus at once; without this, the next key press still goes to the hidden field.
+    input.blur();
     wrap.hidden = true;
     returnFocus?.focus?.();
     returnFocus = null;

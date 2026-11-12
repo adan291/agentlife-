@@ -1,4 +1,4 @@
-import type { NightState, OverviewFloor } from "@agentlife/shared";
+import type { OverviewFloor } from "@agentlife/shared";
 import { JOB_CHOICES, jobLine, nightCount, reportLine, sortFloors, statusLine, stepsOf, waitingBadge } from "./list-model.ts";
 import type { JobChoice } from "./list-model.ts";
 import { stepIcon, stepNote } from "./stepper.ts";
@@ -18,7 +18,6 @@ export interface ListActions {
 export interface ListData {
   /** Null until the first `overview` arrived. */
   floors: readonly OverviewFloor[] | null;
-  night: NightState | null;
   now: number;
   /** Why the list is not available (the recorded demo), shown instead of the rows. */
   locked: string | null;
@@ -155,7 +154,7 @@ function renderRow(doc: Document, floor: OverviewFloor, data: ListData, open: bo
     if (floor.lastReport?.verdict) r.dataset["verdict"] = floor.lastReport.verdict;
     meta.appendChild(r);
   }
-  const nights = nightCount(data.night, floor.projectId);
+  const nights = nightCount(floor);
   if (nights > 0) {
     const n = doc.createElement("span");
     n.textContent = nights === 1 ? "1 night job scheduled" : `${nights} night jobs scheduled`;
@@ -246,7 +245,7 @@ export function createListView(doc: Document, host: HTMLElement, actions: ListAc
   root.hidden = true;
   host.appendChild(root);
 
-  let data: ListData = { floors: null, night: null, now: clock(), locked: null };
+  let data: ListData = { floors: null, now: clock(), locked: null };
   const expanded = new Set<string>();
   let visible = false;
 
@@ -271,7 +270,7 @@ export function createListView(doc: Document, host: HTMLElement, actions: ListAc
     update(patch) {
       // The server repeats an overview that did not change after a reconnect; a re-render would drop the focused button.
       const next = { ...data, ...patch };
-      const same = JSON.stringify([next.floors, next.night, next.locked]) === JSON.stringify([data.floors, data.night, data.locked]);
+      const same = JSON.stringify([next.floors, next.locked]) === JSON.stringify([data.floors, data.locked]);
       data = next;
       if (!same) render();
     },

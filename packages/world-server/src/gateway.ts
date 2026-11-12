@@ -221,10 +221,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   let lastOverviewKey = "";
   let overviewTimer: NodeJS.Timeout | undefined;
+  /** Night jobs that still wait, per project, from the last look at the engine's night shift. */
+  let nightCounts = new Map<string, number>();
+  const rememberNight = (state: NightState): void => {
+    const next = new Map<string, number>();
+    for (const j of state.jobs) if (j.status === "scheduled" || j.status === "waiting") next.set(j.repoId, (next.get(j.repoId) ?? 0) + 1);
+    const changed = JSON.stringify([...next]) !== JSON.stringify([...nightCounts]);
+    nightCounts = next;
+    if (changed) scheduleOverview();
+  };
   /** Sends the overview to a client that watches it, when it changed (or `force`). */
   const pushOverview = (force = false): void => {
     if (!current?.overviewWatch) return;
-    const list = overviewOf(hotel.floors(), floors).slice(0, 100);
+    const list = overviewOf(hotel.floors(), floors, nightCounts).slice(0, 100);
     const key = JSON.stringify(list);
     if (!force && key === lastOverviewKey) return;
     lastOverviewKey = key;
@@ -356,6 +365,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       return;
     }
     const msg: ServerMsg = { type: "night_clock", open: state.open, start: state.config.start, end: state.config.end };
+    rememberNight(state);
     const key = JSON.stringify(msg);
     if (!force && key === lastClock) return;
     lastClock = key;
@@ -365,7 +375,9 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const sendNight = async (ws: WebSocket): Promise<void> => {
     if (!engine?.getNight) return sendError(ws, "engine_unavailable", "the night shift needs the real engine");
     try {
-      send(ws, { type: "night", state: await engine.getNight() });
+      const state = await engine.getNight();
+      rememberNight(state);
+      send(ws, { type: "night", state });
     } catch {
       sendError(ws, "engine_unavailable", "cannot read the night schedule");
     }

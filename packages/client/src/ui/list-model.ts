@@ -1,5 +1,5 @@
 import { ROLE_INFO } from "@agentlife/shared";
-import type { FloorStatus, JobKind, JobView, NightJob, NightState, OverviewFloor, ShowablePanel } from "@agentlife/shared";
+import type { FloorStatus, JobKind, JobView, OverviewFloor, ShowablePanel } from "@agentlife/shared";
 import { formatDuration } from "./duration.ts";
 import { stepName, stepperFor } from "./stepper.ts";
 import type { StepperStep } from "./stepper.ts";
@@ -80,10 +80,9 @@ export function jobLine(floor: OverviewFloor): string {
   return `${head} · Done`;
 }
 
-/** Number of night jobs of a project that still wait for a night or for the user. */
-export function nightCount(night: NightState | null, projectId: string): number {
-  if (!night) return 0;
-  return night.jobs.filter((j: NightJob) => j.repoId === projectId && (j.status === "scheduled" || j.status === "waiting")).length;
+/** Number of night jobs of a project that still wait for a night or for the user (the overview counts them). */
+export function nightCount(floor: Pick<OverviewFloor, "night">): number {
+  return floor.night ?? 0;
 }
 
 /** Text of the status chip of a row (the same words as the elevator panel). */

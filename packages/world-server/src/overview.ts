@@ -33,12 +33,13 @@ export function floorStatusOf(f: FloorSnapshot | undefined): Pick<FloorStatus, "
  * The read-only summary of every project floor for the list view and the command palette (list-mode, D13). Pure.
  * Carries ids, names, states, counts, verdicts and times only; the lobby and the HR office are not project floors.
  */
-export function overviewOf(infos: readonly FloorInfo[], floors: ReadonlyMap<string, FloorSnapshot>): OverviewFloor[] {
+export function overviewOf(infos: readonly FloorInfo[], floors: ReadonlyMap<string, FloorSnapshot>, nightJobs: ReadonlyMap<string, number> = new Map()): OverviewFloor[] {
   const out: OverviewFloor[] = [];
   for (const info of infos) {
     if (info.kind !== "project") continue;
     const projectId = info.roomId.slice("project:".length);
     const f = floors.get(info.roomId);
+    const night = nightJobs.get(projectId) ?? 0;
     const timeline = (f?.timeline ?? []).slice(-OVERVIEW_TIMELINE_MAX).map((e) => ({ ts: e.ts, state: e.state }));
     const waiting = [...(f?.approvals.values() ?? [])].filter((a) => a.status === "pending").length;
     let last: Report | undefined;
@@ -61,6 +62,7 @@ export function overviewOf(infos: readonly FloorInfo[], floors: ReadonlyMap<stri
           }
         : {}),
       waiting,
+      ...(night > 0 ? { night } : {}),
       ...(last
         ? {
             lastReport: {
