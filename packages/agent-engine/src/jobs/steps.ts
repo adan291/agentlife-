@@ -17,6 +17,10 @@ export interface StepContext {
   target?: string;
   /** A scope the change must stay inside, set when a night-shift pre-approval approved the plan. */
   pathRule?: PathRule;
+  /** The team member the project's pipeline names for this step. Absent: the first member of the step's role. */
+  memberId?: string;
+  /** Notes of the research step, for the plan step. Data written by an agent, never instructions. */
+  research?: string;
   /** What the step works on, for `agent.work` (plan task title). Absent in tests; a default is used then. */
   title?: string;
 }
@@ -48,6 +52,10 @@ export interface ReportInput {
   diff?: string;
   test?: TestResult;
   review?: Review;
+  /** `change` jobs whose pipeline has a second review: the independent verdict of the second reviewer. */
+  secondReview?: Review;
+  /** `change` jobs whose pipeline has a research step: the notes the Architect received. */
+  research?: string;
   /** `review-branch` jobs: the findings of the review. */
   branchReview?: BranchReview;
   /** `review-branch` jobs: the branch the diff was taken against. */
@@ -79,6 +87,16 @@ export interface Steps {
   develop(ctx: StepContext, input: { plan: Plan; task: PlanTask; attempt: number; feedback: string[] }): Promise<{ diff: string }>;
   test(ctx: StepContext, input: { diff: string }): Promise<TestResult>;
   review(ctx: StepContext, input: { plan: Plan; task: PlanTask; diff: string; test: TestResult }): Promise<Review>;
+  /**
+   * Pipelines with a `research` step: a read-only researcher reads the project and returns notes for the Architect. A
+   * runtime without it cannot run such a pipeline.
+   */
+  research?(ctx: StepContext): Promise<string>;
+  /**
+   * Pipelines with a `second-review` step: the same input as `review`, answered by another member on another model that
+   * has not seen the first review. A runtime without it cannot run such a pipeline.
+   */
+  secondReview?(ctx: StepContext, input: { plan: Plan; task: PlanTask; diff: string; test: TestResult }): Promise<Review>;
   /**
    * `review-branch` jobs: reads `git diff <base>...<branch>` (read-only), leaves the branch checked out where the test
    * step finds it, and returns the findings with the diff that was reviewed. A runtime without it cannot run that kind.

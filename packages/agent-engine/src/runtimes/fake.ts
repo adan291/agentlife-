@@ -32,6 +32,9 @@ export const FAKE_OUTPUTS: Readonly<Record<Role, string>> = {
   qa: JSON.stringify(REVIEW),
 };
 
+/** What the fake researcher reports (the research step asks the architect's runtime with `step: "research"`). */
+export const FAKE_RESEARCH = "## Notes (simulated)\n- The code lives in src/todo.js.\n- The tests cover list().";
+
 /**
  * Deterministic tool use and context per role, so tests and demos have numbers to show.
  * Architect: 2 read; Developer: 1 read + 1 edited; QA: 1 read.
@@ -84,7 +87,14 @@ export class FakeRuntime implements AgentRuntime {
   async *run(input: RuntimeInput): AsyncIterable<RuntimeEvent> {
     const call = ++this.calls[input.role];
     const override = this.outputs[input.role];
-    const text = override === undefined ? FAKE_OUTPUTS[input.role] : typeof override === "function" ? override(call) : override;
+    const text =
+      override === undefined
+        ? input.step === "research"
+          ? FAKE_RESEARCH
+          : FAKE_OUTPUTS[input.role]
+        : typeof override === "function"
+          ? override(call)
+          : override;
 
     await sleep(this.delayMs, input.signal);
     yield { kind: "progress", text: `${input.role} started` };

@@ -49,6 +49,9 @@ import { installServiceAgents, serviceAgentName, serviceAgentPersona } from "./t
 import { MemoryLearner } from "./memory/learn.ts";
 import { createMemoryRoutes } from "./memory/routes.ts";
 import { MemoryStore } from "./memory/store.ts";
+import { PipelineService } from "./pipeline/service.ts";
+import { PipelineStore } from "./pipeline/store.ts";
+import { createPipelineRoutes } from "./pipeline/routes.ts";
 
 export interface EngineOptions {
   config?: EngineConfig;
@@ -105,6 +108,8 @@ export interface EngineOptions {
     /** Exact secret values to refuse in a note (tests). */
     secrets?: readonly string[];
   };
+  /** Pipelines (pipeline-editor). Default file: `AGENTLIFE_PIPELINES_FILE` or `<dataDir>/pipelines.json`. */
+  pipelines?: { file?: string };
   /** Trusted imports (hr-desk). Fields are for tests; the real process reads `config/catalogue-sources.json`. */
   imports?: {
     /** Default: `AGENTLIFE_IMPORTS_FILE` or `<dataDir>/catalogue-imports.json`. */
@@ -139,6 +144,7 @@ export interface Engine {
   runner: JobRunner;
   projects: ProjectRegistry;
   team: TeamService;
+  pipelines: PipelineService;
   imports: ImportService;
   memory: { store: MemoryStore; learner: MemoryLearner | undefined };
   night: { store: NightStore; scheduler: NightScheduler; summaries: SummaryStore };
@@ -240,6 +246,10 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     },
     logger,
   });
+  const pipelines = new PipelineService({
+    store: new PipelineStore({ file: opts.pipelines?.file ?? process.env["AGENTLIFE_PIPELINES_FILE"] ?? path.join(paths.root, "pipelines.json"), logger }),
+    team,
+  });
   const serviceRuntime = real ? new KiroCliRuntime({ kiroHome: paths.kiroHome }) : undefined;
   // The Night intern: the local model first, the same read-only agent on claude-haiku-5.5 when Ollama cannot answer.
   const intern = serviceRuntime
@@ -332,6 +342,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     limits: config.limits,
     logger,
     activity,
+    pipelines,
     ...(learner ? { onFinished: (job: FinishedJob) => learner.start(job) } : {}),
     ...(ambient ? { ambient } : {}),
     ...(opts.reportTimeoutMs ? { reportTimeoutMs: opts.reportTimeoutMs } : {}),
@@ -390,12 +401,14 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
       ...createProjectRoutes(projects, runner, store, (id) => {
         team.remove(id);
+        pipelines.remove(id);
         memory.removeProject(id);
       }),
       createDeliverRoute(deliverDeps),
       createBranchesRoute({ registry: projects, paths }),
       createCatalogueRoute(catalogue),
       ...createTeamRoutes(team, teamModels),
+      ...createPipelineRoutes(pipelines),
       ...createImportRoutes(imports),
       createSuggestRoute(suggester),
       ...createMemoryRoutes({ store: memory, hasProject: (id) => projects.has(id), ...(learner ? { learner } : {}) }),
@@ -411,6 +424,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     runner,
     projects,
     team,
+    pipelines,
     imports,
     memory: { store: memory, learner },
     night: { store: nightStore, scheduler: nightScheduler, summaries: nightSummaries },

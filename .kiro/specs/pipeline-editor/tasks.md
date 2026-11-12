@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Pipeline schema, validation and generated state machine
+- [x] 1. Pipeline schema, validation and generated state machine
   - Schema, rules with reasons, default pipeline, transitions generated from a pipeline; property test of the safety rules
   - _Requirements: 1.1, 1.2, 1.3_
 

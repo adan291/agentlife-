@@ -5,7 +5,7 @@ import type { Logger } from "../log.ts";
 import type { Store } from "../store.ts";
 import { createStepTracker } from "../work.ts";
 import { fallbackReport } from "./runner.ts";
-import type { TeamResolver } from "../team/service.ts";
+import { memberForStep, type TeamResolver } from "../team/service.ts";
 import type { StepContext, Steps, TestResult } from "./steps.ts";
 
 export interface RuntimeStepsOptions {
@@ -47,7 +47,7 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
 
   async function collect(role: Role, step: string, ctx: StepContext, prompt: string): Promise<string> {
     const outputs: string[] = [];
-    const member = opts.team?.resolve(ctx.repoId, ctx.taskId, role);
+    const member = memberForStep(opts.team, ctx, role);
     const tracker = createStepTracker({
       store: opts.store,
       taskId: ctx.taskId,
@@ -61,6 +61,7 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
     try {
       for await (const ev of opts.runtimes[role].run({
         role,
+        step,
         prompt,
         cwd: cwdFor(ctx.repoId),
         timeoutMs: ctx.timeoutMs,
@@ -86,6 +87,16 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
     return outputs.join("\n");
   }
 
+  async function reviewWith(ctx: StepContext, input: { diff: string; test: TestResult }): Promise<Review> {
+    const out = await collect(
+      "qa",
+      "review",
+      ctx,
+      `${dataPrompt(ctx.goal)}\nDiff:\n${input.diff}\nTests passed: ${input.test.passed}\nReturn JSON {verdict, notes, risk}.`,
+    );
+    return ReviewSchema.parse(parseJson(out, "review"));
+  }
+
   return {
     async analyze(ctx): Promise<Plan> {
       const out = await collect("architect", "analyze", ctx, `${dataPrompt(ctx.goal)}\nReturn a JSON plan with 1 to 5 tasks.`);
@@ -108,13 +119,14 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
       return result;
     },
     async review(ctx, input): Promise<Review> {
-      const out = await collect(
-        "qa",
-        "review",
-        ctx,
-        `${dataPrompt(ctx.goal)}\nDiff:\n${input.diff}\nTests passed: ${input.test.passed}\nReturn JSON {verdict, notes, risk}.`,
-      );
-      return ReviewSchema.parse(parseJson(out, "review"));
+      return reviewWith(ctx, input);
+    },
+    async secondReview(ctx, input): Promise<Review> {
+      return reviewWith(ctx, input);
+    },
+    async research(ctx): Promise<string> {
+      const out = await collect("architect", "research", ctx, `${dataPrompt(ctx.goal)}\nRead the project and return short notes in Markdown.`);
+      return out.trim();
     },
     async reviewBranch(ctx, input) {
       const out = await collect(
