@@ -114,6 +114,8 @@ describe("suggest route", () => {
       candidates: [
         { templateId: "nope", why: "unknown template" },
         { templateId: "reviewer", why: "no desk for this role" },
+        { templateId: "researcher", why: "no desk for this role" },
+        { templateId: "night-intern", why: "no desk for this role" },
         { templateId: "qa", why: "already holds the desk" },
         { templateId: "qa-strict", why: "Reads closely." },
         { templateId: "qa-fast", why: "second QA pick" },

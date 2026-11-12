@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-12 (hr-desk tasks 1–5 done on feat/hr-desk, not merged; night-shift, job-types and build-board merged; hotel-floors merged)
+Updated: 2026-11-12 (hr-desk review fixes on feat/hr-desk, 4.3 still open, not merged; night-shift, job-types and build-board merged; hotel-floors merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -66,13 +66,21 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | project-registry | 5 / 6 | main | Tasks 1-5 done, reviewed and merged; review fixes applied (no paths in clone errors, more secret denies, secrets scrubbed from test copies, length-only masks, no FETCH_HEAD). Task 6: live check with the user |
 | pipeline-editor | 0 / 3 | — | Per-project pipeline on the board with fixed safety rules; optional research and second review. S19 |
 | hotel-floors | 5 / 5 | main | Done. Lobby and elevator checked by the user 2026-11-12; two-project queue and demo-with-floors checks in docs/HUMAN-CHECKS.md |
-| hr-desk | 5 / 5 | feat/hr-desk | Done, not merged: tiers, templates, catalogue, teams, trusted imports, HR office with desk panel, HR ghost, HR agent proposals, ghosts leave and enter by the elevator, Night intern on Ollama with fallback. Needs review + verification and a browser look |
+| hr-desk | 5 / 5 | feat/hr-desk | Done, not merged. Review fixes applied (D9-D11 in risks-and-decisions.md, requirements 3.3 and 6.1 now match the code, more suggest tests). One verify FAIL left: requirement 4.3, see "Open problems". Needs a browser look |
 | build-board | 2 / 2 | feat/build-board | Done, not merged: needs review + verification. Not looked at in a browser |
 | job-types | 4 / 4 | feat/job-types | Done, not merged: needs review + verification. Engine (kinds, pipelines, path rules, branch review, branch list, prompts, reports), world-server and client (review desk, test lab, library shelf, forms, stepper per kind) and an e2e test per kind. Not looked at in a browser; no live run with kiro-cli |
 | night-shift | 4 / 4 | feat/night-shift | Done, not merged: needs review + verification. Engine (schedule, window, scheduler, pre-approval, audit-deps, morning summary, Discord), gateway (lobby mailbox, night board, night clock) and client (night board panel, dimmed rooms, moon clock, desk candles). Not looked at in a browser; no live night. Decisions in the spec's design.md |
 | project-memory | 0 / 3 | — | The Library (row 6) |
 | list-mode | 0 / 3 | — | List view and command palette (row 7) |
 | demo-replay | 7 / 7 | main | Done. Replay mode, Pages workflow, demo build guard, Playwright demo smoke test (passes, Edge), Kiroween polish, README/kiro-usage/video script. Not published yet |
+
+## Open problems
+- hr-desk, verify FAIL on requirement 4.3 (hired agents appear on their floor) is NOT fixed. Both ways out change the design, and the verify report says the choice is the user's, so the unattended session stopped:
+  - A: show every member on the floor. The simulation has a fixed set of agent ids (`AGENT_IDS` in `shared/src/room.ts`: architect, developer, qa, builder; scoped ids `<project>:<role>`) and every room needs a home and a desk anchor per agent. A second QA, a reviewer, a researcher or the Night intern would need dynamic agent ids, extra seats in `rooms/project-template.json`, protocol changes (`team_view`, `agent_presence`) and a change in `gateway.ts` seat logic and the client team bar.
+  - B: change requirement 4.3 to "the member holding a role's desk is shown; the others wait on the bench" (what the code does now, recorded in design.md task 4).
+  - Needed from the user: A or B. Then `hr-desk-e2e.test.ts` and `hr-desk.test.ts` must assert the choice.
+- hr-desk, D10 (docs/risks-and-decisions.md): the import review runs `agentlife-import-review` (read-only tier) instead of `agentlife-security`. Requirement 3.3 was updated to match, on the instruction to fix the review's blocking items. The user should ratify it; if not, `agentlife-security` needs a read-only tier for this task.
+- hr-desk, non-blocking review suggestions not done: escape project ids in the regex at `team/service.ts` (~336); stage all agent files before moving them in `commit`; show import flags as a warning on the approve button.
 
 ## Manual browser checks (world-room task 12, user to do)
 Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_desk_1 -> repos + open_panel computer -> start_job -> approval -> approve -> developing/testing/reviewing -> delivered + report in ~10 s) passed. Run both servers (see above) and check:

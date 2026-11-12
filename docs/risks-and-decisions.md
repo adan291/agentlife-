@@ -58,6 +58,27 @@
 - **Alternativas:** Frankenstein (juego + agentes + Docker + Discord) y Costume Contest.
 - **Cambiaría si:** la estética final destaca más que el concepto. Entonces, Costume Contest.
 
+### D9. Importar plantillas de agentes de fuentes de confianza (spec hr-desk)
+
+- **Decisión:** solo se importan plantillas desde direcciones HTTPS listadas en `config/catalogue-sources.json` (vacío por defecto). Se copian únicamente `id`, `name`, `role`, `persona`, `description` y `defaultModel`; `tools`, `permissions`, `mcpServers`, `hooks`, `resources` y cualquier campo desconocido se descartan y se muestran como "ignorado por seguridad". Los permisos salen siempre de los tiers fijos del repositorio (`agents/tiers/*.json`), nunca de una plantilla.
+- **Aprobación:** la plantilla importada solo se puede contratar tras la aprobación del usuario, que se guarda con el hash sha256 del contenido; cualquier cambio exige una aprobación nueva.
+- **Por qué:** el texto de internet es dato no confiable (prompt injection). Una plantilla puede cambiar quién es el agente, no lo que puede hacer.
+- **Compromiso:** hay una revisión manual por plantilla y la lista de fuentes la mantiene el usuario.
+
+### D10. Revisor de importaciones propio (`agentlife-import-review`) en lugar de `agentlife-security`
+
+- **Decisión:** la revisión de inyección de prompts de una plantilla importada la hace `agentlife-import-review`, un agente con el tier `read-only`, ejecutado en un directorio vacío (`team/service-agents.ts`, `team/import-review.ts`). El requisito 3.3 decía `agentlife-security`; se actualizó el requisito.
+- **Por qué:** `agentlife-security` puede escribir en `data/security` y ejecutar git, y no debe recibir texto de internet. Con el tier de solo lectura, un texto malicioso no puede producir efectos aunque engañe al revisor.
+- **Compromiso:** hay dos agentes de seguridad que mantener. Además de la revisión del agente, el motor aplica patrones fijos de inyección, topes de tamaño y el escáner de secretos.
+- **Pendiente del usuario:** ratificar este cambio (se tomó durante la implementación sin consultarlo). Si prefiere el agente original, hay que dar a `agentlife-security` un tier de solo lectura para esta tarea.
+
+### D11. Segundo runtime de modelo local (`OllamaRuntime`) y agentes de servicio de solo lectura
+
+- **Decisión:** el "Night intern" corre en `runtimes/ollama.ts` (`OllamaRuntime`), no en `LlmRuntime`, con `InternRuntime` como envoltorio que cae a `claude-haiku-5.5` por kiro-cli si Ollama no responde y deja la nota en el informe. Solo acepta direcciones de este equipo (loopback, sin credenciales) y solo los pasos sin herramientas `summary`, `overview`, `memory` y `classify`; el motor rechaza plan, develop y review. Se añaden dos agentes de servicio de solo lectura, `agentlife-import-review` y `agentlife-hr` (sugiere equipos; solo propone, no contrata).
+- **Por qué:** `LlmRuntime` es el diálogo de ambiente (una línea, 60 tokens) y no sirve para respuestas completas. El prompt lleva texto del proyecto, por eso no puede salir de la máquina.
+- **Compromiso:** dos caminos de modelo local en el motor. Las notas del informe se guardan en memoria y se pierden si el motor se reinicia.
+- **Sin probar en vivo:** Ollama con `qwen3.5:4b` y el fallback con `kiro-cli` real.
+
 ## Riesgos
 
 | # | Riesgo | Prob. | Impacto | Mitigación |
