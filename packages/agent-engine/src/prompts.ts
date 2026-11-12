@@ -29,7 +29,11 @@ export function templateFor(role: Role, kind: JobKind = "change"): Role | Prompt
   return role;
 }
 
-export function loadPromptTemplate(role: Role | PromptName | ServicePromptName, dir: string = PROMPTS_DIR): string {
+/** Templates of the pipeline steps that are not a role's own (pipeline-editor): the researcher's notes. */
+export const PIPELINE_PROMPT_NAMES = ["researcher"] as const;
+export type PipelinePromptName = (typeof PIPELINE_PROMPT_NAMES)[number];
+
+export function loadPromptTemplate(role: Role | PromptName | PipelinePromptName | ServicePromptName, dir: string = PROMPTS_DIR): string {
   return readFileSync(path.join(dir, `${role}.md`), "utf8");
 }
 

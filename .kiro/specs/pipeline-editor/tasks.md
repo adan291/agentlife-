@@ -4,7 +4,7 @@
   - Schema, rules with reasons, default pipeline, transitions generated from a pipeline; property test of the safety rules
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 2. Optional steps
+- [x] 2. Optional steps
   - Research notes into the Architect prompt; second review with a different model and combined verdict
   - _Requirements: 3.1, 3.2_
 
