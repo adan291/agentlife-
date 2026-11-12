@@ -329,6 +329,10 @@ describe("job kinds over HTTP", () => {
     const unknown = await post("/tasks", { repoId: "demo", goal: "g", kind: "review-branch", target: "feature/nope" });
     expect(unknown.status).toBe(400);
     expect(((await unknown.json()) as { error: string }).error).toBe("unknown_branch");
+    // The checked-out main has nothing to be compared with (seen live on a project with only main).
+    const itself = await post("/tasks", { repoId: "demo", goal: "g", kind: "review-branch", target: "main" });
+    expect(itself.status).toBe(400);
+    expect(((await itself.json()) as { error: string }).error).toBe("nothing_to_compare");
     expect((await post("/tasks", { repoId: "demo", goal: "g", kind: "review-branch", target: "--output=x" })).status).toBe(400);
     expect((await post("/tasks", { repoId: "demo", goal: "g", kind: "review-branch" })).status).toBe(400);
     expect((await post("/tasks", { repoId: "demo", goal: "g", kind: "deploy", target: "x" })).status).toBe(400);
