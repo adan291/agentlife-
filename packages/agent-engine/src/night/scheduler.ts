@@ -25,6 +25,11 @@ export interface NightSchedulerOptions {
   /** Epoch ms. Tests pass a fake clock. */
   now?: () => number;
   logger?: Logger;
+  /**
+   * Called once when a night closes, with the night and every job in the schedule (the morning summary, requirement 4.1).
+   * A failure is logged; it never keeps the night open.
+   */
+  onClose?: (night: NightRecord, jobs: readonly NightJob[]) => unknown;
 }
 
 /** The reason of a job stopped by the time limit starts with this text; `settle` reads it back. */
@@ -53,6 +58,7 @@ export class NightScheduler {
   private readonly config: NightConfig;
   private readonly now: () => number;
   private readonly log: Logger;
+  private readonly onClose: NonNullable<NightSchedulerOptions["onClose"]> | undefined;
   private ticking = false;
   private timer: NodeJS.Timeout | undefined;
 
@@ -62,6 +68,7 @@ export class NightScheduler {
     this.config = opts.config;
     this.now = opts.now ?? Date.now;
     this.log = opts.logger ?? noopLogger;
+    this.onClose = opts.onClose;
   }
 
   /** Ticks now and then until `stop()`. The timer does not keep the process alive. */
@@ -186,8 +193,17 @@ export class NightScheduler {
   }
 
   private close(night: NightRecord, now: number): void {
-    this.store.setNight({ ...night, closedAt: now });
+    const closed = { ...night, closedAt: now };
+    this.store.setNight(closed);
     this.log.info("night closed", { key: night.key });
+    if (!this.onClose) return;
+    // The summary is written outside the pass: a slow Discord call must not delay the next tick.
+    try {
+      const result = this.onClose(closed, [...this.store.jobs()]);
+      if (result instanceof Promise) result.catch((e: unknown) => this.log.error("morning summary failed", { error: messageOf(e) }));
+    } catch (e) {
+      this.log.error("morning summary failed", { error: messageOf(e) });
+    }
   }
 
   private finish(job: NightJob, now: number, patch: Partial<NightJob>): void {

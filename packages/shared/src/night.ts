@@ -30,6 +30,8 @@ export const NightConfigSchema = z
     end: HhmmSchema,
     maxJobsPerNight: z.number().int().min(1).max(20),
     maxJobMinutes: z.number().int().min(1).max(240),
+    /** Send the morning summary to Discord with `pnpm notify` (requirement 4.2). Off unless the user turns it on. */
+    discord: z.boolean().optional(),
   })
   .refine((c) => c.start !== c.end, { message: "start and end must differ", path: ["end"] });
 export type NightConfig = z.infer<typeof NightConfigSchema>;
@@ -157,3 +159,80 @@ export type NightState = z.infer<typeof NightStateSchema>;
 
 export const NightMoveBodySchema = z.object({ direction: z.enum(["up", "down"]) });
 export type NightMoveBody = z.infer<typeof NightMoveBodySchema>;
+
+// ---- morning summary (requirement 4) ----
+
+/** Shown in the summary and in the Discord message: the words are the same in both. */
+export function nightStatusLabel(status: NightStatus): string {
+  switch (status) {
+    case "scheduled":
+      return "did not run";
+    case "running":
+      return "was still running";
+    case "done":
+      return "done";
+    case "failed":
+      return "failed";
+    case "waiting":
+      return "waiting for you";
+    case "timed_out":
+      return "stopped by the time limit";
+    case "cancelled":
+      return "cancelled";
+    case "skipped":
+      return "skipped";
+  }
+}
+
+/** One job of the night as the summary tells it. */
+export const MorningJobSchema = z.object({
+  id: z.string().min(1).max(40),
+  repoId: z.string().min(1).max(100),
+  kind: JobKindSchema,
+  goal: z.string().min(1).max(GOAL_MAX_CHARS),
+  status: NightStatusSchema,
+  verdict: z.enum(["pass", "fail"]).optional(),
+  /** Whole minutes between start and end. Absent when the job never started. */
+  minutes: z.number().int().nonnegative().optional(),
+  reason: z.string().max(500).optional(),
+  branch: z.string().min(1).max(200).optional(),
+});
+export type MorningJob = z.infer<typeof MorningJobSchema>;
+
+/** Numbers of the night, counted by code. `delivered` counts the jobs delivered as a branch. */
+export const MorningCountsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  waiting: z.number().int().nonnegative(),
+  timedOut: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  delivered: z.number().int().nonnegative(),
+});
+export type MorningCounts = z.infer<typeof MorningCountsSchema>;
+
+/** What the engine writes when the night window ends. The Markdown goes to the lobby mailbox. */
+export const MorningSummarySchema = z.object({
+  /** The night, `YYYY-MM-DD` of the window start. */
+  nightKey: z.string().min(1).max(20),
+  /** Epoch ms when the summary was written. */
+  writtenAt: z.number().int().nonnegative(),
+  counts: MorningCountsSchema,
+  jobs: z.array(MorningJobSchema).max(NIGHT_MAX_JOBS),
+  markdown: z.string().max(100_000),
+});
+export type MorningSummary = z.infer<typeof MorningSummarySchema>;
+
+/** `GET /night/summaries`: newest first. */
+export const MorningSummariesSchema = z.object({ summaries: z.array(MorningSummarySchema).max(30) });
+export type MorningSummaries = z.infer<typeof MorningSummariesSchema>;
+
+/** Id of the mailbox report that carries the summary of a night. */
+export function morningReportId(nightKey: string): string {
+  return `night-${nightKey}`;
+}
+
+export function morningTitle(nightKey: string): string {
+  return `Morning summary ${nightKey}`;
+}

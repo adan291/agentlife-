@@ -91,7 +91,7 @@ describe("night routes", () => {
 
 describe("night config", () => {
   it("has the defaults of the spec in the shipped file", () => {
-    expect(loadNightConfig()).toEqual(DEFAULT_NIGHT_CONFIG);
+    expect(loadNightConfig()).toEqual({ ...DEFAULT_NIGHT_CONFIG, discord: false });
     expect(DEFAULT_NIGHT_CONFIG).toEqual({ start: "01:00", end: "07:00", maxJobsPerNight: 4, maxJobMinutes: 20 });
   });
 

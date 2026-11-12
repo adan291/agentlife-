@@ -9,6 +9,7 @@ import type {
   JobDetails,
   JobKind,
   JobView,
+  MorningSummary,
   Project,
   RegisterProjectBody,
   RegisterProjectResult,
@@ -46,6 +47,8 @@ export interface EngineLink {
   /** Construction board of the lobby: how AGENT LIFE itself is being built. Optional: the scripted engine has none. */
   getBuildBoard?(): Promise<BuildBoard>;
   getBuildReport?(spec: string): Promise<BuildReport>;
+  /** Morning summaries of the night shift, newest first (lobby mailbox). Optional: the scripted engine has none. */
+  getNightSummaries?(): Promise<MorningSummary[]>
   /** Stream of agent events. Ends when the link is closed. */
   events(): AsyncIterable<AgentEvent>;
   close?(): void;

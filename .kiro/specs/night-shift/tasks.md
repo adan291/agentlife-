@@ -8,7 +8,7 @@
   - Scope-based automatic approval, stop when out of scope, optional delivery, audit-deps job
   - _Requirements: 2.1, 2.2, 2.3, 3.3, 6.2_
 
-- [ ] 3. Morning summary and Discord
+- [x] 3. Morning summary and Discord
   - Summary artifact to the lobby mailbox; notify with Ollama overview when enabled
   - _Requirements: 4.1, 4.2, 6.3_
 

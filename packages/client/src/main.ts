@@ -157,7 +157,7 @@ function refreshToasts(): void {
   toasts.update({
     pending: mailbox.pendingCount,
     openPanel: panels.state.open,
-    unreadReport: report ? { reportId: report.reportId, verdict: reportVerdict(report) } : undefined,
+    unreadReport: report ? { reportId: report.reportId, verdict: reportVerdict(report), night: report.kind === "night" } : undefined,
   });
 }
 

@@ -116,6 +116,8 @@ export const ReportSchema = z.object({
   ts: z.number().int().nonnegative().optional(),
   /** Absent: not a job on a registered project, or the engine does not know. */
   delivery: ReportDeliverySchema.optional(),
+  /** `night`: the morning summary of the night shift (lobby mailbox). It has no verdict and no job. */
+  kind: z.literal("night").optional(),
 });
 export type Report = z.infer<typeof ReportSchema>;
 

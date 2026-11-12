@@ -1,7 +1,8 @@
-import { NightJobInputSchema, NightJobSchema, NightMoveBodySchema, NightStateSchema, OkResponseSchema, type NightConfig } from "@agentlife/shared";
+import { MorningSummariesSchema, NightJobInputSchema, NightJobSchema, NightMoveBodySchema, NightStateSchema, OkResponseSchema, type NightConfig } from "@agentlife/shared";
 import { BadRequestError, parseBody, sendJson, type Route } from "../http/server.ts";
 import { NotFoundError } from "../errors.ts";
 import type { NightStore } from "./store.ts";
+import type { SummaryStore } from "./summary-store.ts";
 import { windowAt } from "./window.ts";
 
 const MAX_ID_CHARS = 100;
@@ -21,17 +22,27 @@ function idOf(raw: string | undefined): string {
 export interface NightRouteDeps {
   store: NightStore;
   config: NightConfig;
+  /** The morning summaries. Without it `GET /night/summaries` answers an empty list. */
+  summaries?: SummaryStore;
   hasProject(repoId: string): boolean;
   now?: () => number;
 }
 
 /**
- * `GET /night`, `POST /night/jobs`, `DELETE /night/jobs/:id` and `POST /night/jobs/:id/move` (requirement 1.1). The
- * window and the limits come from `config/night.json` and are shown, not edited, here.
+ * `GET /night`, `POST /night/jobs`, `DELETE /night/jobs/:id` and `POST /night/jobs/:id/move` (requirement 1.1), and
+ * `GET /night/summaries` (requirement 4.1). The window and the limits come from `config/night.json` and are shown, not
+ * edited, here.
  */
 export function createNightRoutes(deps: NightRouteDeps): Route[] {
   const now = deps.now ?? Date.now;
   return [
+    {
+      method: "GET",
+      pattern: /^\/night\/summaries$/,
+      handle: ({ res }) => {
+        sendJson(res, 200, MorningSummariesSchema, { summaries: deps.summaries?.all() ?? [] });
+      },
+    },
     {
       method: "GET",
       pattern: /^\/night$/,

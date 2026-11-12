@@ -19,7 +19,8 @@ export function tabTitle(waiting: number): string {
 }
 
 /** "Report ready: PASS". The verdict is spelled out; without one the text still says a report arrived. */
-export function reportToastText(verdict: ReportVerdict | undefined): string {
+export function reportToastText(verdict: ReportVerdict | undefined, night = false): string {
+  if (night) return "Your morning summary is ready";
   return verdict ? `Report ready: ${verdict.toUpperCase()}` : "Report ready";
 }
 
@@ -36,8 +37,8 @@ export interface ToastInput {
   /** Approvals that wait for the user. */
   pending: number;
   openPanel: PanelName | null;
-  /** The newest report that was not opened yet, with its verdict (undefined when unknown). */
-  unreadReport?: { reportId: string; verdict: ReportVerdict | undefined } | undefined;
+  /** The newest report that was not opened yet, with its verdict (undefined when unknown). `night`: the morning summary. */
+  unreadReport?: { reportId: string; verdict: ReportVerdict | undefined; night?: boolean } | undefined;
 }
 
 /**
@@ -48,7 +49,7 @@ export function toastPlan(input: ToastInput): ToastSpec[] {
   const out: ToastSpec[] = [];
   if (yourTurnVisible(input.pending, input.openPanel)) out.push({ kind: "your-turn", text: YOUR_TURN_TEXT, action: "Open mailbox" });
   if (input.unreadReport && input.openPanel !== "mailbox") {
-    out.push({ kind: "report", text: reportToastText(input.unreadReport.verdict), action: "Open report" });
+    out.push({ kind: "report", text: reportToastText(input.unreadReport.verdict, input.unreadReport.night === true), action: "Open report" });
   }
   return out;
 }

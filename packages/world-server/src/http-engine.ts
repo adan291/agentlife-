@@ -7,6 +7,7 @@ import {
   ErrorResponseSchema,
   HealthResponseSchema,
   jobDetailsFromExport,
+  MorningSummariesSchema,
   ProjectSchema,
   RegisterProjectResultSchema,
   RepoSchema,
@@ -22,6 +23,7 @@ import {
   type DeliveryInfo,
   type JobDetails,
   type JobView,
+  type MorningSummary,
   type Project,
   type RegisterProjectBody,
   type RegisterProjectResult,
@@ -121,6 +123,10 @@ export class HttpEngineLink implements EngineLink {
 
   async getBuildReport(spec: string): Promise<BuildReport> {
     return BuildReportSchema.parse(await this.request("GET", `/build/verify/${encodeURIComponent(spec)}`));
+  }
+
+  async getNightSummaries(): Promise<MorningSummary[]> {
+    return MorningSummariesSchema.parse(await this.request("GET", "/night/summaries")).summaries;
   }
 
   async deliver(taskId: string): Promise<DeliveryInfo> {

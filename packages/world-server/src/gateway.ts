@@ -8,6 +8,8 @@ import {
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   ServerMsgSchema,
+  morningReportId,
+  morningTitle,
   projectIdOfRoom,
   projectRoomId,
   splitAgentId,
@@ -23,6 +25,7 @@ import type {
   FloorStatus,
   Hotel,
   JobState,
+  MorningSummary,
   Project,
   RegisterProjectBody,
   Report,
@@ -56,6 +59,8 @@ export interface GatewayOptions {
   allowedOrigins?: readonly string[];
   /** Milliseconds between checks for deferred sim messages. */
   tickMs?: number;
+  /** Milliseconds between looks at the engine's night shift (summaries, window). Default 60000. */
+  nightPollMs?: number;
   /** Clock for the rate limiter. */
   clock?: () => number;
 }
@@ -266,6 +271,45 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  // ---- night shift: morning summaries in the lobby mailbox ----
+
+  /** Summaries written within this long count as news when the gateway first sees them; older ones are history. */
+  const FRESH_SUMMARY_MS = 24 * 60 * 60 * 1000;
+  /** Summary reports the user has not opened the lobby mailbox for yet. */
+  const unopenedSummaries = new Set<string>();
+
+  /**
+   * Copies the engine's morning summaries into the lobby mailbox. A summary that is new, and recent, is announced like a
+   * delivered report (badge, toast) when the user is in the lobby, and again on the next welcome into the lobby until
+   * the mailbox is opened. Never throws.
+   */
+  const syncSummaries = async (): Promise<void> => {
+    if (!engine?.getNightSummaries) return;
+    let list: MorningSummary[];
+    try {
+      list = await engine.getNightSummaries();
+    } catch {
+      return; // keep what the mailbox has
+    }
+    const lobby = floorOf(LOBBY_ROOM);
+    const news: Report[] = [];
+    for (const s of [...list].reverse()) {
+      const id = morningReportId(s.nightKey);
+      const report: Report = { reportId: id, taskId: id, title: morningTitle(s.nightKey), markdown: s.markdown, ts: s.writtenAt, kind: "night" };
+      const known = lobby.reports.has(id);
+      lobby.reports.set(id, report);
+      if (!known && Date.now() - s.writtenAt < FRESH_SUMMARY_MS) news.push(report);
+    }
+    for (const r of news) {
+      unopenedSummaries.add(r.reportId);
+      toUser(LOBBY_ROOM, { type: "report", report: r });
+    }
+    if (news.length > 0) {
+      lobby.unread = "report_ready";
+      pushFloors();
+    }
+  };
+
   /** The repositories the computer of a floor can start a job on: the floor's own project. */
   const sendRepos = async (ws: WebSocket, roomId: string) => {
     if (!engine) return sendError(ws, "engine_unavailable", "no engine connected");
@@ -310,8 +354,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     } else if (panel === "reception") {
       await sendProjects(ws);
     } else if (panel === "mailbox") {
+      // The lobby's mailbox holds the morning summaries; ask the engine so a summary written a moment ago is there.
+      if (roomId === LOBBY_ROOM) await syncSummaries();
       for (const a of f.approvals.values()) send(ws, { type: "approval", approval: a });
       for (const r of f.reports.values()) send(ws, { type: "report", report: r, resend: true });
+      if (roomId === LOBBY_ROOM) unopenedSummaries.clear();
       if (f.unread) {
         f.unread = null;
         pushFloors();
@@ -336,6 +383,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of f?.approvals.values() ?? []) if (a.status === "pending") send(ws, { type: "approval", approval: a });
+    // A morning summary nobody opened yet is announced again to a client that just arrived in the lobby.
+    if (roomId === LOBBY_ROOM) {
+      for (const id of unopenedSummaries) {
+        const report = f?.reports.get(id);
+        if (report) send(ws, { type: "report", report });
+      }
+    }
     // The progress stepper of a reloaded client needs the running job.
     if (f?.currentTaskId) enqueue(() => sendJobUpdate(roomId));
     pushFloors(true);
@@ -550,6 +604,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       }
     })();
     enqueue(syncProjects);
+    enqueue(syncSummaries);
   }
 
   // ---- client commands ----
@@ -689,6 +744,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
   refreshModels();
 
+  // The night shift writes its summary while nobody is connected, or while the user works on another floor.
+  const nightPoll = engine?.getNightSummaries ? setInterval(() => enqueue(syncSummaries), options.nightPollMs ?? 60_000) : undefined;
+  nightPoll?.unref();
+
   wss.on("connection", (ws) => {
     // One user session in the MVP: a second connection replaces the first.
     if (current) current.ws.close(4000, "replaced by a newer connection");
@@ -696,7 +755,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     current = { ws, userId: you, activityAll: false };
     sendWelcome(ws, hotel.roomOf(you) ?? LOBBY_ROOM, welcome);
     // A project registered since the last connection gets its floor now.
-    if (engine) enqueue(syncProjects);
+    if (engine) {
+      enqueue(syncProjects);
+      enqueue(syncSummaries);
+    }
     refreshModels();
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);
@@ -773,6 +835,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         close: () =>
           new Promise<void>((done) => {
             clearInterval(tick);
+            clearInterval(nightPoll);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();
             wss.close(() => done());

@@ -21,6 +21,8 @@ import { loadNightConfig } from "./night/config.ts";
 import { createNightRoutes } from "./night/routes.ts";
 import { NightScheduler } from "./night/scheduler.ts";
 import { NightStore } from "./night/store.ts";
+import { createDiscordNotifier, createMorningReporter, type NightNotifier } from "./night/morning.ts";
+import { SummaryStore } from "./night/summary-store.ts";
 import { isTerminal } from "./jobs/transitions.ts";
 import type { NightConfig } from "@agentlife/shared";
 import { FakeRuntime } from "./runtimes/fake.ts";
@@ -64,6 +66,10 @@ export interface EngineOptions {
     config?: NightConfig;
     /** Default: `AGENTLIFE_NIGHT_FILE` or `<dataDir>/night.json`. */
     file?: string;
+    /** Default: `AGENTLIFE_NIGHT_SUMMARIES_FILE` or `<dataDir>/night-summaries.json`. */
+    summariesFile?: string;
+    /** Sends the facts of the morning summary to Discord. Default (real process only): `scripts/notify.ts --overview`. Used only when `discord` is on in `config/night.json`. */
+    notify?: NightNotifier;
     run?: boolean;
     tickMs?: number;
     now?: () => number;
@@ -74,7 +80,7 @@ export interface Engine {
   store: Store;
   runner: JobRunner;
   projects: ProjectRegistry;
-  night: { store: NightStore; scheduler: NightScheduler };
+  night: { store: NightStore; scheduler: NightScheduler; summaries: SummaryStore };
   server: http.Server;
   config: EngineConfig;
   host: string;
@@ -170,11 +176,26 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     logger,
     ...(opts.night?.now ? { now: opts.night.now } : {}),
   });
+  const nightSummaries = new SummaryStore({
+    file: opts.night?.summariesFile ?? process.env["AGENTLIFE_NIGHT_SUMMARIES_FILE"] ?? path.join(paths.root, "night-summaries.json"),
+    logger,
+    ...(opts.night?.now ? { now: opts.night.now } : {}),
+  });
   const nightScheduler = new NightScheduler({
     store: nightStore,
     config: nightConfig,
     logger,
     ...(opts.night?.now ? { now: opts.night.now } : {}),
+    onClose: createMorningReporter({
+      summaries: nightSummaries,
+      discord: nightConfig.discord === true,
+      // A test passes its own notifier; the real process runs `scripts/notify.ts`.
+      notify:
+        opts.night?.notify ??
+        (opts.night?.run ? createDiscordNotifier({ root: PROJECT_ROOT, scriptPath: path.join(PROJECT_ROOT, "scripts", "notify.ts") }) : undefined),
+      logger,
+      ...(opts.night?.now ? { now: opts.night.now } : {}),
+    }),
     port: {
       hasProject: (id) => projects.has(id),
       start: (repoId, goal, startOpts) => runner.start(repoId, goal, startOpts),
@@ -201,7 +222,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       ...createProjectRoutes(projects, runner, store),
       createDeliverRoute(deliverDeps),
       createBranchesRoute({ registry: projects, paths }),
-      ...createNightRoutes({ store: nightStore, config: nightConfig, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
+      ...createNightRoutes({ store: nightStore, config: nightConfig, summaries: nightSummaries, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],
   });
@@ -212,7 +233,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     store,
     runner,
     projects,
-    night: { store: nightStore, scheduler: nightScheduler },
+    night: { store: nightStore, scheduler: nightScheduler, summaries: nightSummaries },
     server,
     config,
     host,

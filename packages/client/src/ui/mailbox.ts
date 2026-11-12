@@ -1,7 +1,7 @@
 import type { PanelData } from "./panel-state.ts";
 import { formatTime } from "./board.ts";
 import { renderMarkdown } from "./markdown.ts";
-import { newestFirst, renderReportViewer, reportHeadline, reportVerdict, verdictBadge } from "./report-viewer.ts";
+import { newestFirst, renderReportViewer, reportBadge, reportHeadline } from "./report-viewer.ts";
 
 export interface MailboxActions {
   decide(approvalId: string, decision: "approve" | "reject"): void;
@@ -76,7 +76,7 @@ export function renderMailbox(doc: Document, data: PanelData, actions: MailboxAc
     const when = doc.createElement("span");
     when.className = "al-muted";
     when.textContent = r.ts === undefined ? "" : formatTime(r.ts);
-    item.append(verdictBadge(doc, reportVerdict(r)), label, when);
+    item.append(reportBadge(doc, r), label, when);
     if (unread) {
       const mark = doc.createElement("span");
       mark.className = "al-new";

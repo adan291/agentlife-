@@ -34,8 +34,19 @@ Decisions made while implementing tasks 1 and 2. The requirements stay as writte
 - Verdict: `fail` when npm gave no list at all or a high/critical vulnerability is listed; outdated packages alone pass.
 - `runInSandbox` (extracted from `testStep`) is shared by the test step and the audit step, so both use the same flags.
 
+## Morning summary and Discord (task 3)
+
+- `night/summary.ts` (pure): `buildSummary(night, jobs, writtenAt)` takes the jobs whose `nightKey` is the night's, counts them by status (`countJobs`) and writes the Markdown for the mailbox (headline numbers, "Waiting for you", "Jobs", "To do"). `discordFacts` writes the plain-text facts for Discord from the same data. No model computes a number.
+- `night/summary-store.ts`: `data/night-summaries.json` (override `AGENTLIFE_NIGHT_SUMMARIES_FILE`), atomic write, the last 14 nights, one summary per night, an unreadable file is moved aside. `GET /night/summaries` answers them newest first.
+- `night/morning.ts`: `createMorningReporter` is the scheduler's `onClose`. It stores the summary, then, only if `discord` is true in `config/night.json` (default false), calls the notifier. A failing notifier is logged and never undoes the summary. The scheduler calls `onClose` once, when it closes the night, outside the tick (a slow Discord call cannot delay the next tick); a throwing hook is logged and the night stays closed.
+- The real notifier spawns `node --experimental-strip-types scripts/notify.ts --overview` with no shell, the facts on standard input and an allowlisted environment (`PATH`, home folders, `DISCORD_*`, `OLLAMA_*`; no `KIRO_API_KEY`, no engine token). `notify.ts --overview` asks the local Ollama for a three-sentence English overview of the facts and posts facts and overview; without Ollama the facts go alone. Presence ("here"/"away") does not apply: the user turned the message on in the config.
+- Lobby mailbox: the lobby got a mailbox (`mailbox_lobby`, north wall, x=4). The gateway copies the summaries into the lobby floor as reports (`kind: "night"`, id `night-<key>`, no verdict). A summary written in the last 24 hours is announced like a delivered report when the gateway first sees it (badge, toast "Your morning summary is ready") and again on every welcome into the lobby until the lobby mailbox is opened; older ones only appear in the list. The gateway looks at the engine on every connection, when the lobby mailbox opens and every 60 s (`nightPollMs`).
+- `ReportSchema.kind = "night"` is the only protocol change of this task; the client shows a "Night" badge instead of a verdict.
+
 ## Known limits
 
 - `tier` (cheap / normal) is stored on the job and shown, but not applied yet: the role runtimes take their model from `config/agents.json`, not per job. Needs a per-job model override in the runtime; left for the client task or a follow-up.
-- Not run live: a real night with `kiro-cli`, `audit-deps` in the real Docker image (npm cache contents unknown), delivery of a night job on a registered project.
+- Not run live: a real night with `kiro-cli`, `audit-deps` in the real Docker image (npm cache contents unknown), delivery of a night job on a registered project, a real Discord message with the Ollama overview (the notifier process is tested with stub scripts; `notify.ts --overview` itself is not).
+- The summary names projects by id, not by display name (the engine's night schedule keeps ids).
+- The `discord` switch lives in `config/night.json`; the night board only shows it, it does not change it.
 - Morning summary, Discord and the client (tasks 3 and 4) are not done.
