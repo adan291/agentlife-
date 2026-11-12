@@ -72,6 +72,7 @@ export class Catalogue {
       description: t.description,
       source: t.source,
       origin: t.source === BUILT_IN_SOURCE ? "built-in" : "imported",
+      ...(t.runtime && t.runtime !== "kiro-cli" ? { runtime: t.runtime } : {}),
     }));
   }
 }

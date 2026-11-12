@@ -304,7 +304,7 @@ export function createHrPanel(doc: Document, actions: HrActions) {
       head.append(
         el(doc, "strong", undefined, c.name),
         el(doc, "span", "al-badge", roleLabel(c.role)),
-        el(doc, "span", "al-muted", `${c.origin === "imported" ? "imported" : "built in"} · ${TIER_LABEL[c.tier]} · ${c.defaultModel}`),
+        el(doc, "span", "al-muted", `${c.origin === "imported" ? "imported" : "built in"} · ${TIER_LABEL[c.tier]} · ${c.runtime === "ollama" ? `runs on this computer (${c.defaultModel}), free` : c.defaultModel}`),
       );
       li.append(head, el(doc, "p", undefined, c.description));
       list.appendChild(li);

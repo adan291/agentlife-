@@ -229,6 +229,14 @@ describe("Catalogue tab", () => {
     expect(textOf(cards[1])).toContain("imported");
     expect(textOf(cards[2])).toContain("writes only in its own copy");
   });
+
+  it("says that the intern runs on this computer and is free", () => {
+    const h = harness({ hr: hrState({ catalogue: [entry("qa", "qa"), entry("night-intern", "researcher", { runtime: "ollama", defaultModel: "qwen3.5:4b" })] }) });
+    h.tab("catalogue");
+    const cards = findAll(h.body, (e) => e.dataset["template"] !== undefined);
+    expect(textOf(cards[1])).toContain("runs on this computer (qwen3.5:4b), free");
+    expect(textOf(cards[0])).not.toContain("runs on this computer");
+  });
 });
 
 describe("Imports tab", () => {

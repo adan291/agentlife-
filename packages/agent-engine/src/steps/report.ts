@@ -171,8 +171,15 @@ function testsSection(input: ReportInput): string[] {
 }
 
 /** The "## Run facts" section. */
-function factsSection(facts: readonly StepFact[]): string[] {
-  const out: string[] = ["## Run facts", ""];
+/** The "## Notes" section (things the steps want the reader to know), then the "## Run facts" section. */
+function factsSection(facts: readonly StepFact[], notes: readonly string[] = []): string[] {
+  const out: string[] = [];
+  if (notes.length) {
+    out.push("## Notes", "");
+    for (const n of notes) out.push(`- ${inlineCode(n, 400)}`);
+    out.push("");
+  }
+  out.push("## Run facts", "");
   if (facts.length) {
     for (const f of facts) {
       const files = f.filesRead === undefined && f.filesEdited === undefined ? undefined : `${f.filesRead ?? 0} read, ${f.filesEdited ?? 0} edited`;
@@ -205,7 +212,7 @@ function reportTitle(goal: string): string {
  * requested", the findings by severity, the branch diff and the tests. There is no plan, because nothing was planned,
  * and no way to deliver it, because nothing was changed.
  */
-function buildBranchReport(input: ReportInput, facts: readonly StepFact[]): { title: string; markdown: string } {
+function buildBranchReport(input: ReportInput, facts: readonly StepFact[], notes: readonly string[]): { title: string; markdown: string } {
   const out: string[] = ["# AGENT LIFE report", "", "## Summary", ""];
   out.push(`- **Goal:** ${inlineCode(input.goal)}`);
   out.push(`- **Kind:** ${jobKindLabel("review-branch")}`);
@@ -243,7 +250,7 @@ function buildBranchReport(input: ReportInput, facts: readonly StepFact[]): { ti
   out.push("");
 
   out.push(...testsSection(input));
-  out.push(...factsSection(facts));
+  out.push(...factsSection(facts, notes));
   return { title: reportTitle(input.goal), markdown: out.join("\n") + "\n" };
 }
 
@@ -251,7 +258,7 @@ function buildBranchReport(input: ReportInput, facts: readonly StepFact[]): { ti
  * Report of an `audit-deps` job (night-shift, requirement 3.3): the vulnerable packages by severity, then the outdated
  * ones. Package names come from the project's dependency tree, so they only appear in code spans.
  */
-function buildAuditReport(input: ReportInput, facts: readonly StepFact[]): { title: string; markdown: string } {
+function buildAuditReport(input: ReportInput, facts: readonly StepFact[], notes: readonly string[]): { title: string; markdown: string } {
   const audit = input.audit;
   const out: string[] = ["# AGENT LIFE report", "", "## Summary", ""];
   out.push(`- **Goal:** ${inlineCode(input.goal)}`);
@@ -297,7 +304,7 @@ function buildAuditReport(input: ReportInput, facts: readonly StepFact[]): { tit
   }
   out.push("");
 
-  out.push(...factsSection(facts));
+  out.push(...factsSection(facts, notes));
   return { title: reportTitle(input.goal), markdown: out.join("\n") + "\n" };
 }
 
@@ -306,10 +313,10 @@ function buildAuditReport(input: ReportInput, facts: readonly StepFact[]): { tit
  * fenced code, bold and code spans. Text from the user or a model only appears in code spans, fenced
  * blocks and the plain-text title, so the report never carries Markdown or HTML of its own making.
  */
-export function buildReport(input: ReportInput, facts: readonly StepFact[] = []): { title: string; markdown: string } {
+export function buildReport(input: ReportInput, facts: readonly StepFact[] = [], notes: readonly string[] = []): { title: string; markdown: string } {
   const kind: JobKind = input.kind ?? "change";
-  if (kind === "review-branch") return buildBranchReport(input, facts);
-  if (kind === "audit-deps") return buildAuditReport(input, facts);
+  if (kind === "review-branch") return buildBranchReport(input, facts, notes);
+  if (kind === "audit-deps") return buildAuditReport(input, facts, notes);
   const out: string[] = [];
   out.push("# AGENT LIFE report", "");
 
@@ -385,7 +392,7 @@ export function buildReport(input: ReportInput, facts: readonly StepFact[] = [])
   }
   out.push("");
 
-  out.push(...factsSection(facts));
+  out.push(...factsSection(facts, notes));
 
   return { title: reportTitle(input.goal), markdown: out.join("\n") + "\n" };
 }
@@ -439,5 +446,5 @@ async function basedOn(deps: PipelineDeps, repoId: string): Promise<ReportInput[
 /** Report step: the template filled with the job's data. The runner calls it for failed jobs too (requirement 8.2). */
 export async function reportStep(deps: PipelineDeps, ctx: StepContext, input: ReportInput): Promise<{ title: string; markdown: string }> {
   const from = await basedOn(deps, ctx.repoId);
-  return buildReport(from ? { ...input, basedOn: from } : input, collectFacts(deps, ctx.taskId));
+  return buildReport(from ? { ...input, basedOn: from } : input, collectFacts(deps, ctx.taskId), deps.notes?.get(ctx.taskId) ?? []);
 }

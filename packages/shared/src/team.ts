@@ -29,14 +29,26 @@ export const TEMPLATE_PERSONA_MAX = 2000;
 export const TEMPLATE_DESCRIPTION_MAX = 300;
 export const TEMPLATE_NAME_MAX = 40;
 export const TEMPLATE_MODEL_MAX = 60;
-/** A model id is passed to `kiro-cli --model`, so it must look like one and can never start with a dash. */
-export const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+/**
+ * A model id is passed to `kiro-cli --model`, so it must look like one and can never start with a dash. A colon is
+ * allowed for the tags of local Ollama models (`qwen3.5:4b`).
+ */
+export const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 export const ModelIdSchema = z.string().trim().min(1).max(TEMPLATE_MODEL_MAX).regex(MODEL_ID_RE, "not a model id");
 export const BUILT_IN_SOURCE = "built-in";
 
 export const TemplateIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "use lowercase letters, digits and dashes");
 
 const sourceOk = (s: string): boolean => s === BUILT_IN_SOURCE || (/^https:\/\/\S+$/.test(s) && s.length <= 300);
+
+/**
+ * What runs an agent of a template. `kiro-cli` (the default, when the field is absent) runs the generated agent file.
+ * `ollama` is the local model of the "Night intern": no tools at all, only for read-only steps that need none. Only
+ * catalogue files in this repository can set it; an imported file never can (the import copies known fields only).
+ */
+export const TEMPLATE_RUNTIMES = ["kiro-cli", "ollama"] as const;
+export const TemplateRuntimeSchema = z.enum(TEMPLATE_RUNTIMES);
+export type TemplateRuntime = z.infer<typeof TemplateRuntimeSchema>;
 
 /** The fields every template has. Unknown fields are dropped when this is used to parse (never copied anywhere). */
 export const TemplateBaseSchema = z.object({
@@ -50,13 +62,22 @@ export const TemplateBaseSchema = z.object({
   tier: TierIdSchema,
   /** `built-in`, or the HTTPS address an imported template came from. */
   source: z.string().refine(sourceOk, "source must be built-in or an https address"),
+  runtime: TemplateRuntimeSchema.optional(),
 });
 
-/** A template file of the catalogue: strict, and the tier must be the one its role is allowed. */
-export const TemplateSchema = TemplateBaseSchema.strict().refine((t) => t.tier === tierForRole(t.role), {
-  message: "the tier does not match the role",
-  path: ["tier"],
-});
+/**
+ * A template file of the catalogue: strict, and the tier must be the one its role is allowed. The local runtime is
+ * only for a built-in researcher: it has no tools, so no other role can do its work with it.
+ */
+export const TemplateSchema = TemplateBaseSchema.strict()
+  .refine((t) => t.tier === tierForRole(t.role), {
+    message: "the tier does not match the role",
+    path: ["tier"],
+  })
+  .refine((t) => t.runtime !== "ollama" || (t.role === "researcher" && t.source === BUILT_IN_SOURCE), {
+    message: "the ollama runtime is only for a built-in researcher",
+    path: ["runtime"],
+  });
 export type Template = z.infer<typeof TemplateSchema>;
 
 export const CatalogueEntrySchema = z.object({
@@ -68,6 +89,8 @@ export const CatalogueEntrySchema = z.object({
   description: z.string(),
   source: z.string(),
   origin: z.enum(["built-in", "imported"]),
+  /** Present only for a template that does not run on kiro-cli (the local intern). */
+  runtime: TemplateRuntimeSchema.optional(),
 });
 export type CatalogueEntry = z.infer<typeof CatalogueEntrySchema>;
 export const CatalogueResponseSchema = z.array(CatalogueEntrySchema);

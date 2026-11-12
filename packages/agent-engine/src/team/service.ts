@@ -16,7 +16,8 @@ import { ConflictError, NotFoundError } from "../errors.ts";
 import { BadRequestError } from "../http/server.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import type { Catalogue } from "./catalogue.ts";
-import { AGENT_NAME_RE, agentFileFor, writeAgentFile, type AgentValidator } from "./generate.ts";
+import { AGENT_NAME_RE, agentFileFor, ROLE_INSTRUCTIONS, writeAgentFile, type AgentValidator } from "./generate.ts";
+import { INTERN_FALLBACK_MODEL } from "./intern.ts";
 import type { ModelDirectory } from "./models.ts";
 import type { TeamStore } from "./store.ts";
 import type { Tier } from "./tiers.ts";
@@ -29,9 +30,15 @@ export interface ResolvedMember {
   memberId: string;
   /** Name of the kiro-cli agent (`--agent`). */
   agent: string;
-  /** Model for `--model`; absent when the configuration leaves it to the agent file. */
+  /** Model for `--model`; absent when the configuration leaves it to the agent file. For a local member: the Ollama tag. */
   model?: string;
   displayName: string;
+  /**
+   * `ollama` for the Night intern: the work goes to the local model, with `system` as its persona, and `agent` is only
+   * the read-only agent the fallback model runs as. Absent for everyone else.
+   */
+  runtime?: "ollama";
+  system?: string;
 }
 
 /** What the pipeline steps ask for. A role the team does not have gives undefined and the step uses the built-in agent. */
@@ -130,11 +137,14 @@ export class TeamService implements TeamResolver {
     const out = new Map<TeamRole, ResolvedMember>();
     for (const m of members) {
       if (out.has(m.role)) continue;
+      const template = this.o.catalogue.get(m.templateId);
+      const local = template?.runtime === "ollama";
       out.set(m.role, {
         memberId: m.id,
         agent: this.agentOf(projectId, m, stored !== undefined),
         ...(m.model ? { model: m.model } : {}),
         displayName: m.displayName,
+        ...(local && template ? { runtime: "ollama" as const, system: `${template.persona} ${ROLE_INSTRUCTIONS[template.role]}` } : {}),
       });
     }
     return out;
@@ -166,12 +176,17 @@ export class TeamService implements TeamResolver {
     return ids;
   }
 
+  /** The model written into the agent file. A local member's file is only for the fallback, so it names the fallback model. */
+  private fileModel(template: { runtime?: string | undefined }, member: TeamMember): string {
+    return template.runtime === "ollama" ? INTERN_FALLBACK_MODEL : member.model;
+  }
+
   private async fileFor(projectId: string, member: TeamMember): Promise<void> {
     const agents = this.o.agents;
     if (!agents) return;
     const template = this.o.catalogue.get(member.templateId);
     if (!template) throw new NotFoundError("unknown template");
-    const spec = { agentName: `${projectId}-${member.id}`, model: member.model };
+    const spec = { agentName: `${projectId}-${member.id}`, model: this.fileModel(template, member) };
     const file = agentFileFor(spec, template, this.o.tiers[tierForRole(member.role)]);
     await writeAgentFile(file, { kiroHome: agents.kiroHome, ...(agents.validate ? { validate: agents.validate } : {}) });
   }
@@ -221,8 +236,9 @@ export class TeamService implements TeamResolver {
         throw new ConflictError("team_full", `A team holds at most ${TEAM_MAX_MEMBERS} members. Fire someone first.`);
       }
       this.checkName(members, body.displayName);
-      const model = body.model ?? this.o.models.preferred(template.defaultModel);
-      await this.checkModel(template.role, model);
+      const model = body.model ?? (template.runtime === "ollama" ? template.defaultModel : this.o.models.preferred(template.defaultModel));
+      // A local model is not one of the account's models, so the account's list does not apply to it.
+      if (template.runtime !== "ollama") await this.checkModel(template.role, model);
       let id = `${template.role}-${this.newId()}`;
       while (members.some((m) => m.id === id)) id = `${template.role}-${this.newId()}`;
       const member: TeamMember = { id, displayName: body.displayName, templateId: template.id, role: template.role, model };
@@ -238,7 +254,7 @@ export class TeamService implements TeamResolver {
       const old = members.find((m) => m.id === memberId);
       if (!old) throw new NotFoundError("unknown team member");
       if (body.displayName !== undefined) this.checkName(members, body.displayName, memberId);
-      if (body.model !== undefined) await this.checkModel(old.role, body.model);
+      if (body.model !== undefined && this.o.catalogue.get(old.templateId)?.runtime !== "ollama") await this.checkModel(old.role, body.model);
       const next: TeamMember = { ...old, ...(body.displayName !== undefined ? { displayName: body.displayName } : {}), ...(body.model !== undefined ? { model: body.model } : {}) };
       await this.commit(projectId, members.map((m) => (m.id === memberId ? next : m)));
       if (next.displayName !== old.displayName) this.say(projectId, next.role, `Renamed ${old.displayName} to ${next.displayName}`);
@@ -295,7 +311,7 @@ export class TeamService implements TeamResolver {
         const name = `${projectId}-${m.id}`;
         expected.add(name);
         try {
-          const file = agentFileFor({ agentName: name, model: m.model }, template, this.o.tiers[tierForRole(m.role)]);
+          const file = agentFileFor({ agentName: name, model: this.fileModel(template, m) }, template, this.o.tiers[tierForRole(m.role)]);
           if ((await writeAgentFile(file, { kiroHome: agents.kiroHome })).changed) written += 1;
         } catch (e) {
           this.log.warn("agent file could not be written", { projectId, member: m.id, error: e instanceof Error ? e.message : String(e) });

@@ -27,7 +27,10 @@ import { isTerminal } from "./jobs/transitions.ts";
 import { scopeAgentId, type NightConfig, type JobState, type TeamRole } from "@agentlife/shared";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
+import { OllamaRuntime } from "./runtimes/ollama.ts";
 import { createPipelineSteps } from "./steps/index.ts";
+import { JobNotes } from "./steps/notes.ts";
+import { InternRuntime } from "./team/intern.ts";
 import { LlmRuntime } from "./runtimes/llm.ts";
 import type { AgentRuntime, Role } from "./runtimes/types.ts";
 import { Store, type StoreOptions } from "./store.ts";
@@ -220,6 +223,11 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     logger,
   });
   const serviceRuntime = real ? new KiroCliRuntime({ kiroHome: paths.kiroHome }) : undefined;
+  // The Night intern: the local model first, the same read-only agent on claude-haiku-5.5 when Ollama cannot answer.
+  const intern = serviceRuntime
+    ? new InternRuntime({ local: new OllamaRuntime(), fallback: serviceRuntime, onFallback: (m) => logger.warn(m) })
+    : undefined;
+  const notes = new JobNotes();
   const importReviewer =
     opts.imports?.reviewer ??
     (serviceRuntime
@@ -277,7 +285,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     const models = roleModels(config);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team })
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team, ...(intern ? { intern } : {}), notes })
       : createRuntimeSteps({ runtimes, store, logger, activity, models, team });
   }
   const ambient =

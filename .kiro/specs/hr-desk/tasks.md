@@ -16,6 +16,6 @@
   - HR room furniture and panel (catalogue, teams, import queue), HR agent team suggestion (applied by the user), hired agents appear on their floor, fired agents leave by the elevator
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 5. Local intern
+- [x] 5. Local intern
   - "Night intern" template on the Ollama runtime, allowed only for tool-free read-only steps, fallback to claude-haiku-5.5 reported
   - _Requirements: 6.1, 6.2, 6.3_
