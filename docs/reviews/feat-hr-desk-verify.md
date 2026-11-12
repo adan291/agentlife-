@@ -2,6 +2,8 @@ VERDICT: FAIL
 
 Branch `feat/hr-desk` (8 commits over `main`, tasks 1-5 marked done). Verified on 2026-11-12, second pass after review-fix commit `f0ba971` (docs, requirements 3.3 and 6.1, one extra suggest test). `pnpm check` passes again (shared 211, world-server 137, client 440, agent-engine 598 passed and 7 skipped, scripts 16).
 
+Third pass: no code or spec change since the second pass (HEAD `3ea56d9`, only a review doc modified in the working tree). `pnpm check` and `e2e/hr.spec.ts` were run again with the same results. Requirement 4.3 still reads "Hired agents SHALL appear on their project's floor at their desk" and the code still shows only the member holding a role's desk.
+
 Commands run: `pnpm check` (exit 0: shared 211, world-server 137, client 440, agent-engine 598 passed and 7 skipped, scripts 16); the 10 hr-desk engine test files with the verbose reporter (125 passed, 1 skipped: the live `kiro-cli agent validate` test needs `AGENTLIFE_LIVE=1`); `E2E_CHANNEL=msedge playwright test e2e/hr.spec.ts` (2 passed).
 
 ## Criteria
