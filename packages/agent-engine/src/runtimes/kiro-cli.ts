@@ -4,6 +4,7 @@ import type { EventEmitter } from "node:events";
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { agentName } from "../agents.ts";
+import { MODEL_ID_RE } from "@agentlife/shared";
 import { collectSecrets, createRedactor } from "../log.ts";
 import { isInside } from "../paths.ts";
 import { killTree } from "./kill-tree.ts";
@@ -14,6 +15,7 @@ export const STDERR_TAIL_LINES = 20;
 const MAX_STDERR_BYTES = 64 * 1024;
 const MAX_MESSAGE_CHARS = 2 * 1024 * 1024;
 const MAX_PROGRESS_CHARS = 120;
+const SAFE_AGENT_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
 /** Failure of a kiro-cli run. The message never contains secrets. */
 export class KiroCliError extends Error {
@@ -150,8 +152,11 @@ export class KiroCliRuntime implements AgentRuntime {
     this.kill = opts.kill ?? killTree;
   }
 
-  buildArgs(role: Role): string[] {
-    const model = this.opts.models?.[role];
+  buildArgs(role: Role, member: { agent?: string | undefined; model?: string | undefined } = {}): string[] {
+    // Values from a team go on the command line: they must look like an agent name and a model id, never like a flag.
+    if (member.agent !== undefined && !SAFE_AGENT_NAME.test(member.agent)) throw new KiroCliError("the agent name is not valid");
+    if (member.model !== undefined && !MODEL_ID_RE.test(member.model)) throw new KiroCliError("the model id is not valid");
+    const model = member.model ?? this.opts.models?.[role];
     return [
       ...(this.opts.binArgs ?? []),
       "chat",
@@ -160,7 +165,7 @@ export class KiroCliRuntime implements AgentRuntime {
       "--output-format",
       "stream-json",
       "--agent",
-      agentName(role),
+      member.agent ?? agentName(role),
       ...(model ? ["--model", model] : []),
     ];
   }
@@ -191,7 +196,7 @@ export class KiroCliRuntime implements AgentRuntime {
 
     const child = this.spawnFn({
       command: this.opts.bin ?? "kiro-cli",
-      args: this.buildArgs(input.role),
+      args: this.buildArgs(input.role, { agent: input.agent, model: input.model }),
       cwd: input.cwd,
       env: buildMinimalEnv(this.opts.kiroHome, this.opts.sourceEnv),
     });

@@ -1,4 +1,4 @@
-import { ACTIVITY_TEXT_MAX, sanitize, type AgentId } from "@agentlife/shared";
+import { ACTIVITY_TEXT_MAX, sanitize, type ScopedAgentId } from "@agentlife/shared";
 import type { NewEvent } from "./store.ts";
 
 /** At most one runtime-progress activity event per agent in this window (requirement 4.1). */
@@ -6,9 +6,9 @@ export const ACTIVITY_THROTTLE_MS = 1000;
 
 export interface ActivityEmitter {
   /** Runtime progress (tool calls): sanitised, and dropped when the agent emitted one less than 1 s ago. */
-  progress(taskId: string, agentId: AgentId, text: string): void;
+  progress(taskId: string, agentId: ScopedAgentId, text: string): void;
   /** Job milestone (plan ready, approval, test result): sanitised, not throttled. */
-  line(taskId: string, agentId: AgentId, text: string): void;
+  line(taskId: string, agentId: ScopedAgentId, text: string): void;
 }
 
 export interface ActivityEmitterOptions {
@@ -26,7 +26,7 @@ export function createActivityEmitter(opts: ActivityEmitterOptions): ActivityEmi
   const gap = opts.throttleMs ?? ACTIVITY_THROTTLE_MS;
   const lastAt = new Map<string, number>();
 
-  const emit = (taskId: string, agentId: AgentId, raw: string): void => {
+  const emit = (taskId: string, agentId: ScopedAgentId, raw: string): void => {
     const text = sanitize(raw, ACTIVITY_TEXT_MAX);
     if (!text) return;
     opts.append({ type: "agent.activity", taskId, agentId, text });

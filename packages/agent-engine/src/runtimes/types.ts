@@ -11,6 +11,10 @@ export interface RuntimeInput {
   signal: AbortSignal;
   /** Where a real runtime keeps the raw output lines (JSONL). The fake runtime ignores it. */
   rawLogPath?: string;
+  /** The team member's kiro-cli agent. Default: the built-in agent of the role. */
+  agent?: string;
+  /** The team member's model. Default: the model configured for the role. */
+  model?: string;
 }
 
 export type RuntimeEvent =

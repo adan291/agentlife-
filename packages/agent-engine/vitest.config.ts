@@ -12,6 +12,7 @@ export default defineConfig({
     env: {
       RUNTIME: "fake",
       AGENTLIFE_PROJECTS_FILE: path.join(os.tmpdir(), "agentlife-vitest-no-projects.json"),
+      AGENTLIFE_TEAMS_FILE: path.join(os.tmpdir(), "agentlife-vitest-no-teams.json"),
       AGENTLIFE_PROJECT_ROOTS: "",
     },
   },

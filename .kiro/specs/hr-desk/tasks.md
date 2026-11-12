@@ -4,7 +4,7 @@
   - Tier files, template schema, catalogue, agent file generation from tier + persona with validation; property test that permissions always equal the tier
   - _Requirements: 1.1, 1.2, 2.5, 5.1_
 
-- [ ] 2. Teams per project
+- [x] 2. Teams per project
   - Hire / rename / change model / fire with the team rules, `data/teams.json`, models list from kiro-cli, engine uses each project's team for jobs, activity lines
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.3_
 

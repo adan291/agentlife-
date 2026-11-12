@@ -29,6 +29,9 @@ export const TEMPLATE_PERSONA_MAX = 2000;
 export const TEMPLATE_DESCRIPTION_MAX = 300;
 export const TEMPLATE_NAME_MAX = 40;
 export const TEMPLATE_MODEL_MAX = 60;
+/** A model id is passed to `kiro-cli --model`, so it must look like one and can never start with a dash. */
+export const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const ModelIdSchema = z.string().trim().min(1).max(TEMPLATE_MODEL_MAX).regex(MODEL_ID_RE, "not a model id");
 export const BUILT_IN_SOURCE = "built-in";
 
 export const TemplateIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "use lowercase letters, digits and dashes");
@@ -43,7 +46,7 @@ export const TemplateBaseSchema = z.object({
   /** Who the agent is: voice and approach. Never a permission. */
   persona: z.string().trim().min(1).max(TEMPLATE_PERSONA_MAX),
   description: z.string().trim().min(1).max(TEMPLATE_DESCRIPTION_MAX),
-  defaultModel: z.string().trim().min(1).max(TEMPLATE_MODEL_MAX),
+  defaultModel: ModelIdSchema,
   tier: TierIdSchema,
   /** `built-in`, or the HTTPS address an imported template came from. */
   source: z.string().refine(sourceOk, "source must be built-in or an https address"),
@@ -86,7 +89,7 @@ export const TeamMemberSchema = z.object({
   displayName: MemberNameSchema,
   templateId: TemplateIdSchema,
   role: TeamRoleSchema,
-  model: z.string().min(1).max(TEMPLATE_MODEL_MAX),
+  model: ModelIdSchema,
 });
 export type TeamMember = z.infer<typeof TeamMemberSchema>;
 
@@ -107,7 +110,7 @@ export const HireBodySchema = z
     templateId: TemplateIdSchema,
     displayName: MemberNameSchema,
     /** Default: the template's own model. */
-    model: z.string().trim().min(1).max(TEMPLATE_MODEL_MAX).optional(),
+    model: ModelIdSchema.optional(),
   })
   .strict();
 export type HireBody = z.infer<typeof HireBodySchema>;
@@ -115,7 +118,7 @@ export type HireBody = z.infer<typeof HireBodySchema>;
 export const UpdateMemberBodySchema = z
   .object({
     displayName: MemberNameSchema.optional(),
-    model: z.string().trim().min(1).max(TEMPLATE_MODEL_MAX).optional(),
+    model: ModelIdSchema.optional(),
   })
   .strict()
   .refine((b) => b.displayName !== undefined || b.model !== undefined, "nothing to change");

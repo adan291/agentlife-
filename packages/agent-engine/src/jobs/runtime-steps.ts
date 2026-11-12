@@ -5,6 +5,7 @@ import type { Logger } from "../log.ts";
 import type { Store } from "../store.ts";
 import { createStepTracker } from "../work.ts";
 import { fallbackReport } from "./runner.ts";
+import type { TeamResolver } from "../team/service.ts";
 import type { StepContext, Steps, TestResult } from "./steps.ts";
 
 export interface RuntimeStepsOptions {
@@ -19,6 +20,8 @@ export interface RuntimeStepsOptions {
   activity?: ActivityEmitter;
   /** Model label per role, shown with the work of the agent (`agent.work`). */
   models?: Partial<Record<Role, string>>;
+  /** The agents of each project's team. Without it every role runs with the configured model. */
+  team?: TeamResolver;
 }
 
 function dataPrompt(goal: string): string {
@@ -44,6 +47,7 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
 
   async function collect(role: Role, step: string, ctx: StepContext, prompt: string): Promise<string> {
     const outputs: string[] = [];
+    const member = opts.team?.resolve(ctx.repoId, ctx.taskId, role);
     const tracker = createStepTracker({
       store: opts.store,
       taskId: ctx.taskId,
@@ -51,7 +55,7 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
       agentId: role,
       step,
       title: ctx.title,
-      model: opts.models?.[role],
+      model: member?.model ?? opts.models?.[role],
     });
     tracker?.start();
     try {
@@ -61,6 +65,7 @@ export function createRuntimeSteps(opts: RuntimeStepsOptions): Steps {
         cwd: cwdFor(ctx.repoId),
         timeoutMs: ctx.timeoutMs,
         signal: ctx.signal,
+        ...(member ? { agent: member.agent, ...(member.model ? { model: member.model } : {}) } : {}),
       })) {
         opts.store.appendRunLog(ctx.taskId, step, { n: ctx.stepIndex, ts: Date.now(), ...ev });
         tracker?.feed(ev);

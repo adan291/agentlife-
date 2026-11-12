@@ -7,6 +7,7 @@ import type { DataPaths } from "../paths.ts";
 import type { ProjectRegistry, ResolvedProject } from "../projects/registry.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
+import type { TeamResolver } from "../team/service.ts";
 import { createStepTracker } from "../work.ts";
 
 /** What the real steps need. Built once by the engine (task 11) and shared by all steps. */
@@ -25,6 +26,8 @@ export interface PipelineDeps {
   activity?: ActivityEmitter;
   /** Model label per role, shown with the work of the agent (`agent.work`). */
   models?: Partial<Record<Role, string>>;
+  /** The agents of each project's team. Without it every role runs the built-in agent with the configured model. */
+  team?: TeamResolver;
 }
 
 const SAFE_TASK_ID = /^[A-Za-z0-9_-]+$/;
@@ -72,6 +75,7 @@ export async function runRole(
 ): Promise<string> {
   assertSafeTaskId(ctx.taskId);
   const outputs: string[] = [];
+  const member = deps.team?.resolve(ctx.repoId, ctx.taskId, role);
   const input = {
     role,
     prompt,
@@ -79,6 +83,7 @@ export async function runRole(
     timeoutMs: ctx.timeoutMs,
     signal: ctx.signal,
     rawLogPath: path.join(deps.paths.runs, ctx.taskId, `${step}.raw.jsonl`),
+    ...(member ? { agent: member.agent, ...(member.model ? { model: member.model } : {}) } : {}),
   };
   const tracker = createStepTracker({
     store: deps.store,
@@ -87,7 +92,7 @@ export async function runRole(
     agentId: role,
     step,
     title: ctx.title,
-    model: deps.models?.[role],
+    model: member?.model ?? deps.models?.[role],
   });
   tracker?.start();
   try {
