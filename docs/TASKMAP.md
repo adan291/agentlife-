@@ -11,7 +11,7 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 1 | `project-registry` | S14 | yes | needs-check | Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch |
 | 2 | `hotel-floors` | S15 S16 | yes | done | Lobby, elevator with live floor status, one floor per project, two jobs at once |
 | 3 | `build-board` | S15B | no | done | Construction board in the lobby: TASKMAP rows, tasks per spec, conductor phase, what waits for you |
-| 4 | `job-types` | S20 S21 | no | todo | Review my branch, write tests, document: each from its own furniture |
+| 4 | `job-types` | S20 S21 | no | done | Review my branch, write tests, document: each from its own furniture |
 | 5 | `night-shift` | S22 S23 | yes | todo | Schedule jobs for the night; morning summary in the mailbox and on Discord |
 | 6 | `hr-desk` | S17 S18 S24 | yes | todo | HR office: hire, rename, change model, fire; trusted imports; local Ollama intern |
 | 7 | `project-memory` | S25 | no | todo | The Library: what agents learned, used in every next job |
