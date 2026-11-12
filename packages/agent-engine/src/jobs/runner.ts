@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
+  BranchReviewSchema,
   PlanSchema,
   ReviewSchema,
+  targetProblem,
   type AgentId,
   type AgentState,
   type ApprovalDecision,
   type EngineJobView,
+  type JobKind,
   type JobState,
   type Plan,
   type Review,
@@ -19,8 +22,9 @@ import { noopLogger, type Logger } from "../log.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
 import { createStepTracker, defaultWorkTitle } from "../work.ts";
-import type { ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
-import { assertTransition, canTransition, isTerminal } from "./transitions.ts";
+import { assertTransitionFor, canTransitionFor, hasTestStep } from "./kinds.ts";
+import type { PlanTask, ReportInput, StepContext, Steps, TestResult, Verdict } from "./steps.ts";
+import { isTerminal } from "./transitions.ts";
 
 /** Develop runs at most this many times: the first try plus one retry after a QA fail (requirement 3.5). */
 export const MAX_DEVELOP_ATTEMPTS = 2;
@@ -35,6 +39,23 @@ const STEP_ROLE: Record<StepKey, AgentId> = {
   report: "architect",
 };
 const AGENTS: readonly AgentId[] = ["architect", "developer", "qa"];
+
+/** Wording of the plan step per kind (`review-branch` has no plan). `change` keeps the original texts. */
+const PLAN_WORDS: Record<JobKind, { reading: string; analysing: string; chatter: string; summary: string }> = {
+  change: { reading: "Reading the repo", analysing: "Analysing the repo", chatter: "analysing the repository", summary: "Plan for" },
+  "review-branch": { reading: "Reading the repo", analysing: "Analysing the repo", chatter: "analysing the repository", summary: "Plan for" },
+  "write-tests": { reading: "Reading the code to test", analysing: "Planning the tests", chatter: "planning tests", summary: "Test plan for" },
+  document: { reading: "Researching the topic", analysing: "Researching the topic", chatter: "researching a topic", summary: "Documentation plan for" },
+};
+
+/** What the review step is given when the pipeline has no test step (`document`). Never shown as a test result. */
+const NO_TEST_STEP: TestResult = { passed: true, skipped: true, log: "not part of this job" };
+
+export interface StartOptions {
+  kind?: JobKind;
+  /** Branch (`review-branch`), path or module (`write-tests`), topic or path (`document`). */
+  target?: string;
+}
 
 export interface RunnerOptions {
   store: Store;
@@ -51,6 +72,8 @@ export interface RunnerOptions {
 
 interface Active {
   id: string;
+  kind: JobKind;
+  target?: string;
   ac: AbortController;
   pending?: { approvalId: string; resolve: (d: ApprovalDecision) => void } | undefined;
   data: Omit<ReportInput, "goal" | "verdict">;
@@ -75,6 +98,7 @@ function errorText(e: unknown): string {
 /** Markdown used when the report step fails, after a job failure, and on restart recovery. */
 export function fallbackReport(input: ReportInput): { title: string; markdown: string } {
   const lines = [`# Report`, ``, `**Goal:** ${input.goal}`, `**Verdict:** ${input.verdict}`];
+  if (input.kind && input.kind !== "change") lines.push(`**Kind:** ${input.kind}`);
   if (input.failureReason) lines.push(``, `**Failure:** ${input.failureReason}`);
   if (input.plan) {
     lines.push(``, `## Plan`);
@@ -126,12 +150,26 @@ export class JobRunner {
   /**
    * Starts a job. Throws ConflictError("busy") when the project already has a job that is not finished. When the
    * hotel already runs its limit of jobs, the job is created and waits in the queue.
+   * `kind` defaults to `change`; the other kinds need a `target` (a branch, a module path or a topic).
    */
-  start(repoId: string, goal: string): string {
+  start(repoId: string, goal: string, opts: StartOptions = {}): string {
+    const kind = opts.kind ?? "change";
+    const problem = targetProblem(kind, opts.target);
+    if (problem) throw new ConflictError("invalid_target", problem);
+    if (kind === "review-branch" && !this.steps.reviewBranch) {
+      throw new ConflictError("unsupported_kind", "this engine cannot review branches");
+    }
     if (this.activeJobOn(repoId)) throw new ConflictError("busy", "this project already has a job");
     const id = this.newId();
-    this.store.appendEvent({ type: "task.created", taskId: id, repoId, goal });
-    const a: Active = { id, ac: new AbortController(), data: {}, done: Promise.resolve() };
+    this.store.appendEvent({
+      type: "task.created",
+      taskId: id,
+      repoId,
+      goal,
+      ...(kind === "change" ? {} : { kind, ...(opts.target ? { target: opts.target } : {}) }),
+    });
+    const data: Active["data"] = kind === "change" ? {} : { kind, ...(opts.target ? { target: opts.target } : {}) };
+    const a: Active = { id, kind, ...(opts.target ? { target: opts.target } : {}), ac: new AbortController(), data, done: Promise.resolve() };
     this.active.set(id, a);
     a.done = this.drive(a, repoId, goal);
     this.finished.set(id, a.done);
@@ -159,7 +197,7 @@ export class JobRunner {
     const view = this.store.getJob(taskId);
     if (!view) throw new NotFoundError(`unknown task '${taskId}'`);
     const a = this.active.get(taskId);
-    if (!a || !canTransition(view.state, "cancelled")) {
+    if (!a || !canTransitionFor(view.kind ?? "change", view.state, "cancelled")) {
       throw new ConflictError("not_cancellable", `task is ${view.state}`);
     }
     a.ac.abort(new JobCancelledError());
@@ -223,10 +261,14 @@ export class JobRunner {
     return v.state;
   }
 
+  private kindOf(id: string): JobKind {
+    return this.store.getJob(id)?.kind ?? "change";
+  }
+
   private transition(id: string, to: JobState, reason?: string): void {
     const from = this.state(id);
     try {
-      assertTransition(from, to);
+      assertTransitionFor(this.kindOf(id), from, to);
     } catch (e) {
       this.log.error("forbidden transition", { taskId: id, from, to });
       throw e;
@@ -351,7 +393,7 @@ export class JobRunner {
         a.pending = undefined;
         this.store.appendEvent({ type: "approval.resolved", taskId: id, agentId: "architect", approvalId, decision: "reject" });
       }
-      if (canTransition(this.state(id), "cancelled")) this.transition(id, "cancelled", "Cancelled by user");
+      if (canTransitionFor(this.kindOf(id), this.state(id), "cancelled")) this.transition(id, "cancelled", "Cancelled by user");
       this.note(id, "architect", "Job cancelled");
       this.others(id, []);
       for (const ag of AGENTS) this.goto(id, ag, "home");
@@ -379,23 +421,33 @@ export class JobRunner {
   }
 
   private async pipeline(a: Active, repoId: string, goal: string): Promise<void> {
+    if (a.kind === "review-branch") return this.reviewBranchPipeline(a, repoId, goal);
+    const planned = await this.planAndApprove(a, repoId, goal);
+    if (!planned) return;
+    await this.buildAndReview(a, repoId, goal, planned.plan, planned.task);
+  }
+
+  /** Steps 1 and 2 of `change`, `write-tests` and `document`: the plan (or research) and the human approval. */
+  private async planAndApprove(a: Active, repoId: string, goal: string): Promise<{ plan: Plan; task: PlanTask } | undefined> {
     const id = a.id;
     const { signal } = a.ac;
     const T = this.limits.timeoutsMs;
+    const words = PLAN_WORDS[a.kind];
 
     // 1. Architect analyses.
     this.transition(id, "analyzing");
     this.goto(id, "architect", "board");
-    this.agent(id, "architect", "thinking", "Reading the repo");
-    this.note(id, "architect", "Analysing the repo");
+    this.agent(id, "architect", "thinking", words.reading);
+    this.note(id, "architect", words.analysing);
     this.others(id, ["architect"]);
-    this.chatter(a, "architect", "analysing the repository");
+    this.chatter(a, "architect", words.chatter);
     const plan: Plan = PlanSchema.parse(await this.runStep(a, repoId, goal, "analyze", T.analyze, defaultWorkTitle("analyze", repoId), (c) => this.steps.analyze(c)));
     a.data.plan = plan;
     const task = plan.tasks[0];
     if (!task) throw new Error("plan has no tasks");
     a.data.task = task;
-    this.note(id, "architect", `Plan ready: ${plan.tasks.length} ${plan.tasks.length === 1 ? "task" : "tasks"}`);    this.store.saveArtifact({
+    this.note(id, "architect", `Plan ready: ${plan.tasks.length} ${plan.tasks.length === 1 ? "task" : "tasks"}`);
+    this.store.saveArtifact({
       taskId: id,
       agentId: "architect",
       kind: "plan",
@@ -417,7 +469,7 @@ export class JobRunner {
       approvalId,
       kind: "plan",
       summary: trunc(
-        `Plan for: ${goal}\n` +
+        `${words.summary}: ${goal}\n` +
           plan.tasks.map((t, i) => `${i + 1}. ${t.title} (risk: ${t.risk})`).join("\n") +
           `\nApproving builds task 1: ${task.title}`,
         4000,
@@ -435,13 +487,22 @@ export class JobRunner {
       this.transition(id, "cancelled", "Plan rejected");
       this.others(id, []);
       for (const ag of AGENTS) this.goto(id, ag, "home");
-      return;
+      return undefined;
     }
     this.note(id, "architect", "Approved task 1");
     this.agent(id, "architect", "done", "Plan approved");
     this.goto(id, "architect", "home");
+    return { plan, task };
+  }
 
-    // 3. Develop, test, review (one retry after a QA fail).
+  /**
+   * Steps 3 and 4: develop, test, review (one retry after a QA fail), then the report. A `document` job has no test
+   * step: its review is the check. The engine's path rule for the kind is applied by the develop step.
+   */
+  private async buildAndReview(a: Active, repoId: string, goal: string, plan: Plan, task: PlanTask): Promise<void> {
+    const id = a.id;
+    const T = this.limits.timeoutsMs;
+    const withTests = hasTestStep(a.kind);
     let feedback: string[] = [];
     let verdict: Verdict = "fail";
     for (let attempt = 1; attempt <= MAX_DEVELOP_ATTEMPTS; attempt++) {
@@ -458,14 +519,18 @@ export class JobRunner {
       this.agent(id, "developer", "done", "Patch ready");
       this.note(id, "developer", "Patch ready");
 
-      this.transition(id, "testing");
-      this.goto(id, "qa", "computer");
-      this.agent(id, "qa", "working", "Running tests");
-      this.note(id, "qa", "Running tests");
-      const test: TestResult = await this.runStep(a, repoId, goal, "test", T.test, task.title, (c) => this.steps.test(c, { diff }));
-      a.data.test = test;
-      this.note(id, "qa", testResultLine(test));
-      this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "test_log", title: `Test log (attempt ${attempt})`, filename: `test_log-${attempt}.txt`, content: test.log });
+      let test: TestResult = NO_TEST_STEP;
+      if (withTests) {
+        this.transition(id, "testing");
+        this.goto(id, "qa", "computer");
+        this.agent(id, "qa", "working", "Running tests");
+        this.note(id, "qa", "Running tests");
+        test = await this.runStep(a, repoId, goal, "test", T.test, task.title, (c) => this.steps.test(c, { diff }));
+        a.data.test = test;
+        this.note(id, "qa", testResultLine(test));
+        this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "test_log", title: `Test log (attempt ${attempt})`, filename: `test_log-${attempt}.txt`, content: test.log });
+      }
+      const checked = test;
 
       this.transition(id, "reviewing");
       this.goto(id, "qa", "desk");
@@ -473,17 +538,60 @@ export class JobRunner {
       this.note(id, "qa", "Reviewing the patch");
       this.chatter(a, "qa", "reviewing the patch");
       const review: Review = ReviewSchema.parse(
-        await this.runStep(a, repoId, goal, "review", T.review, task.title, (c) => this.steps.review(c, { plan, task, diff, test })),
+        await this.runStep(a, repoId, goal, "review", T.review, task.title, (c) => this.steps.review(c, { plan, task, diff, test: checked })),
       );
       a.data.review = review;
-      this.note(id, "qa", `Review: ${review.verdict} (risk ${review.risk})`);      this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Review (attempt ${attempt})`, filename: `review-${attempt}.json`, content: JSON.stringify(review, null, 2) });
+      this.note(id, "qa", `Review: ${review.verdict} (risk ${review.risk})`);
+      this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: `Review (attempt ${attempt})`, filename: `review-${attempt}.json`, content: JSON.stringify(review, null, 2) });
 
-      verdict = review.verdict === "pass" && test.passed ? "pass" : "fail";
+      verdict = review.verdict === "pass" && checked.passed ? "pass" : "fail";
       if (verdict === "pass") break;
-      feedback = [...(test.passed ? [] : ["The tests failed."]), ...review.notes];
+      feedback = [...(checked.passed ? [] : ["The tests failed."]), ...review.notes];
     }
 
     // 4. Report.
+    this.agent(id, "qa", "done", "Review finished");
+    this.transition(id, "report_ready", `verdict:${verdict}`);
+    await this.finish(a, goal, verdict);
+  }
+
+  /**
+   * `review-branch`: QA reads the branch diff (read-only), the engine tests the branch in Docker, then the report.
+   * Nothing is written and nothing needs approval, so the job is never deliverable.
+   */
+  private async reviewBranchPipeline(a: Active, repoId: string, goal: string): Promise<void> {
+    const id = a.id;
+    const T = this.limits.timeoutsMs;
+    const branch = a.target;
+    const reviewBranch = this.steps.reviewBranch?.bind(this.steps);
+    if (!branch) throw new Error("no branch to review");
+    if (!reviewBranch) throw new Error("this engine cannot review branches");
+
+    this.transition(id, "reviewing");
+    this.goto(id, "qa", "desk");
+    this.agent(id, "qa", "thinking", "Reading the branch");
+    this.note(id, "qa", "Reviewing the branch");
+    this.others(id, ["qa"]);
+    this.chatter(a, "qa", "reviewing a branch");
+    const result = await this.runStep(a, repoId, goal, "review", T.review, `Review of ${branch}`, (c) => reviewBranch(c, { branch }));
+    const review = BranchReviewSchema.parse(result.review);
+    a.data.branchReview = review;
+    a.data.diff = result.diff;
+    a.data.comparedWith = result.base;
+    this.note(id, "qa", `Review: ${review.verdict} (risk ${review.risk})`);
+    this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "diff", title: "Branch diff", filename: "diff-1.patch", content: result.diff });
+    this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "review", title: "Branch review", filename: "review-1.json", content: JSON.stringify(review, null, 2) });
+
+    this.transition(id, "testing");
+    this.goto(id, "qa", "computer");
+    this.agent(id, "qa", "working", "Running tests");
+    this.note(id, "qa", "Running tests");
+    const test: TestResult = await this.runStep(a, repoId, goal, "test", T.test, `Tests of ${branch}`, (c) => this.steps.test(c, { diff: result.diff }));
+    a.data.test = test;
+    this.note(id, "qa", testResultLine(test));
+    this.store.saveArtifact({ taskId: id, agentId: "qa", kind: "test_log", title: "Test log", filename: "test_log-1.txt", content: test.log });
+
+    const verdict: Verdict = review.verdict === "pass" && test.passed ? "pass" : "fail";
     this.agent(id, "qa", "done", "Review finished");
     this.transition(id, "report_ready", `verdict:${verdict}`);
     await this.finish(a, goal, verdict);
@@ -556,7 +664,10 @@ export class JobRunner {
       createStepTracker({ store: this.store, taskId: a.id, repoId, agentId: STEP_ROLE[step], step, title })?.start();
     }
     try {
-      const result = await Promise.race([fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title }), aborted]);
+      const result = await Promise.race([
+        fn({ taskId: a.id, repoId, goal, signal: ac.signal, timeoutMs, stepIndex, title, kind: a.kind, ...(a.target ? { target: a.target } : {}) }),
+        aborted,
+      ]);
       this.log.info("step finished", { taskId: a.id, step, durationMs: Date.now() - started, status: "ok" });
       return result;
     } catch (e) {

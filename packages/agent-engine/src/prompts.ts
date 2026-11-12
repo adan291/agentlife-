@@ -5,7 +5,11 @@ import type { Role } from "./runtimes/types.ts";
 
 export const PROMPTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "prompts");
 
-export function loadPromptTemplate(role: Role, dir: string = PROMPTS_DIR): string {
+/** Templates of the job kinds other than `change`, next to the three role templates. */
+export const KIND_PROMPT_NAMES = ["qa-branch"] as const;
+export type PromptName = (typeof KIND_PROMPT_NAMES)[number];
+
+export function loadPromptTemplate(role: Role | PromptName, dir: string = PROMPTS_DIR): string {
   return readFileSync(path.join(dir, `${role}.md`), "utf8");
 }
 

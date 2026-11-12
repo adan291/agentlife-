@@ -1,4 +1,6 @@
 import path from "node:path";
+import type { JobKind } from "@agentlife/shared";
+import { kindPathProblem } from "../jobs/kinds.ts";
 import { isInside } from "../paths.ts";
 
 /** One changed file, from `git diff --raw -z` joined with `git diff --numstat -z`. */
@@ -71,15 +73,25 @@ export function pathProblem(root: string, rel: string): string | undefined {
 const SYMLINK_MODE = "120000";
 const GITLINK_MODE = "160000";
 
-/** Requirement 5.3: inside the worktree, nothing protected, no binary, no symlink, within the size limits. */
-export function validateDiff(root: string, entries: readonly DiffEntry[], limits: DiffLimits, patchBytes = 0): DiffCheck {
+/**
+ * Requirement 5.3: inside the worktree, nothing protected, no binary, no symlink, within the size limits.
+ * `kind` adds the path rule of the job (job-types, requirement 1.3): a `write-tests` diff may only touch test files and
+ * a `document` diff only documentation. The reason names the rule, and it ends up in the report.
+ */
+export function validateDiff(
+  root: string,
+  entries: readonly DiffEntry[],
+  limits: DiffLimits,
+  patchBytes = 0,
+  kind: JobKind = "change",
+): DiffCheck {
   if (entries.length === 0) return { ok: false, reason: "the Developer made no change" };
   if (entries.length > limits.maxFilesChanged) {
     return { ok: false, reason: `${entries.length} files changed, the limit is ${limits.maxFilesChanged}` };
   }
   let lines = 0;
   for (const e of entries) {
-    const problem = pathProblem(root, e.path);
+    const problem = pathProblem(root, e.path) ?? kindPathProblem(kind, e.path);
     if (problem) return { ok: false, reason: problem };
     if (e.status !== "A" && e.status !== "M" && e.status !== "D") {
       return { ok: false, reason: `unsupported change (${e.status}) in ${e.path}` };

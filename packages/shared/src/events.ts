@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { JOB_TARGET_MAX_CHARS, JobKindSchema } from "./job-kinds.ts";
 import { ScopedAgentIdSchema, SemanticAnchorSchema } from "./room.ts";
 
 export const AgentStateSchema = z.enum([
@@ -65,7 +66,16 @@ const agentBase = { ...base, agentId: ScopedAgentIdSchema };
 const optAgentBase = { ...base, agentId: ScopedAgentIdSchema.optional() };
 
 export const AgentEventSchema = z.discriminatedUnion("type", [
-  z.object({ ...base, type: z.literal("task.created"), repoId: z.string().min(1), goal: z.string().min(1).max(300) }),
+  z.object({
+    ...base,
+    type: z.literal("task.created"),
+    repoId: z.string().min(1),
+    goal: z.string().min(1).max(300),
+    /** Written only for kinds other than `change`; absent means `change`. */
+    kind: JobKindSchema.optional(),
+    /** Branch, module path or topic of a non-`change` job. */
+    target: z.string().min(1).max(JOB_TARGET_MAX_CHARS).optional(),
+  }),
   /** The job waits for a free slot (the hotel runs a limited number of jobs at once). Sent again when its place changes. */
   z.object({ ...base, type: z.literal("task.queued"), position: z.number().int().positive() }),
   z.object({

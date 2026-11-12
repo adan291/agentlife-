@@ -46,6 +46,7 @@ export async function developStep(deps: PipelineDeps, ctx: StepContext, input: D
     throw new Error(`worktree is missing for attempt ${input.attempt}: ${wt}`);
   }
 
+  const kind = ctx.kind ?? "change";
   const prompt = renderPrompt(loadPromptTemplate("developer"), {
     goal: fence(ctx.goal),
     task: fence(JSON.stringify(input.task, null, 2), "json"),
@@ -73,7 +74,7 @@ export async function developStep(deps: PipelineDeps, ctx: StepContext, input: D
   try {
     const raw = await git(wt, ["diff", "--cached", "--raw", "-z", "--no-abbrev", ...DIFF_FLAGS, base], gitOpts);
     const numstat = await git(wt, ["diff", "--cached", "--numstat", "-z", ...DIFF_FLAGS, base], gitOpts);
-    verdict = validateDiff(wt, parseGitDiff(raw, numstat), deps.limits, patchBytes);
+    verdict = validateDiff(wt, parseGitDiff(raw, numstat), deps.limits, patchBytes, kind);
   } catch (e) {
     if (e instanceof DiffRejectedError) throw e;
     verdict = { ok: false as const, reason: `cannot read the diff: ${e instanceof Error ? e.message : String(e)}` };

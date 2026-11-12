@@ -164,7 +164,10 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
             { path: "repoId", message: "not in the allowlist" },
           ]);
         }
-        const taskId = runner.start(body.repoId, body.goal);
+        const taskId = runner.start(body.repoId, body.goal, {
+          kind: body.kind,
+          ...(body.target ? { target: body.target } : {}),
+        });
         sendJson(res, 201, StartJobResponseSchema, { taskId });
       },
     },

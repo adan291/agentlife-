@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Engine: job kinds, pipelines and per-kind path rules
+- [x] 1. Engine: job kinds, pipelines and per-kind path rules
   - `kind` in StartJobBody; fixed pipeline per kind; diff validation by kind; review-branch reads the branch diff read-only
   - _Requirements: 1.1, 1.2, 1.3, 4.1_
 
