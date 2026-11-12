@@ -12,7 +12,7 @@ export function agentName(role: Role): string {
   return `${AGENT_PREFIX}${role}`;
 }
 
-const RuleSchema = z.object({
+export const RuleSchema = z.object({
   capability: z.string().min(1),
   match: z.array(z.string().min(1)).min(1),
   exclude: z.array(z.string().min(1)).optional(),

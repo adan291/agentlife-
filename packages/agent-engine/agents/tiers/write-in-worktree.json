@@ -1,0 +1,106 @@
+{
+  "id": "write-in-worktree",
+  "description": "Reads and writes files inside the task worktree only. No shell, no network, no .git, env files, manifests or CI files.",
+  "tools": [
+    "read",
+    "write"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_read",
+        "match": [
+          "**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_read",
+        "match": [
+          ".env",
+          ".env.*",
+          "*.pem",
+          "*.key",
+          "id_rsa*",
+          "id_ed25519*",
+          "*.p12",
+          "*.pfx",
+          "credentials*",
+          "secrets*",
+          ".npmrc",
+          ".aws/**",
+          ".ssh/**",
+          ".git/**",
+          "**/.env",
+          "**/.env.*",
+          "**/*.pem",
+          "**/*.key",
+          "**/id_rsa*",
+          "**/id_ed25519*",
+          "**/*.p12",
+          "**/*.pfx",
+          "**/credentials*",
+          "**/secrets*",
+          "**/.npmrc",
+          "**/.aws/**",
+          "**/.ssh/**",
+          "**/.git/**",
+          "*.env",
+          ".netrc",
+          "**/.netrc",
+          ".pypirc",
+          "**/.pypirc",
+          ".docker/**",
+          "**/.docker/**",
+          ".kube/**",
+          "**/.kube/**",
+          "*.jks",
+          "*.keystore"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          "./**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          ".git/**",
+          "**/.git/**",
+          ".env",
+          ".env.*",
+          "**/.env",
+          "**/.env.*",
+          "package.json",
+          "**/package.json",
+          "**/package-lock.json",
+          "**/pnpm-lock.yaml",
+          "**/yarn.lock",
+          ".github/**",
+          "**/.github/**",
+          ".kiro/**",
+          "**/.kiro/**"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "*"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "web_fetch",
+        "match": [
+          "*"
+        ],
+        "effect": "deny"
+      }
+    ]
+  }
+}

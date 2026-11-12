@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Tiers, templates and generated agent files
+- [x] 1. Tiers, templates and generated agent files
   - Tier files, template schema, catalogue, agent file generation from tier + persona with validation; property test that permissions always equal the tier
   - _Requirements: 1.1, 1.2, 2.5, 5.1_
 
