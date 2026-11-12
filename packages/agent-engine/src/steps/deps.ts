@@ -7,7 +7,10 @@ import type { DataPaths } from "../paths.ts";
 import type { ProjectRegistry, ResolvedProject } from "../projects/registry.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
+import type { TeamResolver } from "../team/service.ts";
+import { assertInternStep } from "../team/intern.ts";
 import { createStepTracker } from "../work.ts";
+import type { JobNotes } from "./notes.ts";
 
 /** What the real steps need. Built once by the engine (task 11) and shared by all steps. */
 export interface PipelineDeps {
@@ -25,6 +28,12 @@ export interface PipelineDeps {
   activity?: ActivityEmitter;
   /** Model label per role, shown with the work of the agent (`agent.work`). */
   models?: Partial<Record<Role, string>>;
+  /** The agents of each project's team. Without it every role runs the built-in agent with the configured model. */
+  team?: TeamResolver;
+  /** Runs the steps of the local intern (Ollama, with the fallback model). Without it a team member that is the intern cannot work. */
+  intern?: AgentRuntime;
+  /** What the report must mention about the job, e.g. that the intern fell back to another model. */
+  notes?: JobNotes;
 }
 
 const SAFE_TASK_ID = /^[A-Za-z0-9_-]+$/;
@@ -72,13 +81,23 @@ export async function runRole(
 ): Promise<string> {
   assertSafeTaskId(ctx.taskId);
   const outputs: string[] = [];
+  const member = deps.team?.resolve(ctx.repoId, ctx.taskId, role);
+  // The local intern has no tools: it may only do the small read-only steps. Refused before anything runs.
+  let runtime = deps.runtimes[role];
+  if (member?.runtime === "ollama") {
+    assertInternStep(step);
+    if (!deps.intern) throw new Error("The Night intern is not available in this engine.");
+    runtime = deps.intern;
+  }
   const input = {
     role,
+    step,
     prompt,
     cwd,
     timeoutMs: ctx.timeoutMs,
     signal: ctx.signal,
     rawLogPath: path.join(deps.paths.runs, ctx.taskId, `${step}.raw.jsonl`),
+    ...(member ? { agent: member.agent, ...(member.model ? { model: member.model } : {}), ...(member.system ? { system: member.system } : {}) } : {}),
   };
   const tracker = createStepTracker({
     store: deps.store,
@@ -87,15 +106,20 @@ export async function runRole(
     agentId: role,
     step,
     title: ctx.title,
-    model: deps.models?.[role],
+    model: member?.model ?? deps.models?.[role],
   });
   tracker?.start();
   try {
-    for await (const ev of deps.runtimes[role].run(input)) {
+    for await (const ev of runtime.run(input)) {
       deps.store.appendRunLog(ctx.taskId, step, { n: ctx.stepIndex, ts: Date.now(), ...ev });
       tracker?.feed(ev);
       if (ev.kind === "output") outputs.push(ev.text);
       if (ev.kind === "progress") deps.activity?.progress(ctx.taskId, role, ev.text);
+      if (ev.kind === "fallback") {
+        const who = member?.displayName ?? "The intern";
+        deps.activity?.progress(ctx.taskId, role, `${ev.to} does the ${step} step: ${ev.reason}`);
+        deps.notes?.add(ctx.taskId, `${who} runs on ${ev.from}. ${ev.reason} The ${step} step ran on ${ev.to} instead, which spends credits.`);
+      }
       if (ev.kind === "usage") {
         deps.logger?.info("step usage", {
           taskId: ctx.taskId,

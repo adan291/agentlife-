@@ -1,4 +1,4 @@
-import type { ClientMsg, PanelName, ServerMsg } from "@agentlife/shared";
+import type { ClientMsg, HrAction, PanelName, ServerMsg } from "@agentlife/shared";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
 import { createKindPanel } from "./kind-forms.ts";
@@ -8,6 +8,7 @@ import { renderMailbox } from "./mailbox.ts";
 import { renderFloorList } from "./elevator.ts";
 import { BUILD_EVENT_REFRESH_MS, BUILD_REFRESH_MS, isBuilderMessage, renderBuildBoard, renderBuildReport } from "./build-board.ts";
 import { createNightPanel } from "./night-board.ts";
+import { createHrPanel } from "./hr.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
 import { UI_COLOURS } from "./theme.ts";
@@ -113,7 +114,11 @@ const TITLES: Record<PanelName, string> = {
   tests: "Test lab",
   library: "Library",
   night: "Night shift",
+  hr: "HR desk",
 };
+
+/** The HR desk needs the real engine: the recorded demo shows this instead of the desk. */
+const HR_LOCKED = "The HR desk is off in the recorded demo. Run AGENT LIFE on your computer to hire, rename and fire agents.";
 
 /** The night shift needs the real engine: the recorded demo shows this instead of the board. */
 const NIGHT_LOCKED = "The night shift is off in the recorded demo. Run AGENT LIFE on your computer to schedule jobs for the night.";
@@ -153,6 +158,8 @@ export interface PanelHooks {
   projectsLocked?: string;
   /** The user picked a floor in the elevator panel. */
   goTo?(roomId: string): void;
+  /** The user asked the HR agent for a proposal: the HR ghost starts thinking (it stops when the answer or an error arrives). */
+  hrThinking?(): void;
 }
 
 /**
@@ -197,6 +204,31 @@ export function createPanels(
     move: (id, direction) => {
       state.nightError = null;
       send({ type: "night_move", id, direction });
+    },
+  });
+
+  const hrAct = (act: HrAction): void => {
+    state.hrError = null;
+    send({ type: "hr_do", act });
+  };
+  const hrPanel = createHrPanel(document, {
+    hire: (projectId, templateId, displayName, model) => hrAct({ action: "hire", projectId, templateId, displayName, ...(model ? { model } : {}) }),
+    rename: (projectId, memberId, displayName) => hrAct({ action: "update", projectId, memberId, displayName }),
+    setModel: (projectId, memberId, model) => hrAct({ action: "update", projectId, memberId, model }),
+    fire: (projectId, memberId) => hrAct({ action: "fire", projectId, memberId }),
+    importFrom: (url) => hrAct({ action: "import", url }),
+    approve: (id, hash) => hrAct({ action: "approve_import", id, hash }),
+    reject: (id) => hrAct({ action: "reject_import", id }),
+    suggest: (projectId) => {
+      state.suggestion = null;
+      state.hrBusy = projectId;
+      hooks.hrThinking?.();
+      hrAct({ action: "suggest", projectId });
+      render();
+    },
+    apply: (projectId, picks) => {
+      state.suggestion = null;
+      hrAct({ action: "apply", projectId, picks });
     },
   });
 
@@ -295,7 +327,7 @@ export function createPanels(
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
-    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || (state.open === "mailbox" && state.viewing !== null));
+    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || state.open === "hr" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
@@ -332,6 +364,8 @@ export function createPanels(
                         { night: state.night, error: state.nightError, ...(locked ? { locked: NIGHT_LOCKED } : {}) },
                         render,
                       )
+                    : state.open === "hr"
+                      ? hrPanel({ hr: state.hr, error: state.hrError, suggestion: state.suggestion, busy: state.hrBusy, ...(locked ? { locked: HR_LOCKED } : {}) }, render)
                     : state.open === "door"
                   ? { body: doorNote(document) }
                   : {

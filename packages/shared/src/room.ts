@@ -9,6 +9,24 @@ export const AGENT_IDS = ["architect", "developer", "qa", "builder"] as const;
 export const AgentIdSchema = z.enum(AGENT_IDS);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 
+/**
+ * Standing spots of a project floor for the team members who do not hold a role's desk: a second developer, a reviewer,
+ * a researcher, the Night intern (hr-desk requirement 4.3, decision "every member is visible"). A guest id names a
+ * spot, not a person; the world-server says who stands there (`team_view`). Guests are not agents: they have no state,
+ * no work and no events, only an avatar that stands, walks to the elevator when they are let go, and walks back.
+ */
+export const GUEST_IDS = ["guest1", "guest2", "guest3", "guest4", "guest5", "guest6"] as const;
+export const GuestIdSchema = z.enum(GUEST_IDS);
+export type GuestId = z.infer<typeof GuestIdSchema>;
+
+export function isGuestId(id: unknown): id is GuestId {
+  return typeof id === "string" && (GUEST_IDS as readonly string[]).includes(id);
+}
+
+/** Everyone who has a home tile in a room: the agents and the guests. */
+export const StaffIdSchema = z.enum([...AGENT_IDS, ...GUEST_IDS]);
+export type StaffId = z.infer<typeof StaffIdSchema>;
+
 /** Roles that work for a project. The Builder is not a project agent: it lives in the lobby. */
 export const PROJECT_ROLES = ["architect", "developer", "qa"] as const;
 export type ProjectRole = (typeof PROJECT_ROLES)[number];
@@ -48,6 +66,12 @@ export const AnchorNameSchema = z.enum([
   "home_developer",
   "home_qa",
   "home_builder",
+  "home_guest1",
+  "home_guest2",
+  "home_guest3",
+  "home_guest4",
+  "home_guest5",
+  "home_guest6",
 ]);
 export type AnchorName = z.infer<typeof AnchorNameSchema>;
 
@@ -114,6 +138,11 @@ export function roomAgents(room: Pick<RoomDef, "kind">): readonly AgentId[] {
   }
 }
 
+/** Standing spots of the team's other members: only project floors have them. */
+export function roomGuests(room: Pick<RoomDef, "kind">): readonly GuestId[] {
+  return room.kind === "project" ? GUEST_IDS : [];
+}
+
 export interface RoomIssue {
   /** Dotted path of the invalid field, e.g. `furni.2.x`. */
   path: string;
@@ -167,7 +196,7 @@ export function useTile(p: PlacedFurni, catalog: Catalog = FURNI_CATALOG): Tile 
 export function resolveAnchor(
   room: RoomDef,
   anchor: SemanticAnchor | AnchorName,
-  agentId?: AgentId,
+  agentId?: StaffId,
 ): Anchor | undefined {
   if (anchor === "door") return room.door;
   if (anchor === "desk") {
@@ -241,6 +270,7 @@ export function checkRoom(room: RoomDef, catalog: Catalog = FURNI_CATALOG): Room
   const required: AnchorName[] = [
     ...(office ? (["computer", "mailbox", "board"] as const) : []),
     ...agents.map((a) => `home_${a}` as const),
+    ...roomGuests(room).map((g) => `home_${g}` as const),
   ];
   for (const n of required) {
     if (!room.anchors.some((a) => a.name === n)) add("anchors", `missing anchor '${n}'`);

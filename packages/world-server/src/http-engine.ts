@@ -3,19 +3,28 @@ import {
   BranchesResponseSchema,
   BuildBoardSchema,
   BuildReportSchema,
+  CatalogueResponseSchema,
+  CatalogueSourcesResponseSchema,
   DeliveryInfoSchema,
   ErrorResponseSchema,
   HealthResponseSchema,
+  ImportListResponseSchema,
+  ImportViewSchema,
   jobDetailsFromExport,
   MorningSummariesSchema,
   NightJobSchema,
   NightStateSchema,
+  OkResponseSchema,
   ProjectSchema,
   RegisterProjectResultSchema,
   RepoSchema,
   RolesConfigResponseSchema,
   RunExportSchema,
   StartJobResponseSchema,
+  TeamMemberSchema,
+  TeamModelsResponseSchema,
+  TeamResponseSchema,
+  TeamSuggestionSchema,
   type AgentEvent,
   type AgentId,
   type ApprovalDecision,
@@ -35,10 +44,12 @@ import {
   type Repo,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink, StartJobOptions } from "./engine-link.ts";
+import type { EngineLink, HrLink, StartJobOptions } from "./engine-link.ts";
 
 export const ENGINE_TOKEN_HEADER = "x-agentlife-token";
 const REQUEST_TIMEOUT_MS = 10_000;
+/** Asking the security agent or the HR agent can take a while. */
+const AGENT_REQUEST_TIMEOUT_MS = 120_000;
 
 export interface HttpEngineOptions {
   /** Engine base URL, e.g. http://127.0.0.1:8788. */
@@ -68,6 +79,40 @@ export class HttpEngineLink implements EngineLink {
   private readonly closer = new AbortController();
   private lastSeq: number | undefined;
   private started = false;
+
+  /** The HR office: calls to the engine's catalogue, team, import and suggestion routes. */
+  readonly hr: HrLink = {
+    state: async () => {
+      const [catalogue, projects, imports, sources, models] = await Promise.all([
+        this.request("GET", "/catalogue").then((j) => CatalogueResponseSchema.parse(j)),
+        this.listProjects(),
+        this.request("GET", "/catalogue/imports").then((j) => ImportListResponseSchema.parse(j)),
+        this.request("GET", "/catalogue/sources").then((j) => CatalogueSourcesResponseSchema.parse(j).sources),
+        this.request("GET", "/team/models").then((j) => TeamModelsResponseSchema.parse(j).models),
+      ]);
+      const teams = await Promise.all(
+        projects.map(async (p) => {
+          const t = TeamResponseSchema.parse(await this.request("GET", `/projects/${encodeURIComponent(p.id)}/team`));
+          return { projectId: p.id, name: p.name, customised: t.customised, members: t.members };
+        }),
+      );
+      return { catalogue, teams, imports, sources, models };
+    },
+    team: async (projectId) => TeamResponseSchema.parse(await this.request("GET", `/projects/${encodeURIComponent(projectId)}/team`)),
+    hire: async (projectId, body) => TeamMemberSchema.parse(await this.request("POST", `/projects/${encodeURIComponent(projectId)}/team`, body)),
+    update: async (projectId, memberId, body) =>
+      TeamMemberSchema.parse(await this.request("PATCH", `/projects/${encodeURIComponent(projectId)}/team/${encodeURIComponent(memberId)}`, body)),
+    fire: async (projectId, memberId) => {
+      OkResponseSchema.parse(await this.request("DELETE", `/projects/${encodeURIComponent(projectId)}/team/${encodeURIComponent(memberId)}`));
+    },
+    importTemplate: async (url) => ImportViewSchema.parse(await this.request("POST", "/catalogue/imports", { url }, AGENT_REQUEST_TIMEOUT_MS)),
+    approveImport: async (id, hash) => ImportViewSchema.parse(await this.request("POST", `/catalogue/imports/${encodeURIComponent(id)}/approve`, { hash })),
+    rejectImport: async (id) => {
+      OkResponseSchema.parse(await this.request("POST", `/catalogue/imports/${encodeURIComponent(id)}/reject`, {}));
+    },
+    suggest: async (projectId) =>
+      TeamSuggestionSchema.parse(await this.request("POST", `/projects/${encodeURIComponent(projectId)}/team/suggest`, {}, AGENT_REQUEST_TIMEOUT_MS)),
+  };
 
   constructor(opts: HttpEngineOptions) {
     this.base = opts.baseUrl.replace(/\/+$/, "");
@@ -200,8 +245,8 @@ export class HttpEngineLink implements EngineLink {
     return this.token ? { [ENGINE_TOKEN_HEADER]: this.token } : {};
   }
 
-  private async request(method: string, path: string, body?: unknown): Promise<unknown> {
-    const { ok, status, json } = await this.requestRaw(method, path, body);
+  private async request(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<unknown> {
+    const { ok, status, json } = await this.requestRaw(method, path, body, timeoutMs);
     if (!ok) {
       const err = ErrorResponseSchema.safeParse(json);
       throw new Error(err.success ? (err.data.message ?? err.data.error) : `engine responded ${status}`);
@@ -210,12 +255,12 @@ export class HttpEngineLink implements EngineLink {
   }
 
   /** Like `request` but returns the answer of any status instead of throwing on a non-2xx one. */
-  private async requestRaw(method: string, path: string, body?: unknown): Promise<{ ok: boolean; status: number; json: unknown }> {
+  private async requestRaw(method: string, path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<{ ok: boolean; status: number; json: unknown }> {
     const res = await this.fetchFn(this.base + path, {
       method,
       headers: { ...this.headers(), ...(body === undefined ? {} : { "content-type": "application/json" }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.any([this.closer.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
+      signal: AbortSignal.any([this.closer.signal, AbortSignal.timeout(timeoutMs)]),
     });
     const text = await res.text();
     let json: unknown;

@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, JobDetails, JobView, NightState, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, NightState, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg, TeamSuggestion } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -36,6 +36,12 @@ export class PanelState {
   /** Night board data (lobby), and why a change or the whole board failed. The error is cleared when the panel opens. */
   night: NightState | null = null;
   nightError: string | null = null;
+  /** HR desk data (HR office), the HR agent's last proposal, and why the desk failed to do something. */
+  hr: HrState | null = null;
+  hrError: string | null = null;
+  suggestion: TeamSuggestion | null = null;
+  /** Project the HR agent is working out a proposal for (a request is out); null when none. */
+  hrBusy: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -68,6 +74,11 @@ export class PanelState {
           this.buildError = null;
         }
         if (msg.panel === "night") this.nightError = null;
+        if (msg.panel === "hr") {
+          this.hrError = null;
+          this.suggestion = null;
+          this.hrBusy = null;
+        }
         return true;
       case "night": {
         // An error that came just before this message (a refused change) stays on screen. The periodic refresh
@@ -76,6 +87,14 @@ export class PanelState {
         this.night = msg.state;
         return !same && this.open === "night";
       }
+      case "hr":
+        // After a change the desk sends its new state; a refused change keeps its error on screen until the next action.
+        this.hr = msg.state;
+        return this.open === "hr";
+      case "hr_suggestion":
+        this.suggestion = msg.suggestion;
+        this.hrBusy = null;
+        return this.open === "hr";
       case "build_board":
         this.build = msg.board;
         this.buildError = null;
@@ -123,10 +142,19 @@ export class PanelState {
           this.nightError = msg.message;
           return this.open === "night";
         }
+        if (msg.code === "hr_error") {
+          this.hrError = msg.message;
+          this.hrBusy = null;
+          return this.open === "hr";
+        }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;
           if (this.open === "build") this.buildError = msg.message;
           if (this.open === "night") this.nightError = msg.message;
+          if (this.open === "hr") {
+            this.hrError = msg.message;
+            this.hrBusy = null;
+          }
           return true;
         }
         return false;

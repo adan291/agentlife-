@@ -21,7 +21,8 @@ export class AvatarView {
 
   constructor(
     readonly id: number | string,
-    readonly role: RoleKey,
+    /** A guest spot starts with a placeholder and takes the role of whoever stands there. */
+    public role: RoleKey,
     private readonly sprites: SpriteProvider,
     tile: Tile,
     dir: number,
@@ -30,6 +31,11 @@ export class AvatarView {
     this.bobOffset = typeof id === "string" ? [...id].reduce((n, c) => n + c.charCodeAt(0), 0) * 37 : 0;
     this.dir = (((dir % 8) + 8) % 8) as Dir;
     this.update(Date.now());
+  }
+
+  /** True while a walk is under way (a walk that has just ended is folded in by the next `update`). */
+  get walking(): boolean {
+    return this.walk !== null;
   }
 
   /** Start a walk; it begins from the last tile fully reached, like the server's simulation. */

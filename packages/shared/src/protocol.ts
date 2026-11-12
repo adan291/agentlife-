@@ -3,11 +3,12 @@ import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionS
 import { BranchesResponseSchema, JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
 import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
 import { FloorStatusSchema } from "./floors.ts";
+import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
-import { AgentIdSchema, RoomDefSchema } from "./room.ts";
+import { AgentIdSchema, GuestIdSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
 
 export const MAX_MESSAGE_BYTES = 16 * 1024;
 export const MAX_MESSAGES_PER_SECOND = 20;
@@ -22,11 +23,11 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
-/** User avatar id is a positive integer; agent ids are strings, so they never collide. */
-export const AvatarIdSchema = z.union([z.number().int().positive(), AgentIdSchema]);
+/** User avatar id is a positive integer; agent and guest ids are strings, so they never collide. */
+export const AvatarIdSchema = z.union([z.number().int().positive(), AgentIdSchema, GuestIdSchema]);
 export type AvatarId = z.infer<typeof AvatarIdSchema>;
 
 export const AvatarSchema = z.object({
@@ -131,6 +132,7 @@ export const ErrorCodeSchema = z.enum([
   "project_error",
   "delivery_failed",
   "night_error",
+  "hr_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -188,6 +190,10 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("night_remove"), id: z.string().min(1).max(40) }),
   /** Night board: move a scheduled job one place up or down. */
   z.object({ type: z.literal("night_move"), id: z.string().min(1).max(40), ...NightMoveBodySchema.shape }),
+  /** HR desk (HR office): ask for the catalogue, the teams and the imports. Answered with `hr`. */
+  z.object({ type: z.literal("hr_state") }),
+  /** HR desk: hire, rename, fire, import, approve, reject, ask for a proposal or apply one. Answered with `hr` (and `hr_suggestion`). */
+  z.object({ type: z.literal("hr_do"), act: HrActionSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -249,6 +255,22 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("night"), state: NightStateSchema }),
   /** Whether the night window is open, for the dimmed rooms and the moon clock. Sent after `welcome` and when it changes. */
   z.object({ type: z.literal("night_clock"), open: z.boolean(), start: NightHhmmSchema, end: NightHhmmSchema }),
+  /** HR desk data (catalogue, teams, imports). */
+  z.object({ type: z.literal("hr"), state: HrStateSchema }),
+  /** The HR agent's proposal for a project's team. The user applies it with `hr_do`; nothing was hired. */
+  z.object({ type: z.literal("hr_suggestion"), suggestion: TeamSuggestionSchema }),
+  /**
+   * Who sits at each desk of a project floor (the first member of each role) and who stands at the other spots
+   * (`guests`: every other member). Sent after `welcome` and whenever it changes. A guest not listed is not on the floor.
+   */
+  z.object({
+    type: z.literal("team_view"),
+    roomId: z.string().min(1).max(100),
+    members: z.array(TeamViewMemberSchema).max(3),
+    guests: z.array(TeamViewGuestSchema).max(6).optional(),
+  }),
+  /** A ghost leaves the floor by the elevator (it was let go) or comes back through it (its replacement). */
+  z.object({ type: z.literal("agent_presence"), agentId: StaffIdSchema, present: z.boolean() }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

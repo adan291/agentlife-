@@ -39,7 +39,7 @@ Depends on project-registry and hotel-floors (HR office room, per-project teams)
 #### Acceptance Criteria
 1. Imports SHALL be allowed only from sources listed in `config/catalogue-sources.json` (HTTPS URLs; empty by default); any other URL SHALL be refused.
 2. An imported file SHALL be parsed as a template; any `tools`, `permissions`, `mcpServers`, `hooks`, `resources` or unknown fields SHALL be dropped and listed to the user as "ignored for safety".
-3. Persona and description SHALL be capped (2 000 and 300 characters), scanned for leaks, and reviewed by the `agentlife-security` agent for prompt-injection patterns ("ignore previous instructions", tool or permission requests, exfiltration requests); the review result SHALL be shown to the user.
+3. Persona and description SHALL be capped (2 000 and 300 characters), scanned for leaks, and reviewed for prompt-injection patterns ("ignore previous instructions", tool or permission requests, exfiltration requests) by fixed patterns and by the `agentlife-import-review` agent (read-only tier, empty directory; `agentlife-security` is not used because it can write and run git, see D10 in `docs/risks-and-decisions.md`); the review result SHALL be shown to the user.
 4. AN imported template SHALL become hireable only after the user approves it in the HR panel; the approval SHALL be stored with the template's content hash, and any change to the content SHALL require a new approval.
 
 ### Requirement 4: HR office and HR agent
@@ -47,7 +47,7 @@ Depends on project-registry and hotel-floors (HR office room, per-project teams)
 #### Acceptance Criteria
 1. THE HR office room SHALL have an HR desk (panel: catalogue, teams per project, import queue) and an HR ghost.
 2. THE HR agent (read-only tier, cheap model) SHALL answer "suggest a team for <project>" with a proposal based on the project's stack and size, which the user can apply with one click (it never hires on its own).
-3. Hired agents SHALL appear on their project's floor at their desk; a fired agent SHALL walk to the elevator and leave.
+3. Hired agents SHALL appear on their project's floor: the first member of a role that has a desk (architect, developer, qa) at that desk, every other member (a second developer or QA, a reviewer, a researcher, the Night intern) standing at one of the floor's spots near the desks; a fired agent SHALL walk to the elevator and leave. Every member of a team (up to 8) is visible on its floor.
 
 ### Requirement 5: Tests
 
@@ -61,6 +61,6 @@ Depends on project-registry and hotel-floors (HR office room, per-project teams)
 **User Story:** As the user, I want a cheap helper for small tasks, so that simple work does not spend Kiro credits.
 
 #### Acceptance Criteria
-1. THE catalogue SHALL include a "Night intern" template (role `researcher`, tier `read-only`) whose runtime is the local Ollama endpoint (`LlmRuntime`, `qwen3.5:4b` by default) instead of kiro-cli.
+1. THE catalogue SHALL include a "Night intern" template (role `researcher`, tier `read-only`) whose runtime is the local Ollama endpoint (`OllamaRuntime` with a fallback wrapper, `qwen3.5:4b` by default; `LlmRuntime` is the ambient chatter and is not used, see D11) instead of kiro-cli.
 2. THE intern SHALL be usable only for read-only steps that need no tools: summaries, morning overviews, memory proposals, classification; the engine SHALL refuse to assign it to plan, develop or review steps.
 3. WHEN Ollama is not running, steps assigned to the intern SHALL fall back to `claude-haiku-5.5` and the report SHALL say so.

@@ -1,0 +1,10 @@
+{
+  "$comment": "Models a team member of each role may use. The account's own model list (kiro-cli chat --list-models) narrows this further. Edit here to allow more.",
+  "allowedModels": {
+    "architect": ["auto", "claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5", "gpt-5.6-luna", "gpt-5.6-terra"],
+    "developer": ["auto", "claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5", "gpt-5.6-luna", "gpt-5.6-terra"],
+    "qa": ["auto", "claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5", "gpt-5.6-luna", "gpt-5.6-terra"],
+    "reviewer": ["auto", "claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5", "gpt-5.6-luna", "gpt-5.6-terra"],
+    "researcher": ["auto", "claude-haiku-5.5", "claude-sonnet-5.5", "gpt-5.6-luna"]
+  }
+}

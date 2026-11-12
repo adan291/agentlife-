@@ -151,6 +151,26 @@ const receptionDesk: Recipe = (g, c) => {
   ]);
 };
 
+/** The HR desk: a wooden counter with a stack of personnel folders, a name plate and a candle-coloured lamp. */
+const hrDesk: Recipe = (g, c) => {
+  const body = full(c, 0.05);
+  const top = full(c, 0.02);
+  const mid = { x: (top.x0 + top.x1) / 2, y: (top.y0 + top.y1) / 2 };
+  drawBoxes(g, [
+    piece(body, 0, 1.5, C.woodDark),
+    piece(top, 1.5, 1.7, C.deskArchitect),
+    // Three folders in a leaning stack.
+    piece({ x0: mid.x - 0.55, y0: mid.y - 0.16, x1: mid.x - 0.2, y1: mid.y + 0.16 }, 1.7, 1.8, C.note1),
+    piece({ x0: mid.x - 0.53, y0: mid.y - 0.15, x1: mid.x - 0.18, y1: mid.y + 0.17 }, 1.8, 1.9, C.note2),
+    piece({ x0: mid.x - 0.56, y0: mid.y - 0.16, x1: mid.x - 0.21, y1: mid.y + 0.15 }, 1.9, 2.0, C.note3),
+    // Name plate.
+    piece({ x0: mid.x + 0.05, y0: mid.y - 0.12, x1: mid.x + 0.35, y1: mid.y + 0.12 }, 1.7, 1.95, C.metal),
+    // Small lamp.
+    piece({ x0: mid.x + 0.5, y0: mid.y - 0.05, x1: mid.x + 0.6, y1: mid.y + 0.05 }, 1.7, 2.3, C.metal),
+    piece({ x0: mid.x + 0.43, y0: mid.y - 0.12, x1: mid.x + 0.67, y1: mid.y + 0.12 }, 2.3, 2.6, C.lampGlow),
+  ]);
+};
+
 const board: Recipe = (g, c) => {
   const slab = backRect(c, 0.14, 0.04);
   const legs: BoxPiece[] = [];
@@ -389,6 +409,7 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   test_lab: testLab,
   library_shelf: libraryShelf,
   night_board: nightBoard,
+  hr_desk: hrDesk,
   door,
   chair,
   plant,

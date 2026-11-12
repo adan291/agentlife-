@@ -1,7 +1,8 @@
 import { Container } from "pixi.js";
 import type { Application, FederatedPointerEvent } from "pixi.js";
-import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, screenToTile, tileToScreen } from "@agentlife/shared";
-import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, ServerMsg, WelcomeMsg } from "@agentlife/shared";
+import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, isGuestId, screenToTile, tileToScreen } from "@agentlife/shared";
+import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, ServerMsg, StaffId, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
+import { FloorPeople } from "./floor-people.ts";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 import { AvatarView } from "./avatar-view.ts";
@@ -14,7 +15,8 @@ import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { chooseZoom, toggleZoom } from "./zoom.ts";
 import type { Zoom } from "./zoom.ts";
-import { agentTooltip } from "../ui/tooltip.ts";
+import { agentTooltip, guestTooltip } from "../ui/tooltip.ts";
+import { roleLabel } from "../ui/hr.ts";
 import { WorkModel } from "../ui/work.ts";
 import { MonitorFx } from "./monitor-fx.ts";
 import { DeskCandle, FlameFx, MoteLayer, candleLit, isFlameItem } from "./ambient-fx.ts";
@@ -43,6 +45,9 @@ interface AvatarEntry {
   view: AvatarView;
   overlay: AvatarOverlay;
 }
+
+/** Where the HR ghost stands in the HR office, next to its desk. */
+const HR_GHOST_TILE = { x: 7, y: 1 } as const;
 
 /**
  * The visible world: room, furniture, avatars and their overlays, plus mouse input.
@@ -80,6 +85,12 @@ export class WorldView {
   /** Candles on the agents' desks: lit at night while the agent works. */
   private readonly candles = new Map<AgentId, DeskCandle>();
   private night = false;
+  /** Name of the team member at each desk of a project floor (`team_view`); absent: the role name. */
+  private readonly seatNames = new Map<AgentId, string>();
+  /** Who is on the floor besides the three desk ghosts, and who has left by the elevator (`team_view`, `agent_presence`). */
+  private readonly people = new FloorPeople();
+  /** The HR agent behind its desk in the HR office; decorative, not part of the simulation. */
+  private hrGhost: AvatarEntry | null = null;
   /** Slow wisps drifting through the room. */
   private motes: MoteLayer | null = null;
 
@@ -144,9 +155,21 @@ export class WorldView {
     return true;
   }
 
-  private agentTip(agent: AgentId) {
+  private agentTip(agent: StaffId) {
+    if (isGuestId(agent)) {
+      const g = this.people.guest(agent);
+      return guestTooltip(g?.name ?? "Team member", g ? roleLabel(g.role) : "Team member", g?.model);
+    }
     const s = this.agentStatus.get(agent);
-    return agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
+    const tip = agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
+    const name = this.seatNames.get(agent);
+    return name && name !== tip.title ? { ...tip, title: `${name} (${tip.title})` } : tip;
+  }
+
+  /** The HR agent thinks while it works out a proposal (the HR desk asked it). */
+  setHrThinking(thinking: boolean): void {
+    if (thinking) this.hrGhost?.overlay.setState("thinking", "Working out a team");
+    else this.hrGhost?.overlay.setState("idle");
   }
 
   setZoom(z: Zoom): void {
@@ -163,6 +186,7 @@ export class WorldView {
 
   handle(msg: ServerMsg, now = Date.now()): void {
     this.work.apply(msg);
+    this.people.apply(msg);
     switch (msg.type) {
       case "welcome":
         this.hooks.tooltip?.hide();
@@ -191,7 +215,17 @@ export class WorldView {
         if (label) entry?.overlay.setName(builderTagName("Builder", label));
         break;
       }
+      case "team_view":
+        this.applyTeamView(msg.members, msg.guests ?? []);
+        break;
+      case "agent_presence":
+        // Whether the ghost is drawn follows `people` in `tick`: a ghost that left stays until it reaches the elevator.
+        break;
+      case "hr_suggestion":
+        this.setHrThinking(false);
+        break;
       case "error":
+        if (msg.code === "hr_error" || msg.code === "engine_unavailable") this.setHrThinking(false);
         this.hooks.onError?.(msg.code, msg.message);
         break;
       default:
@@ -218,10 +252,18 @@ export class WorldView {
     for (const c of this.candles.values()) c.update(now, this.reducedMotion);
     for (const f of this.flames) f.update(now, this.reducedMotion);
     this.motes?.update(now, this.reducedMotion);
-    for (const { view, overlay } of this.avatars.values()) {
+    for (const [id, entry] of this.avatars) {
+      const { view, overlay } = entry;
       view.update(now);
+      // A ghost that was let go disappears once it has reached the elevator; a spot nobody stands at shows nobody.
+      if (typeof id === "string") this.setAvatarVisible(entry, this.people.isShown(id, view.walking));
       overlay.update(now, view.feetX, view.feetY);
       overlay.container.zIndex = view.feetY;
+    }
+    if (this.hrGhost) {
+      this.hrGhost.view.update(now);
+      this.hrGhost.overlay.update(now, this.hrGhost.view.feetX, this.hrGhost.view.feetY);
+      this.hrGhost.overlay.container.zIndex = this.hrGhost.view.feetY;
     }
   }
 
@@ -264,6 +306,7 @@ export class WorldView {
     }
 
     this.models = msg.models ?? {};
+    this.seatNames.clear();
     // A project floor writes its name over the elevator and the board.
     this.objects.addChild(buildSigns(msg.room, (x, y) => room.heightmap.height(x, y) ?? 0));
     this.agentStatus.clear();
@@ -272,19 +315,55 @@ export class WorldView {
     this.refreshCandles();
     const status = new Map(msg.agents.map((a) => [a.agentId, a]));
     for (const a of msg.avatars) {
-      const role: RoleKey = typeof a.id === "string" ? a.id : "user";
+      // A guest spot has no role until `team_view` says who stands there.
+      const role: RoleKey = typeof a.id !== "string" ? "user" : isGuestId(a.id) ? "researcher" : a.id;
       const view = new AvatarView(a.id, role, this.sprites, { x: a.x, y: a.y }, a.dir);
-      const overlay = new AvatarOverlay(a.name, ROLE_COLOURS[role], this.sprites, typeof a.id === "string");
-      const s = typeof a.id === "string" ? status.get(a.id) : undefined;
+      const overlay = new AvatarOverlay(a.name, ROLE_COLOURS[role], this.sprites, typeof a.id === "string" && !isGuestId(a.id));
+      const s = typeof a.id === "string" && !isGuestId(a.id) ? status.get(a.id) : undefined;
       if (s) overlay.setState(s.state, s.text);
       this.objects.addChild(view.sprite);
       this.overlays.addChild(overlay.container);
       this.avatars.set(a.id, { view, overlay });
     }
+    if (msg.room.kind === "hr") this.addHrGhost();
 
     if (!this.zoomChosen) this.chooseAutoZoom();
     this.layout();
     this.tick(Date.now());
+  }
+
+  private setAvatarVisible(entry: AvatarEntry, visible: boolean): void {
+    entry.view.sprite.visible = visible;
+    entry.overlay.container.visible = visible;
+  }
+
+  /** Names and models of the team members at the desks and at the standing spots (`team_view`). */
+  private applyTeamView(
+    members: readonly { agentId: AgentId; name: string; model?: string | undefined }[],
+    guests: readonly TeamViewGuest[],
+  ): void {
+    for (const m of members) {
+      this.seatNames.set(m.agentId, m.name);
+      if (m.model) this.models[m.agentId] = m.model;
+      this.avatars.get(m.agentId)?.overlay.setName(m.name);
+    }
+    for (const g of guests) {
+      const entry = this.avatars.get(g.guestId);
+      if (!entry) continue;
+      entry.view.role = g.role;
+      entry.overlay.setName(g.name);
+      entry.overlay.setColour(ROLE_COLOURS[g.role]);
+    }
+  }
+
+  /** The HR office has an HR agent behind its desk. It is scenery: the simulation does not know it. */
+  private addHrGhost(): void {
+    const view = new AvatarView("hr", "hr", this.sprites, { ...HR_GHOST_TILE }, 4);
+    const overlay = new AvatarOverlay("HR", ROLE_COLOURS.hr, this.sprites, true);
+    overlay.setState("idle");
+    this.objects.addChild(view.sprite);
+    this.overlays.addChild(overlay.container);
+    this.hrGhost = { view, overlay };
   }
 
   /** Picks 1x or 2x from the stage size (only used while the user has not chosen a zoom). */
@@ -309,6 +388,8 @@ export class WorldView {
     this.hoveredItem = null;
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
+    this.hrGhost?.overlay.destroy();
+    this.hrGhost = null;
     for (const c of this.objects.removeChildren()) c.destroy();
     this.furni = [];
     this.monitors.clear();
@@ -344,6 +425,15 @@ export class WorldView {
     const h = this.hit(e);
     if (!h) return;
     this.hoveredItem = null;
+    if (this.hrGhost?.view.sprite.getBounds().containsPoint(e.global.x, e.global.y)) {
+      this.app.canvas.style.cursor = "default";
+      h.room.setHover(null);
+      this.hooks.tooltip?.hover("agent:hr", e.global.x, e.global.y, () => ({
+        title: "HR",
+        lines: ["Suggests a team for a project when you ask at the HR desk. It only proposes; you decide."],
+      }));
+      return;
+    }
     const agent = this.agentAt(e.global.x, e.global.y);
     if (agent) {
       this.app.canvas.style.cursor = "default";
@@ -372,8 +462,8 @@ export class WorldView {
   }
 
   /** Front-most agent (not the user) whose sprite is under the point, in canvas coordinates. */
-  private agentAt(gx: number, gy: number): AgentId | undefined {
-    let best: AgentId | undefined;
+  private agentAt(gx: number, gy: number): StaffId | undefined {
+    let best: StaffId | undefined;
     let bestY = -Infinity;
     for (const [id, { view }] of this.avatars) {
       if (typeof id !== "string" || !view.sprite.visible) continue;

@@ -28,7 +28,7 @@ export class AvatarOverlay {
 
   constructor(
     private name: string,
-    private readonly colour: number,
+    private colour: number,
     private readonly sprites: SpriteProvider,
     hasStatus: boolean,
   ) {
@@ -66,6 +66,13 @@ export class AvatarOverlay {
   setName(name: string): void {
     if (name === this.name) return;
     this.name = name;
+    this.drawTag();
+  }
+
+  /** Change the name tag colour (a guest spot takes the colour of the role of whoever stands there). */
+  setColour(colour: number): void {
+    if (colour === this.colour) return;
+    this.colour = colour;
     this.drawTag();
   }
 

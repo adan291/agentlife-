@@ -1,0 +1,84 @@
+{
+  "id": "read-only",
+  "description": "Reads files in the working directory. Cannot write, run commands or use the network.",
+  "tools": [
+    "read"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_read",
+        "match": [
+          "**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_read",
+        "match": [
+          ".env",
+          ".env.*",
+          "*.pem",
+          "*.key",
+          "id_rsa*",
+          "id_ed25519*",
+          "*.p12",
+          "*.pfx",
+          "credentials*",
+          "secrets*",
+          ".npmrc",
+          ".aws/**",
+          ".ssh/**",
+          ".git/**",
+          "**/.env",
+          "**/.env.*",
+          "**/*.pem",
+          "**/*.key",
+          "**/id_rsa*",
+          "**/id_ed25519*",
+          "**/*.p12",
+          "**/*.pfx",
+          "**/credentials*",
+          "**/secrets*",
+          "**/.npmrc",
+          "**/.aws/**",
+          "**/.ssh/**",
+          "**/.git/**",
+          "*.env",
+          ".netrc",
+          "**/.netrc",
+          ".pypirc",
+          "**/.pypirc",
+          ".docker/**",
+          "**/.docker/**",
+          ".kube/**",
+          "**/.kube/**",
+          "*.jks",
+          "*.keystore"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          "**"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "*"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "web_fetch",
+        "match": [
+          "*"
+        ],
+        "effect": "deny"
+      }
+    ]
+  }
+}

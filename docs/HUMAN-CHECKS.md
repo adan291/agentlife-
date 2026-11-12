@@ -12,3 +12,9 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 
 ## night-shift (merged 2026-11-12)
 - [ ] Look at the feature in the browser
+
+## hr-desk tasks 3-4 (on feat/hr-desk, not merged)
+- [ ] Engine and world-server running, go to the HR office (door in the lobby), click the HR desk: hire a QA from the catalogue on a project, fire the first QA, then take the elevator to that project: the old QA leaves by the elevator and the new one walks in with its name
+- [ ] "Suggest a team" for a project: the HR ghost looks like it is thinking, the proposal appears, nothing changes until "Apply this team"
+- [ ] Hire a second developer, a reviewer, a researcher and the Night intern on one project, then take the elevator to that floor: all four walk in from the elevator and stand at their own spots with their names and role colours; hover one for the tooltip; fire one and watch it walk back to the elevator; check that name tags do not overlap badly
+- [ ] Imports: put one https address in `packages/agent-engine/config/catalogue-sources.json`, restart the engine, import, read the persona and the review, approve, hire it; change the file at the source and import again to see "Update waits for you"

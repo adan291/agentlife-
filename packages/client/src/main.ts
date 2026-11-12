@@ -167,6 +167,7 @@ const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl
   unreadReports: () => mailbox.unreadIds(),
   onReportOpened: (id) => void mailbox.markRead(id),
   goTo,
+  hrThinking: () => world.setHrThinking(true),
   ...(replay
     ? {
         lockedGoal: replay.recordedGoal,

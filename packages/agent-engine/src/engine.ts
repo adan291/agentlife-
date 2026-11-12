@@ -24,13 +24,28 @@ import { NightStore } from "./night/store.ts";
 import { createDiscordNotifier, createMorningReporter, type NightNotifier } from "./night/morning.ts";
 import { SummaryStore } from "./night/summary-store.ts";
 import { isTerminal } from "./jobs/transitions.ts";
-import type { NightConfig } from "@agentlife/shared";
+import { scopeAgentId, type NightConfig, type JobState, type TeamRole } from "@agentlife/shared";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
+import { OllamaRuntime } from "./runtimes/ollama.ts";
 import { createPipelineSteps } from "./steps/index.ts";
+import { JobNotes } from "./steps/notes.ts";
+import { InternRuntime } from "./team/intern.ts";
 import { LlmRuntime } from "./runtimes/llm.ts";
 import type { AgentRuntime, Role } from "./runtimes/types.ts";
 import { Store, type StoreOptions } from "./store.ts";
+import { Catalogue } from "./team/catalogue.ts";
+import { kiroCliValidator, type AgentValidator } from "./team/generate.ts";
+import { kiroCliModelLister, loadTeamRules, ModelDirectory } from "./team/models.ts";
+import { TeamService } from "./team/service.ts";
+import { TeamStore } from "./team/store.ts";
+import { loadTiers } from "./team/tiers.ts";
+import { createCatalogueRoute, createImportRoutes, createSuggestRoute, createTeamRoutes } from "./team/routes.ts";
+import { agentHr, projectFactsReader, TeamSuggester, type FactsReader, type HrAgent } from "./team/suggest.ts";
+import { agentImportReviewer } from "./team/import-review.ts";
+import { loadCatalogueSources, type FetchFn } from "./team/import.ts";
+import { ImportService, type ImportReviewer } from "./team/imports.ts";
+import { installServiceAgents, serviceAgentName } from "./team/service-agents.ts";
 
 export interface EngineOptions {
   config?: EngineConfig;
@@ -58,6 +73,32 @@ export interface EngineOptions {
   projectsFile?: string;
   /** A ready registry (tests that build their own pipeline steps share it with the engine). */
   projects?: ProjectRegistry;
+  /** The templates that can be hired. Default: `config/catalogue`. */
+  catalogue?: Catalogue;
+  /** Teams (hr-desk). All fields are for tests; the real process uses the defaults. */
+  team?: {
+    /** Default: `AGENTLIFE_TEAMS_FILE` or `<dataDir>/teams.json`. */
+    file?: string;
+    /** Default: the role lists of `config/team-rules.json` narrowed by `kiro-cli chat --list-models` (real pipeline only). */
+    models?: ModelDirectory;
+    /** Where agent files of customised teams are written and how they are checked. Default: only with the real pipeline. */
+    agents?: { kiroHome: string; validate?: AgentValidator };
+    /** The HR agent. Default: the HR service agent with the real pipeline, none otherwise (the fixed rules choose). */
+    hrAgent?: HrAgent;
+    /** How the size and stack of a project are read for a suggestion. Default: the registry and `git ls-files`. */
+    facts?: FactsReader;
+  };
+  /** Trusted imports (hr-desk). Fields are for tests; the real process reads `config/catalogue-sources.json`. */
+  imports?: {
+    /** Default: `AGENTLIFE_IMPORTS_FILE` or `<dataDir>/catalogue-imports.json`. */
+    file?: string;
+    sources?: string[];
+    fetch?: FetchFn;
+    timeoutMs?: number;
+    now?: () => number;
+    /** Default: the security agent with the real pipeline, none otherwise (only the fixed checks run). */
+    reviewer?: ImportReviewer;
+  };
   /**
    * Night shift. The routes and the schedule file are always there; the scheduler that starts night jobs runs only when
    * `run` is true (the real process), so tests never start a job because of a schedule that sits in `data/night.json`.
@@ -80,6 +121,8 @@ export interface Engine {
   store: Store;
   runner: JobRunner;
   projects: ProjectRegistry;
+  team: TeamService;
+  imports: ImportService;
   night: { store: NightStore; scheduler: NightScheduler; summaries: SummaryStore };
   server: http.Server;
   config: EngineConfig;
@@ -92,6 +135,9 @@ export interface Engine {
 function forceFake(): boolean {
   return process.env["RUNTIME"] === "fake";
 }
+
+/** The role that works while a job is in this state (an agent in that role cannot be fired meanwhile). */
+const ROLE_OF_STATE: Partial<Record<JobState, TeamRole>> = { analyzing: "architect", developing: "developer", reviewing: "qa" };
 
 /** True when at least one role runs on kiro-cli, so the real pipeline steps are used. */
 function usesRealPipeline(config: EngineConfig): boolean {
@@ -141,17 +187,106 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       agentlifeRoot: PROJECT_ROOT,
     });
   const activity = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
+  const real = !steps && usesRealPipeline(config);
+  const catalogue = opts.catalogue ?? new Catalogue();
+  const tiers = loadTiers();
+  const teamModels =
+    opts.team?.models ??
+    new ModelDirectory({
+      rules: loadTeamRules(),
+      fake: forceFake(),
+      // The role agents run with this environment, so this is the model list they see.
+      ...(real ? { list: kiroCliModelLister(paths.kiroHome) } : {}),
+    });
+  const team = new TeamService({
+    store: new TeamStore({ file: opts.team?.file ?? process.env["AGENTLIFE_TEAMS_FILE"] ?? path.join(paths.root, "teams.json"), logger }),
+    catalogue,
+    models: teamModels,
+    tiers,
+    hasProject: (id) => projects.has(id),
+    defaultModels: roleModels(config),
+    ...(opts.team?.agents
+      ? { agents: opts.team.agents }
+      : real
+        ? { agents: { kiroHome: paths.kiroHome, validate: kiroCliValidator(paths.kiroHome) } }
+        : {}),
+    busy: (projectId) =>
+      store.listJobs().flatMap((j) => {
+        const role = j.repoId === projectId ? ROLE_OF_STATE[j.state] : undefined;
+        return role ? [{ taskId: j.taskId, role }] : [];
+      }),
+    activity: (projectId, role, text) => {
+      // Reviewers and researchers have no seat of their own in the room yet: their lines come from the nearest seat.
+      const seat = role === "reviewer" ? "qa" : role === "researcher" ? "architect" : role;
+      activity.line(`team:${projectId}`, scopeAgentId(projectId, seat), text);
+    },
+    logger,
+  });
+  const serviceRuntime = real ? new KiroCliRuntime({ kiroHome: paths.kiroHome }) : undefined;
+  // The Night intern: the local model first, the same read-only agent on claude-haiku-5.5 when Ollama cannot answer.
+  const intern = serviceRuntime
+    ? new InternRuntime({ local: new OllamaRuntime(), fallback: serviceRuntime, onFallback: (m) => logger.warn(m) })
+    : undefined;
+  const notes = new JobNotes();
+  const importReviewer =
+    opts.imports?.reviewer ??
+    (serviceRuntime
+      ? agentImportReviewer({
+          runtime: serviceRuntime,
+          agent: serviceAgentName("import-review"),
+          model: teamModels.preferred("claude-haiku-5.5"),
+          cwd: path.join(paths.root, "import-review"),
+          rawLogPath: path.join(paths.runs, "import-review.raw.jsonl"),
+        })
+      : undefined);
+  const hrAgent =
+    opts.team?.hrAgent ??
+    (serviceRuntime
+      ? agentHr({
+          runtime: serviceRuntime,
+          agent: serviceAgentName("hr"),
+          model: teamModels.preferred("claude-haiku-5.5"),
+          cwd: path.join(paths.root, "hr"),
+          rawLogPath: path.join(paths.runs, "hr.raw.jsonl"),
+        })
+      : undefined);
+  const suggester = new TeamSuggester({
+    team,
+    catalogue,
+    models: teamModels,
+    facts: opts.team?.facts ?? projectFactsReader(projects),
+    logger,
+    ...(hrAgent ? { agent: hrAgent } : {}),
+  });
+  const imports = new ImportService({
+    file: opts.imports?.file ?? process.env["AGENTLIFE_IMPORTS_FILE"] ?? path.join(paths.root, "catalogue-imports.json"),
+    sources: opts.imports?.sources ?? loadCatalogueSources(),
+    catalogue,
+    logger,
+    ...(importReviewer ? { reviewer: importReviewer } : {}),
+    ...(opts.imports?.fetch ? { fetch: opts.imports.fetch } : {}),
+    ...(opts.imports?.timeoutMs ? { timeoutMs: opts.imports.timeoutMs } : {}),
+    ...(opts.imports?.now ? { now: opts.imports.now } : {}),
+  });
   if (!steps) {
-    const real = usesRealPipeline(config);
     if (real) {
       const installed = installAgents({ kiroHome: paths.kiroHome });
       logger.info("role agents installed", { dir: installed.dir, agents: installed.installed });
+      const synced = await team.syncAgents();
+      if (synced.written > 0 || synced.removed > 0) logger.info("team agents synced", synced);
+      try {
+        const serviceFiles = await installServiceAgents({ kiroHome: paths.kiroHome, tiers, validate: kiroCliValidator(paths.kiroHome) });
+        if (serviceFiles.length > 0) logger.info("service agents written", { agents: serviceFiles });
+      } catch (e) {
+        // Without them the import review falls back to the fixed checks; the rest of the engine does not need them.
+        logger.warn("service agents could not be written", { error: e instanceof Error ? e.message : String(e) });
+      }
     }
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     const models = roleModels(config);
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models })
-      : createRuntimeSteps({ runtimes, store, logger, activity, models });
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team, ...(intern ? { intern } : {}), notes })
+      : createRuntimeSteps({ runtimes, store, logger, activity, models, team });
   }
   const ambient =
     opts.ambient ??
@@ -219,9 +354,13 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
       createCrewRoute(crewRelay),
       ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
-      ...createProjectRoutes(projects, runner, store),
+      ...createProjectRoutes(projects, runner, store, (id) => team.remove(id)),
       createDeliverRoute(deliverDeps),
       createBranchesRoute({ registry: projects, paths }),
+      createCatalogueRoute(catalogue),
+      ...createTeamRoutes(team, teamModels),
+      ...createImportRoutes(imports),
+      createSuggestRoute(suggester),
       ...createNightRoutes({ store: nightStore, config: nightConfig, summaries: nightSummaries, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],
@@ -233,6 +372,8 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     store,
     runner,
     projects,
+    team,
+    imports,
     night: { store: nightStore, scheduler: nightScheduler, summaries: nightSummaries },
     server,
     config,

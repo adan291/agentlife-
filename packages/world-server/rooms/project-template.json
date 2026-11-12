@@ -24,7 +24,13 @@
     { "name": "desk", "x": 10, "y": 3, "dir": 2, "agent": "qa" },
     { "name": "home_architect", "x": 3, "y": 4, "dir": 4 },
     { "name": "home_developer", "x": 3, "y": 7, "dir": 4 },
-    { "name": "home_qa", "x": 9, "y": 6, "dir": 4 }
+    { "name": "home_qa", "x": 9, "y": 6, "dir": 4 },
+    { "name": "home_guest1", "x": 2, "y": 3, "dir": 6 },
+    { "name": "home_guest2", "x": 2, "y": 6, "dir": 6 },
+    { "name": "home_guest3", "x": 10, "y": 4, "dir": 2 },
+    { "name": "home_guest4", "x": 10, "y": 5, "dir": 2 },
+    { "name": "home_guest5", "x": 5, "y": 4, "dir": 4 },
+    { "name": "home_guest6", "x": 7, "y": 4, "dir": 4 }
   ],
   "furni": [
     { "itemId": "cobweb_1", "defId": "cobweb", "x": 0, "y": 0, "dir": 4 },

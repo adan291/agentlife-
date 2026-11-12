@@ -93,7 +93,7 @@ export function createBranchesRoute(deps: { registry: ProjectRegistry; paths: Da
  * `GET/POST /projects` and `DELETE /projects/:id`. Responses carry id, name, stack and test command; the path of a
  * project never leaves the registry (requirement 2).
  */
-export function createProjectRoutes(registry: ProjectRegistry, runner: JobRunner, store: Store): Route[] {
+export function createProjectRoutes(registry: ProjectRegistry, runner: JobRunner, store: Store, onRemoved?: (id: string) => void): Route[] {
   return [
     {
       method: "GET",
@@ -125,6 +125,7 @@ export function createProjectRoutes(registry: ProjectRegistry, runner: JobRunner
           throw new ConflictError("project_busy", "A job is running on this project. Wait for it to finish.");
         }
         registry.remove(id);
+        onRemoved?.(id);
         sendJson(res, 200, OkResponseSchema, { ok: true });
       },
     },

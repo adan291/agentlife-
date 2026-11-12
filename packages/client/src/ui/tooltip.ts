@@ -53,6 +53,13 @@ export function agentTooltip(
   return { title: info.name, lines };
 }
 
+/** Tooltip of a team member who stands at one of the floor's spots instead of a desk. */
+export function guestTooltip(name: string, roleName: string, model: string | undefined): TooltipContent {
+  const lines = [`${roleName} of this project's team. Stands on the floor; a role's desk belongs to its first member.`];
+  if (model) lines.push(`Model: ${model}`);
+  return { title: `${name} (${roleName})`, lines };
+}
+
 const CSS = `
 .al-tooltip { position: absolute; z-index: 30; max-width: min(340px, calc(100% - var(--al-s4))); pointer-events: none; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); padding: var(--al-s2) var(--al-s3); font: var(--al-font, 14px)/1.5 monospace; box-sizing: border-box; }
 .al-tooltip[hidden] { display: none; }

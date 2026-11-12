@@ -3,8 +3,8 @@ import { dirFromDelta, oppositeDir } from "../geometry/dir.ts";
 import type { Dir } from "../geometry/dir.ts";
 import { findPath } from "../geometry/pathfind.ts";
 import type { PathGrid, Tile } from "../geometry/pathfind.ts";
-import { buildPathGrid, resolveAnchor, roomAgents, splitAgentId, useTile } from "../room.ts";
-import type { AgentId, RoomDef } from "../room.ts";
+import { buildPathGrid, resolveAnchor, roomAgents, roomGuests, splitAgentId, useTile } from "../room.ts";
+import type { AgentId, RoomDef, SemanticAnchor, StaffId } from "../room.ts";
 import type { AgentEvent, AgentState } from "../events.ts";
 import { PROTOCOL_VERSION } from "../version.ts";
 import type { AvatarId, Avatar, ClientMsg, ServerMsg, WelcomeMsg } from "../protocol.ts";
@@ -81,6 +81,10 @@ export class WorldSim {
         dir: (home?.dir ?? 4) as Dir,
       });
       this.agentStates.set(agent, { state: "idle" });
+    }
+    for (const guest of roomGuests(room)) {
+      // A guest spot is empty until the world-server puts a team member there: the avatar waits at the elevator.
+      this.avatars.set(guest, { id: guest, name: `Guest ${guest.slice("guest".length)}`, tile: { x: room.door.x, y: room.door.y }, dir: room.door.dir as Dir });
     }
   }
 
@@ -199,6 +203,17 @@ export class WorldSim {
       default:
         return [];
     }
+  }
+
+  /**
+   * Sends an agent or a guest to a named place outside of any job (a team change: the elevator, back to its desk or
+   * spot). Returns the walk.
+   */
+  sendAgentTo(agentId: StaffId, anchor: SemanticAnchor): ServerMsg[] {
+    const agent = this.avatars.get(agentId);
+    const a = resolveAnchor(this.room, anchor, agentId);
+    if (!agent || !a) return [];
+    return this.walkTo(agent, { x: a.x, y: a.y }, a.dir as Dir, [], false);
   }
 
   /** Remove and return deferred messages whose time has come, oldest first. */
