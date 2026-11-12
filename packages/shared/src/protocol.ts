@@ -8,6 +8,7 @@ import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { MemoryActionSchema, MemoryStateSchema } from "./memory.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
+import { OverviewFloorSchema, ShowablePanelSchema } from "./overview.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, GuestIdSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
 
@@ -173,8 +174,18 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("remove_project"), projectId: z.string().min(1).max(100) }),
   /** Report viewer: fetch the job's branch into the user's repository. Answered with `report` (resend) or an error. */
   z.object({ type: z.literal("deliver"), taskId: TaskIdSchema }),
-  /** Elevator: go to another floor. Only accepted while the avatar stands at the elevator. Answered with a new `welcome`. */
-  z.object({ type: z.literal("go_to"), roomId: RoomIdSchema }),
+  /**
+   * Go to another floor. `via: "elevator"` (default) is accepted only while the avatar stands at the elevator; `via: "list"`
+   * (list view and command palette, D13) skips that check. Answered with a new `welcome`.
+   */
+  z.object({ type: z.literal("go_to"), roomId: RoomIdSchema, via: z.enum(["elevator", "list"]).optional() }),
+  /**
+   * List view and command palette: open a panel of the user's floor without walking to its furniture. The server checks the
+   * floor has that furniture, sends the panel's data and then `open_panel`, as it does for `use`.
+   */
+  z.object({ type: z.literal("show_panel"), panel: ShowablePanelSchema }),
+  /** List view: while `on`, the server sends `overview` now and after every change that alters it. Off on every new connection. */
+  z.object({ type: z.literal("overview_watch"), on: z.boolean() }),
   /**
    * Activity terminal: `floor` (default on every connection) sends only the activity of the user's floor; `all` also sends
    * the other floors' lines as they happen, plus their buffered lines right away.
@@ -254,6 +265,8 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("job_details"), details: JobDetailsSchema }),
   /** Every floor with its live status. Sent after `welcome` and whenever a status changes. */
   z.object({ type: z.literal("floors"), floors: z.array(FloorStatusSchema).max(100) }),
+  /** Read-only summary of every project floor, for the list view and the command palette. Sent only while `overview_watch` is on. */
+  z.object({ type: z.literal("overview"), floors: z.array(OverviewFloorSchema).max(100) }),
   /** Construction board data (the engine's `GET /build/board`) and a verifier report. */
   z.object({ type: z.literal("build_board"), board: BuildBoardSchema }),
   z.object({ type: z.literal("build_report"), report: BuildReportSchema }),

@@ -1,5 +1,7 @@
 import type { ConnectionStatus } from "../transport.ts";
 import { UI_COLOURS } from "./theme.ts";
+import { inTextField, isPaletteKey, isViewKey, otherView } from "./view-mode.ts";
+import type { ViewMode } from "./view-mode.ts";
 
 const CSS = `
 .al-hud { font: var(--al-font, 14px)/1.4 monospace; color: ${UI_COLOURS.text}; }
@@ -43,6 +45,8 @@ export interface Hud {
   setFloor(name: string): void;
   /** Text of the Elevator shortcut (it counts the floors that wait for the user). */
   setElevatorLabel(label: string, title?: string): void;
+  /** The view in use; the button offers the other one. */
+  setView(view: ViewMode): void;
 }
 
 /** Top bar controls and stage messages: zoom button, text size, help, connection status, notice and toast. */
@@ -53,6 +57,8 @@ export function createHud(
   font?: FontControls,
   onUseHere: () => void = () => {},
   onElevator: () => void = () => {},
+  onView: () => void = () => {},
+  onPalette: () => void = () => {},
 ): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -73,6 +79,12 @@ export function createHud(
   const elevator = button("Elevator", "Take the elevator to another floor");
   elevator.addEventListener("click", onElevator);
   mounts.right.appendChild(elevator);
+  const viewButton = button("List");
+  viewButton.addEventListener("click", onView);
+  mounts.right.appendChild(viewButton);
+  const palette = button("Commands", "Open the command palette (Ctrl+K)");
+  palette.addEventListener("click", onPalette);
+  mounts.right.appendChild(palette);
   const zoom = button("");
   zoom.title = "Toggle zoom (Z)";
   zoom.addEventListener("click", onZoom);
@@ -123,9 +135,15 @@ export function createHud(
   mounts.stage.appendChild(toast);
 
   window.addEventListener("keydown", (e) => {
-    const t = e.target as HTMLElement | null;
-    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
-    if (e.key === "z" || e.key === "Z") onZoom();
+    if (isPaletteKey(e)) {
+      // Browsers bind Ctrl+K to the address bar search.
+      e.preventDefault();
+      onPalette();
+      return;
+    }
+    if (inTextField(e.target)) return;
+    if (isViewKey(e)) onView();
+    else if (e.key === "z" || e.key === "Z") onZoom();
   });
 
   let timer: number | undefined;
@@ -154,6 +172,13 @@ export function createHud(
       const t = title ?? "Take the elevator to another floor";
       elevator.title = t;
       elevator.setAttribute("aria-label", label === "Elevator" ? t : `${label}. ${t}`);
+    },
+    setView(view) {
+      const next = otherView(view);
+      viewButton.textContent = next === "list" ? "List" : "Hotel";
+      const text = next === "list" ? "Show the list of projects (L)" : "Show the hotel (L)";
+      viewButton.title = text;
+      viewButton.setAttribute("aria-label", text);
     },
     toast(text, ms = 2500) {
       toast.textContent = text;
