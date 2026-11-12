@@ -14,6 +14,8 @@ import { createReplayBar } from "./ui/replay-bar.ts";
 import { createHud } from "./ui/hud.ts";
 import { createPanels } from "./ui/panels.ts";
 import { createNavigator, showPanelMessage } from "./ui/actions.ts";
+import { buildCommands } from "./ui/commands.ts";
+import { createCommandPalette } from "./ui/command-palette.ts";
 import { createListView } from "./ui/list-view.ts";
 import type { ListActions } from "./ui/list-view.ts";
 import { loadView, otherView, saveView } from "./ui/view-mode.ts";
@@ -131,6 +133,7 @@ const hud = createHud(
     else hud.toast("There is no elevator on this floor.");
   },
   () => toggleView(),
+  () => openPalette(),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
@@ -244,6 +247,7 @@ const listActions: ListActions = {
   scheduleNight: () => navigator.act(LOBBY_ROOM, () => transport.send(showPanelMessage("night"))),
 };
 const listView = createListView(document, stageEl, listActions);
+const palette = createCommandPalette(document, stageEl);
 if (!live) listView.update({ locked: LIST_LOCKED });
 
 function setView(next: ViewMode): void {
@@ -259,6 +263,11 @@ function setView(next: ViewMode): void {
 }
 function toggleView(): void {
   setView(otherView(view));
+}
+function openPalette(): void {
+  palette.toggle(() =>
+    buildCommands({ floors: overviewFloors, hotelFloors: floorList, live: live !== undefined, actions: listActions, toggleView }),
+  );
 }
 setView(view);
 setInterval(() => {

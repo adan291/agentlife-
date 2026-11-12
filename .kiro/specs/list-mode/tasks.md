@@ -4,7 +4,7 @@
   - View toggle and `L` key, project rows with job state, expandable steps and artifacts, all actions
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 2. Command palette
+- [x] 2. Command palette
   - `Ctrl+K`, fuzzy search, commands mapped to existing messages, keyboard navigation
   - _Requirements: 2.1, 2.2_
 

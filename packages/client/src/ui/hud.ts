@@ -1,6 +1,6 @@
 import type { ConnectionStatus } from "../transport.ts";
 import { UI_COLOURS } from "./theme.ts";
-import { inTextField, isViewKey, otherView } from "./view-mode.ts";
+import { inTextField, isPaletteKey, isViewKey, otherView } from "./view-mode.ts";
 import type { ViewMode } from "./view-mode.ts";
 
 const CSS = `
@@ -58,6 +58,7 @@ export function createHud(
   onUseHere: () => void = () => {},
   onElevator: () => void = () => {},
   onView: () => void = () => {},
+  onPalette: () => void = () => {},
 ): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -81,6 +82,9 @@ export function createHud(
   const viewButton = button("List");
   viewButton.addEventListener("click", onView);
   mounts.right.appendChild(viewButton);
+  const palette = button("Commands", "Open the command palette (Ctrl+K)");
+  palette.addEventListener("click", onPalette);
+  mounts.right.appendChild(palette);
   const zoom = button("");
   zoom.title = "Toggle zoom (Z)";
   zoom.addEventListener("click", onZoom);
@@ -131,6 +135,12 @@ export function createHud(
   mounts.stage.appendChild(toast);
 
   window.addEventListener("keydown", (e) => {
+    if (isPaletteKey(e)) {
+      // Browsers bind Ctrl+K to the address bar search.
+      e.preventDefault();
+      onPalette();
+      return;
+    }
     if (inTextField(e.target)) return;
     if (isViewKey(e)) onView();
     else if (e.key === "z" || e.key === "Z") onZoom();
