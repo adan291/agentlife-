@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-12 (build-board tasks 1–2 done on branch feat/build-board, not merged; hotel-floors merged)
+Updated: 2026-11-12 (job-types tasks 1–2 done on branch feat/job-types, not merged; build-board tasks 1–2 done on feat/build-board, not merged; hotel-floors merged)
 
 ## Phase
 Phase 0 done. world-room merged into main (S1, S3, S4, S5; tasks 1–12 done, browser check passed). Reviewed with agentlife-reviewer (docs/reviews/feat-world-room.md); its two blockers were fixed. agent-engine merged into main (S6, S7; 10/10). Review docs/reviews/feat-agent-engine.md: blocker fixed (ENGINE_HOST, refuses a non-loopback host without ENGINE_TOKEN). Two-process e2e verified: engine (RUNTIME=fake) + world-server ENGINE=http, a scripted WebSocket client went start_job -> approve -> report. `pnpm check` passes (226 tests). Next: agent-pipeline, once the S2 security finding is resolved. S2 (kiro-cli spike) is blocked on a security finding, see below.
@@ -68,7 +68,7 @@ Still to do: `permissions: contents: read` in CI (audit L5).
 | hotel-floors | 5 / 5 | main | Done. Lobby and elevator checked by the user 2026-11-12; two-project queue and demo-with-floors checks in docs/HUMAN-CHECKS.md |
 | hr-desk | 0 / 4 | — | HR office: catalogue, hire/rename/fire, models per member, trusted imports (persona only, fixed permission tiers, security review, user approval), HR ghost suggests teams. S17-S18 |
 | build-board | 2 / 2 | feat/build-board | Done, not merged: needs review + verification. Not looked at in a browser |
-| job-types | 0 / 4 | — | Review branch, write tests, document (TASKMAP row 3) |
+| job-types | 2 / 4 | feat/job-types | Engine side done (kinds, pipelines, path rules, branch review, branch list, prompts, reports); not merged, not reviewed. Tasks 3 (client and world) and 4 (e2e per kind) remain (TASKMAP row 3) |
 | night-shift | 0 / 4 | — | Night jobs, morning summary (row 4) |
 | project-memory | 0 / 3 | — | The Library (row 6) |
 | list-mode | 0 / 3 | — | List view and command palette (row 7) |
@@ -88,6 +88,14 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 10. Typing in the goal box then pressing Z must not toggle zoom (already guarded); a server message arriving while typing re-renders the form and may drop focus (known, minor).
 
 ## Open problems / pending decisions
+- job-types (tasks 1–2 done on `feat/job-types`, `pnpm check` and `security:scan` pass; decisions in the spec's design.md). What to know for task 3 and for review:
+  - Protocol: `StartJobBody` has `kind` (default `change`) and `target` (branch, module path or topic; checked by `targetProblem` in shared). `task.created` and `EngineJobView` carry `kind`/`target` only for kinds other than `change`, so an absent kind means `change`. New engine endpoint `GET /projects/:id/branches` answers `{ current, branches }`. `POST /tasks` with `review-branch` refuses a target that is not in that list (400 `unknown_branch`). `POST /tasks/:id/deliver` answers 409 `not_deliverable` for a branch review. The world-server and client do not use any of this yet (task 3): `HttpEngineLink.startJob(repoId, goal)` still sends no kind, and `JobView` in protocol.ts has no kind.
+  - Pipelines: `jobs/kinds.ts` (`PIPELINES`, `transitionsFor`, path rules). `review-branch` runs the states reviewing, testing, report_ready (no approval); `document` skips testing; `write-tests` is a change with a test-files-only path rule. No new job states or step names, so the client stepper shows the same steps (for `review-branch` it will jump from nothing to Review; for `document` it never reaches Test). Task 3 should decide how the stepper and board show that.
+  - `Steps.reviewBranch` is optional; the fake engine in world-server (`fake-engine.ts`) and the demo replay do not implement kinds. The engine's fake runtime steps do (`runtime-steps.ts`), but the built-in project has no branches until a job has run on it, so `review-branch` on `haunted-todo` has nothing to pick under `RUNTIME=fake`. Task 4 needs a registered project or a different source of branches for its scripted job.
+  - Not run live: the real `kiro-cli` Architect/Developer/QA with the seven new prompts (`prompts/*-tests.md`, `*-docs.md`, `qa-branch.md`), a branch review on a real project with Docker tests, and a test image built for a branch (it uses the base branch's lockfile, see design.md). Only scripted agents and real git repositories were used.
+  - Known limits: the reviewed branch is compared with the checked-out branch, else `main`, else `master`; `test/**` style folders count from the project root only; a `write-tests` or `document` target is not shown to the Developer, only to the Architect (the plan carries it).
+  - The task 1 commit was amended once (before task 2) to replace a fake email address that the repository scanner flagged. Nothing was pushed.
+  - A scratch file `data/tmp-pipeline-old.txt` was created by mistake and could not be deleted from the session (permission rule on `data/**`); it is git-ignored, delete it by hand.
 - build-board (tasks 1–2 done on `feat/build-board`, `pnpm check` and `security:scan` pass; the spec has no design.md, decisions here):
   - Engine: `GET /build/board` and `GET /build/verify/:spec` (`agent-engine/src/build-board.ts`, parsers are pure and tested); the board reads only TASKMAP.md, each row's `.kiro/specs/<spec>/tasks.md`, `data/sessions/log.md` and `docs/reviews/feat-<spec>-verify.md` of the AGENT LIFE repo (spec names must match `^[a-z0-9-]+$`). Crew event kind `phase` (session `conduct`, field `phase`); the relay keeps the latest phase, the Builder walks to its desk and says it. `scripts/crew-phase.ts` sends it; `scripts/conduct.ts` reports session, review, verify, fix, merge, stopped and done (best effort).
   - Row status: TASKMAP `done` is merged, `needs-check` waits for you (human check), `skip` skipped; the phase marks the spec running/verifying, a `stopped` phase makes it wait for you with the reason. Waiting rows are first.
