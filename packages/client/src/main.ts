@@ -1,6 +1,6 @@
 import { Application } from "pixi.js";
-import { FURNI_CATALOG, RunExportSchema, validateRoom } from "@agentlife/shared";
-import type { FloorStatus, RunExport, ServerMsg } from "@agentlife/shared";
+import { FURNI_CATALOG, LOBBY_ROOM, RunExportSchema, validateRoom } from "@agentlife/shared";
+import type { FloorStatus, OverviewFloor, RunExport, ServerMsg } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
 import { DEMO_RUN_PATH, assetUrl, currentMode } from "./mode.ts";
 import { ReplayTransport } from "./replay/transport.ts";
@@ -13,6 +13,11 @@ import type { Transport } from "./transport.ts";
 import { createReplayBar } from "./ui/replay-bar.ts";
 import { createHud } from "./ui/hud.ts";
 import { createPanels } from "./ui/panels.ts";
+import { createNavigator, showPanelMessage } from "./ui/actions.ts";
+import { createListView } from "./ui/list-view.ts";
+import type { ListActions } from "./ui/list-view.ts";
+import { loadView, otherView, saveView } from "./ui/view-mode.ts";
+import type { ViewMode } from "./ui/view-mode.ts";
 import { createGuide } from "./ui/guide.ts";
 import { MailboxState } from "./ui/mailbox-state.ts";
 import { createTerminal } from "./ui/terminal.ts";
@@ -125,6 +130,7 @@ const hud = createHud(
     if (elevatorItemId) transport.send({ type: "use", itemId: elevatorItemId });
     else hud.toast("There is no elevator on this floor.");
   },
+  () => toggleView(),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
@@ -210,6 +216,55 @@ const toasts = createToasts(
   shell.banners,
 );
 
+// ---- list view and command palette (list-mode): the same hotel, without walking ----
+
+const navigator = createNavigator({ send: (msg) => transport.send(msg), toast: (text) => hud.toast(text) });
+const viewStorage = typeof localStorage !== "undefined" ? localStorage : undefined;
+let view: ViewMode = loadView(viewStorage);
+/** The latest overview of the project floors, or null before the first one (and always in the recorded demo). */
+let overviewFloors: OverviewFloor[] | null = null;
+const LIST_LOCKED = "The list view needs the live hotel. Run AGENT LIFE on your computer to use it.";
+/** While the list is on screen it asks for the night schedule this often (a job changes state while the user looks). */
+const LIST_NIGHT_REFRESH_MS = 10_000;
+
+const listActions: ListActions = {
+  newJob: (roomId, choice) => navigator.act(roomId, () => transport.send(showPanelMessage(choice.panel))),
+  reviewPlan: (roomId) => navigator.act(roomId, () => transport.send(showPanelMessage("mailbox"))),
+  openReport: (roomId, reportId) =>
+    navigator.act(roomId, () => {
+      // The mailbox sends the floor's reports before it opens; the viewer opens once this one is here.
+      transport.send(showPanelMessage("mailbox"));
+      navigator.act(roomId, () => panels.openReport(reportId), () => panels.state.data.reports.some((r) => r.reportId === reportId));
+    }),
+  openJobCard: (roomId) => navigator.act(roomId, () => transport.send(showPanelMessage("board"))),
+  goTo: (roomId) => {
+    setView("hotel");
+    navigator.act(roomId, () => undefined);
+  },
+  scheduleNight: () => navigator.act(LOBBY_ROOM, () => transport.send(showPanelMessage("night"))),
+};
+const listView = createListView(document, stageEl, listActions);
+if (!live) listView.update({ locked: LIST_LOCKED });
+
+function setView(next: ViewMode): void {
+  view = next;
+  shell.root.dataset["view"] = next;
+  saveView(viewStorage, next);
+  hud.setView(next);
+  listView.setVisible(next === "list");
+  if (next === "list") {
+    panels.close();
+    if (live) transport.send({ type: "night_state" });
+  }
+}
+function toggleView(): void {
+  setView(otherView(view));
+}
+setView(view);
+setInterval(() => {
+  if (view === "list" && live) transport.send({ type: "night_state" });
+}, LIST_NIGHT_REFRESH_MS);
+
 /** A new `welcome`: the user is in a (possibly other) room. */
 function enteredRoom(msg: Extract<ServerMsg, { type: "welcome" }>): void {
   const previous = currentRoom;
@@ -220,7 +275,7 @@ function enteredRoom(msg: Extract<ServerMsg, { type: "welcome" }>): void {
   refreshElevator();
   terminal.setRoom(currentRoom);
   // The doors show the floor's indicator and open; a floor change the user did not start (a door, a removed floor) closes them first.
-  if (previous !== undefined && previous !== currentRoom) transition.arrive(floorTag(floorList, currentRoom), currentRoomName);
+  if (previous !== undefined && previous !== currentRoom && view === "hotel") transition.arrive(floorTag(floorList, currentRoom), currentRoomName);
   else transition.abort();
   if (restored && floorStorage) saveFloor(floorStorage, currentRoom);
   // The server forgets the terminal scope with every connection, and the terminal was reseeded with this floor only.
@@ -252,6 +307,11 @@ function floorsChanged(floors: FloorStatus[]): void {
 
 transport.onStatus((s) => {
   hud.setStatus(s);
+  // A new connection starts without the overview: ask for it for the whole session, so the palette has its data at once.
+  if (s === "open" && live) {
+    transport.send({ type: "overview_watch", on: true });
+    if (view === "list") transport.send({ type: "night_state" });
+  }
   // A new connection starts in the lobby again: go back to the floor the user was on.
   if (s === "open" && live && currentRoom !== undefined) {
     rememberedFloor = loadFloor(floorStorage);
@@ -272,6 +332,7 @@ transport.onMessage((msg) => {
   replayBar?.handle(msg);
   if (delivered) world.notifyReportDelivered();
   refreshToasts();
+  navigator.handle(msg);
   if (msg.type === "welcome") {
     hud.setZoomLabel(world.zoom);
     terminal.seed(msg.activity ?? []);
@@ -279,6 +340,11 @@ transport.onMessage((msg) => {
     enteredRoom(msg);
   } else if (msg.type === "floors") {
     floorsChanged(msg.floors);
+  } else if (msg.type === "overview") {
+    overviewFloors = msg.floors;
+    listView.update({ floors: msg.floors });
+  } else if (msg.type === "night") {
+    listView.update({ night: msg.state });
   } else if (msg.type === "night_clock") {
     nightLook.set(msg);
     world.setNight(msg.open);

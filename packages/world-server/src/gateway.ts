@@ -3,6 +3,7 @@ import type { RawData, WebSocket } from "ws";
 import {
   ACTIVITY_BUFFER_SIZE,
   ClientMsgSchema,
+  FURNI_CATALOG,
   GUEST_IDS,
   HR_ROOM,
   LOBBY_ROOM,
@@ -16,7 +17,6 @@ import {
   projectIdOfRoom,
   projectRoomId,
   splitAgentId,
-  statusOfJobState,
 } from "@agentlife/shared";
 import type {
   ActivityLine,
@@ -30,6 +30,7 @@ import type {
   Hotel,
   HrAction,
   MemoryAction,
+  JobKind,
   JobState,
   MorningSummary,
   NightState,
@@ -38,6 +39,7 @@ import type {
   Report,
   SeatedRole,
   ServerMsg,
+  ShowablePanel,
   StepName,
   TeamMember,
   TeamRole,
@@ -45,6 +47,7 @@ import type {
 } from "@agentlife/shared";
 import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
+import { floorStatusOf, overviewOf } from "./overview.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -71,7 +74,8 @@ export interface GatewayOptions {
   tickMs?: number;
   /** Milliseconds between looks at the engine's night shift (summaries, window). Default 60000. */
   nightPollMs?: number;
-  /** Clock for the rate limiter. */
+  /** Milliseconds the overview waits after a change before it is sent (changes within it are sent once). Default 300. */
+  overviewDebounceMs?: number;
   clock?: () => number;
 }
 
@@ -123,6 +127,10 @@ interface Floor {
   queuePosition: number | undefined;
   /** A report the user has not opened yet (cleared when the mailbox of this floor is opened). */
   unread: "report_ready" | "failed" | null;
+  /** Kind and target of the current job, and its state entries (from the events), for the overview. */
+  jobKind: JobKind | undefined;
+  jobTarget: string | undefined;
+  timeline: { ts: number; state: JobState }[];
 }
 
 function newFloor(): Floor {
@@ -138,6 +146,9 @@ function newFloor(): Floor {
     jobState: undefined,
     queuePosition: undefined,
     unread: null,
+    jobKind: undefined,
+    jobTarget: undefined,
+    timeline: [],
   };
 }
 
@@ -160,7 +171,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   // connection (a reload picks up a late engine). Failures leave the cache as it was.
   let models: Partial<Record<AgentId, string>> | undefined;
 
-  let current: { ws: WebSocket; userId: number; activityAll: boolean } | null = null;
+  let current: { ws: WebSocket; userId: number; activityAll: boolean; overviewWatch: boolean } | null = null;
   const currentWs = (): WebSocket | undefined => current?.ws;
 
   const send = (ws: WebSocket, msg: ServerMsg) => {
@@ -204,25 +215,37 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   // ---- floors ----
 
   const floorStatuses = (): FloorStatus[] =>
-    hotel.floors().map((info) => {
-      const f = floors.get(info.roomId);
-      const base = f?.jobState ? statusOfJobState(f.jobState, f.queuePosition) : { status: "idle" as const };
-      const status = base.status === "idle" && f?.unread ? f.unread : base.status;
-      return {
-        roomId: info.roomId,
-        name: info.name,
-        kind: info.kind,
-        status,
-        ...(status === "working" && "who" in base && base.who ? { who: base.who } : {}),
-        ...(status === "queued" && "queuePosition" in base && base.queuePosition ? { queuePosition: base.queuePosition } : {}),
-      };
-    });
+    hotel.floors().map((info) => ({ roomId: info.roomId, name: info.name, kind: info.kind, ...floorStatusOf(floors.get(info.roomId)) }));
+
+  // ---- overview: the read-only summary behind the list view and the command palette ----
+
+  let lastOverviewKey = "";
+  let overviewTimer: NodeJS.Timeout | undefined;
+  /** Sends the overview to a client that watches it, when it changed (or `force`). */
+  const pushOverview = (force = false): void => {
+    if (!current?.overviewWatch) return;
+    const list = overviewOf(hotel.floors(), floors).slice(0, 100);
+    const key = JSON.stringify(list);
+    if (!force && key === lastOverviewKey) return;
+    lastOverviewKey = key;
+    send(current.ws, { type: "overview", floors: list });
+  };
+  /** Many changes come in bursts (a job moves through several states); the client gets one overview for each burst. */
+  const scheduleOverview = (): void => {
+    if (!current?.overviewWatch || overviewTimer) return;
+    overviewTimer = setTimeout(() => {
+      overviewTimer = undefined;
+      pushOverview();
+    }, options.overviewDebounceMs ?? 300);
+    overviewTimer.unref();
+  };
 
   let lastFloorsKey = "";
   /** Sends the floor list to the user when it changed (or `force`). */
   const pushFloors = (force = false): void => {
     const list = floorStatuses().slice(0, 100);
     const key = JSON.stringify(list);
+    scheduleOverview();
     if (!force && key === lastFloorsKey) return;
     lastFloorsKey = key;
     if (current) send(current.ws, { type: "floors", floors: list });
@@ -818,6 +841,9 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           f.jobState = "created";
           f.queuePosition = undefined;
           f.unread = null;
+          f.jobKind = ev.kind;
+          f.jobTarget = ev.target;
+          f.timeline = [{ ts: ev.ts, state: "created" }];
           await sendJobUpdate(roomId);
           pushFloors();
           break;
@@ -832,6 +858,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             f.currentStep = STEP_OF_STATE[ev.state];
             f.jobState = ev.state;
             f.queuePosition = undefined;
+            f.timeline.push({ ts: ev.ts, state: ev.state });
           }
           if (ev.state === "report_ready" && ev.reason?.startsWith("verdict:")) {
             const v = ev.reason.slice("verdict:".length);
@@ -940,6 +967,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         default:
           break;
       }
+      // Approvals, reports and job states change what the overview shows; activity lines do not.
+      if (ev.type !== "agent.activity" && ev.type !== "agent.work") scheduleOverview();
     });
   };
 
@@ -1043,6 +1072,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           if (room) toUser(room, { type: "report", report: r, resend: true });
         }
       }
+      scheduleOverview();
     } catch (e) {
       sendError(ws, "delivery_failed", errorText(e, "cannot deliver the branch"));
     }
@@ -1064,13 +1094,38 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     });
   };
 
-  /** The elevator: only while the avatar stands in front of one. */
-  const goTo = (ws: WebSocket, roomId: string) => {
+  /**
+   * Another floor. By the elevator only while the avatar stands in front of one; from the list view or the command
+   * palette (`via: "list"`, D13) from anywhere. The user enters the floor the same way in both cases.
+   */
+  const goTo = (ws: WebSocket, roomId: string, via: "elevator" | "list" = "elevator") => {
     if (!current) return;
     if (!hotel.has(roomId)) return sendError(ws, "bad_message", "unknown floor");
     if (roomId === userRoom()) return;
-    if (!hotel.atElevator(current.userId)) return sendError(ws, "bad_message", "use the elevator first");
+    if (via === "elevator" && !hotel.atElevator(current.userId)) return sendError(ws, "bad_message", "use the elevator first");
     enqueue(() => enterRoom(roomId));
+  };
+
+  /** Furniture (by interaction) that each showable panel stands for: the floor must have it. */
+  const showPanel = (ws: WebSocket, panel: ShowablePanel) => {
+    const roomId = userRoom();
+    const sim = roomId ? hotel.sim(roomId) : undefined;
+    if (!roomId || !sim) return;
+    if (!sim.room.furni.some((p) => FURNI_CATALOG[p.defId]?.interaction === panel)) {
+      return sendError(ws, "bad_message", "this floor has no such desk");
+    }
+    // Same order as for the furniture: the data first, then the panel.
+    enqueue(async () => {
+      if (userRoom() !== roomId) return;
+      await panelData(ws, roomId, panel);
+      if (userRoom() === roomId) send(ws, { type: "open_panel", panel });
+    });
+  };
+
+  const watchOverview = (on: boolean) => {
+    if (!current) return;
+    current.overviewWatch = on;
+    if (on) pushOverview(true);
   };
 
   const tick = setInterval(() => {
@@ -1108,7 +1163,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     // One user session in the MVP: a second connection replaces the first.
     if (current) current.ws.close(4000, "replaced by a newer connection");
     const { you, welcome } = hotel.join();
-    current = { ws, userId: you, activityAll: false };
+    current = { ws, userId: you, activityAll: false, overviewWatch: false };
     sendWelcome(ws, hotel.roomOf(you) ?? LOBBY_ROOM, welcome);
     // A project registered since the last connection gets its floor now.
     if (engine) {
@@ -1159,7 +1214,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       } else if (msg.type === "deliver") {
         void deliverJob(ws, msg.taskId);
       } else if (msg.type === "go_to") {
-        goTo(ws, msg.roomId);
+        goTo(ws, msg.roomId, msg.via);
+      } else if (msg.type === "show_panel") {
+        showPanel(ws, msg.panel);
+      } else if (msg.type === "overview_watch") {
+        watchOverview(msg.on);
       } else if (msg.type === "activity_scope") {
         setActivityScope(msg.scope);
       } else if (msg.type === "build_board") {
@@ -1212,6 +1271,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           new Promise<void>((done) => {
             clearInterval(tick);
             clearInterval(nightPoll);
+            clearTimeout(overviewTimer);
             for (const t of swapTimers) clearTimeout(t);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();

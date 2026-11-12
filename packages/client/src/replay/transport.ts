@@ -156,7 +156,10 @@ export class ReplayTransport implements Transport {
       case "deliver":
         return this.emit({ type: "error", code: "project_error", message: "This is a recorded run: nothing can be changed here." });
       case "go_to":
-        return this.goTo(msg.roomId);
+        return this.goTo(msg.roomId, msg.via);
+      case "overview_watch":
+      case "show_panel":
+        return; // the list view is off in the demo (it says so)
       case "activity_scope":
         return; // every recorded line belongs to the one recorded floor
       case "list_branches":
@@ -273,11 +276,11 @@ export class ReplayTransport implements Transport {
     return this.userRoom() === this.floorRoom;
   }
 
-  /** The elevator, as in the gateway: only while the avatar stands in front of one. */
-  private goTo(roomId: string): void {
+  /** The elevator, as in the gateway: only while the avatar stands in front of one (the command palette may skip that). */
+  private goTo(roomId: string, via: "elevator" | "list" = "elevator"): void {
     if (!this.hotel.has(roomId)) return this.error("bad_message", "unknown floor");
     if (roomId === this.userRoom()) return;
-    if (!this.hotel.atElevator(this.you)) return this.error("bad_message", "use the elevator first");
+    if (via === "elevator" && !this.hotel.atElevator(this.you)) return this.error("bad_message", "use the elevator first");
     this.enterRoom(roomId);
   }
 

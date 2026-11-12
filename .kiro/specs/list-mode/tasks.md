@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. List view
+- [x] 1. List view
   - View toggle and `L` key, project rows with job state, expandable steps and artifacts, all actions
   - _Requirements: 1.1, 1.2, 1.3_
 

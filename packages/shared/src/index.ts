@@ -18,6 +18,7 @@ export * from "./build.ts";
 export * from "./sanitize.ts";
 export * from "./projects.ts";
 export * from "./floors.ts";
+export * from "./overview.ts";
 export * from "./night.ts";
 export * from "./team.ts";
 export * from "./hr.ts";

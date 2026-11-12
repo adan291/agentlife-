@@ -1,4 +1,5 @@
 import type { ClientMsg, HrAction, MemoryAction, PanelName, ServerMsg } from "@agentlife/shared";
+import { approveMessage, deliverMessage, startJobMessage } from "./actions.ts";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
 import { createKindPanel } from "./kind-forms.ts";
@@ -192,9 +193,9 @@ export function createPanels(
   document.head.appendChild(style);
 
   const state = new PanelState();
-  const computer = createComputerPanel(document, { startJob: (repoId, goal) => send({ type: "start_job", repoId, goal }) }, hooks.lockedGoal);
+  const computer = createComputerPanel(document, { startJob: (repoId, goal) => send(startJobMessage(repoId, goal)) }, hooks.lockedGoal);
   const kindActions: KindFormActions = {
-    startJob: (repoId, goal, kind, target) => send({ type: "start_job", repoId, goal, kind, target }),
+    startJob: (repoId, goal, kind, target) => send(startJobMessage(repoId, goal, kind, target)),
   };
   const locked = hooks.lockedGoal !== undefined;
   const kindPanels = {
@@ -390,9 +391,9 @@ export function createPanels(
                   document,
                   state.data,
                   {
-                    decide: (approvalId, decision) => send({ type: "approve", approvalId, decision }),
+                    decide: (approvalId, decision) => send(approveMessage(approvalId, decision)),
                     openReport: (reportId) => openReport(reportId),
-                    deliver: (taskId) => send({ type: "deliver", taskId }),
+                    deliver: (taskId) => send(deliverMessage(taskId)),
                     ...(locked ? {} : { remember: libraryActions }),
                     back: () => {
                       state.back();
