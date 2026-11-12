@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Engine: night schedule, window, limits and scheduler
+- [x] 1. Engine: night schedule, window, limits and scheduler
   - `data/night.json`, routes to add/reorder/remove, config window and limits, scheduler with injectable clock
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 6.1_
 
