@@ -8,6 +8,6 @@
   - Research notes into the Architect prompt; second review with a different model and combined verdict
   - _Requirements: 3.1, 3.2_
 
-- [ ] 3. Board editor
+- [x] 3. Board editor
   - Cards, reorder, add/remove, live validation messages, save for next job
   - _Requirements: 2.1, 2.2_

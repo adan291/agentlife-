@@ -11,6 +11,7 @@ import { renderMailbox } from "./mailbox.ts";
 import { renderFloorList } from "./elevator.ts";
 import { BUILD_EVENT_REFRESH_MS, BUILD_REFRESH_MS, isBuilderMessage, renderBuildBoard, renderBuildReport } from "./build-board.ts";
 import { createNightPanel } from "./night-board.ts";
+import { createPipelineEditor } from "./pipeline-editor.ts";
 import { createHrPanel } from "./hr.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
@@ -109,6 +110,18 @@ const CSS = `
 .al-remember { border-color: var(--al-accent); }
 .al-mem-item { margin: var(--al-s2) 0; }
 .al-badge[data-verdict="night"] { color: ${UI_COLOURS.accentText}; border-color: var(--al-accent); }
+.al-pipe { margin: 0 0 var(--al-s3); padding-bottom: var(--al-s2); border-bottom: 1px solid var(--al-border); }
+.al-pipe-row { list-style: none; margin: var(--al-s2) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--al-s2); }
+.al-pipe-card { flex: 1 1 150px; max-width: 220px; min-width: 0; padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); box-sizing: border-box; }
+.al-pipe-card[data-invalid="true"] { border-color: ${UI_COLOURS.del}; background: ${UI_COLOURS.delBg}; }
+.al-pipe-card[data-dragging="true"] { opacity: 0.6; border-color: var(--al-accent); }
+.al-pipe-card[data-drop="true"] { box-shadow: inset 4px 0 0 var(--al-accent); }
+.al-pipe-head { display: flex; align-items: center; gap: var(--al-s2); }
+.al-pipe-grip { cursor: grab; touch-action: none; padding: 0 var(--al-s2); }
+.al-pipe-name { min-width: 0; overflow-wrap: anywhere; }
+.al-pipe-who, .al-pipe-model { margin: var(--al-s1) 0; }
+.al-pipe-problem { margin: var(--al-s1) 0 0; }
+.al-pipe-errors { margin: var(--al-s2) 0; padding-left: var(--al-s5); }
 `;
 
 const TITLES: Record<PanelName, string> = {
@@ -140,6 +153,9 @@ export const MEMORY_REFRESH_MS = 4_000;
 const LIBRARY_LOCKED = "The Library is off in the recorded demo. Run AGENT LIFE on your computer and the team will remember what it learns about your project.";
 
 /** While the night board is open it asks for fresh data this often (a job changes state while the user looks). */export const NIGHT_REFRESH_MS = 10_000;
+
+/** The pipeline editor needs the real engine: the recorded demo shows this instead of the editor. */
+const PIPELINE_LOCKED = "The pipeline editor is off in the recorded demo. Run AGENT LIFE on your computer to choose the steps of your jobs.";
 
 /** The door panel is never shown in practice: the server turns a door into a floor change. */
 function doorNote(doc: Document): HTMLElement {
@@ -232,6 +248,17 @@ export function createPanels(
     move: (id, direction) => {
       state.nightError = null;
       send({ type: "night_move", id, direction });
+    },
+  });
+
+  const pipelineEditor = createPipelineEditor(document, {
+    save: (steps) => {
+      state.pipelineError = null;
+      send({ type: "pipeline_save", steps });
+    },
+    reset: () => {
+      state.pipelineError = null;
+      send({ type: "pipeline_reset" });
     },
   });
 
@@ -362,6 +389,24 @@ export function createPanels(
     clearInterval(memoryInterval);
     memoryInterval = undefined;
   };
+  /** The board: the pipeline editor of the project, then the card of its job. A document opened in the viewer replaces both. */
+  const boardBody = (): HTMLElement => {
+    const card = renderJobPanel(document, state.data, state.viewing, {
+      view: (artifactId) => {
+        state.view(artifactId);
+        render();
+      },
+      back: () => {
+        state.back();
+        render();
+      },
+    });
+    if (state.viewing || !state.roomId?.startsWith("project:")) return card;
+    const wrap = document.createElement("div");
+    wrap.append(pipelineEditor({ state: state.pipeline, error: state.pipelineError, ...(locked ? { locked: PIPELINE_LOCKED } : {}) }, render), card);
+    return wrap;
+  };
+
   const render = () => {
     syncBuildTimers();
     syncNightTimer();
@@ -419,18 +464,7 @@ export function createPanels(
                       ? hrPanel({ hr: state.hr, error: state.hrError, suggestion: state.suggestion, busy: state.hrBusy, ...(locked ? { locked: HR_LOCKED } : {}) }, render)
                     : state.open === "door"
                   ? { body: doorNote(document) }
-                  : {
-                      body: renderJobPanel(document, state.data, state.viewing, {
-                        view: (artifactId) => {
-                          state.view(artifactId);
-                          render();
-                        },
-                        back: () => {
-                          state.back();
-                          render();
-                        },
-                      }),
-                    };
+                  : { body: boardBody() };
     // A refresh of the same view keeps the reading position; opening another view starts at the top.
     const viewKey = `${state.open}:${state.viewing ?? ""}`;
     const keep = !wasHidden && viewKey === lastViewKey ? body.scrollTop : 0;

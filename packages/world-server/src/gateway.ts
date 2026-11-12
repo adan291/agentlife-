@@ -30,6 +30,7 @@ import type {
   Hotel,
   HrAction,
   MemoryAction,
+  PipelineStep,
   JobKind,
   JobState,
   MorningSummary,
@@ -453,6 +454,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       }
     } else if (panel === "board") {
       await sendJobUpdate(roomId);
+      if (projectIdOfRoom(roomId) !== undefined) await sendPipeline(ws, true);
     } else if (panel === "elevator" || panel === "directory") {
       pushFloors(true);
     } else if (panel === "build") {
@@ -806,6 +808,37 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       sendError(ws, "memory_error", errorText(e, "the Library could not do that"));
     }
     await sendMemory(ws);
+  };
+
+  // ---- the pipeline of a project (pipeline-editor) ----
+
+  /** The pipeline of the project on the user's floor, with the team the rules check it against. */
+  const sendPipeline = async (ws: WebSocket, quiet = false): Promise<void> => {
+    const room = userRoom();
+    const projectId = room === undefined ? undefined : projectIdOfRoom(room);
+    if (projectId === undefined) return quiet ? undefined : sendError(ws, "bad_message", "the pipeline belongs to a project's floor");
+    if (!engine?.pipeline) return sendError(ws, "pipeline_error", "The pipeline editor needs the real engine.");
+    try {
+      send(ws, { type: "pipeline", state: await engine.pipeline.state(projectId) });
+    } catch (e) {
+      sendError(ws, "pipeline_error", errorText(e, "cannot read the pipeline of the project"));
+    }
+  };
+
+  /** Saves or resets the pipeline of the user's project, then sends it. A refusal names the rule that broke. */
+  const pipelineAct = async (ws: WebSocket, act: { save: readonly PipelineStep[] } | { reset: true }): Promise<void> => {
+    const room = userRoom();
+    const projectId = room === undefined ? undefined : projectIdOfRoom(room);
+    if (projectId === undefined) return sendError(ws, "bad_message", "the pipeline belongs to a project's floor");
+    const pipeline = engine?.pipeline;
+    if (!pipeline) return sendError(ws, "pipeline_error", "The pipeline editor needs the real engine.");
+    try {
+      const state = "save" in act ? await pipeline.save(projectId, act.save) : await pipeline.reset(projectId);
+      send(ws, { type: "pipeline", state });
+    } catch (e) {
+      sendError(ws, "pipeline_error", errorText(e, "the pipeline could not be saved"));
+      await sendPipeline(ws, true);
+    }
   };
 
   // ---- engine events ----
@@ -1257,6 +1290,12 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void sendMemory(ws);
       } else if (msg.type === "memory_do") {
         void memoryAct(ws, msg.act);
+      } else if (msg.type === "pipeline_state") {
+        void sendPipeline(ws);
+      } else if (msg.type === "pipeline_save") {
+        void pipelineAct(ws, { save: msg.steps });
+      } else if (msg.type === "pipeline_reset") {
+        void pipelineAct(ws, { reset: true });
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

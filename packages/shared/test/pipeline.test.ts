@@ -1,12 +1,14 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+  ClientMsgSchema,
   DEFAULT_PIPELINE,
   PIPELINE_REQUIRED_KINDS,
   PIPELINE_STEP_KINDS,
   PIPELINE_STEP_ROLES,
   PipelineSchema,
   SavePipelineBodySchema,
+  ServerMsgSchema,
   validatePipeline,
   type PipelineMember,
   type PipelineStep,
@@ -198,5 +200,23 @@ describe("validatePipeline: properties", () => {
         }
       }),
     );
+  });
+});
+
+describe("pipeline protocol", () => {
+  it("accepts the board messages and refuses what is not a pipeline", () => {
+    expect(ClientMsgSchema.safeParse({ type: "pipeline_state" }).success).toBe(true);
+    expect(ClientMsgSchema.safeParse({ type: "pipeline_reset" }).success).toBe(true);
+    expect(ClientMsgSchema.safeParse({ type: "pipeline_save", steps: DEFAULT_PIPELINE }).success).toBe(true);
+    for (const steps of [[], [{ kind: "deploy" }], [{ kind: "plan", tools: ["shell"] }], [{ kind: "plan", memberId: "../x" }], "plan"]) {
+      expect(ClientMsgSchema.safeParse({ type: "pipeline_save", steps }).success, JSON.stringify(steps)).toBe(false);
+    }
+  });
+
+  it("accepts the server messages", () => {
+    const state = { projectId: "alpha", customised: false, steps: DEFAULT_PIPELINE, members: [{ id: "qa", displayName: "QA", role: "qa", model: "m" }] };
+    expect(ServerMsgSchema.safeParse({ type: "pipeline", state }).success).toBe(true);
+    expect(ServerMsgSchema.safeParse({ type: "pipeline", state: { ...state, steps: [] } }).success).toBe(false);
+    expect(ServerMsgSchema.safeParse({ type: "error", code: "pipeline_error", message: "no" }).success).toBe(true);
   });
 });

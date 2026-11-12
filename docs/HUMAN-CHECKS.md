@@ -27,3 +27,10 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Real download from a source listed in `config/catalogue-sources.json`.
 - [ ] Night intern: start Ollama with `qwen3.5:4b` and check an answer; stop Ollama and check that `claude-haiku-5.5` answers and the report's Notes section says so. No pipeline step asks for a researcher yet, so this needs a test harness or pipeline-editor.
 - [ ] The user should ratify D10 (import review uses `agentlife-import-review`, not `agentlife-security`).
+
+## pipeline-editor (on feat/pipeline-editor, not merged)
+- [ ] Engine and world-server running (`ENGINE=http`), open the board of a project: the Pipeline section is above the job card; drag a card, use the arrows, see the red card with its rule and Save off; put the steps back and press "Back to the default".
+- [ ] HR desk: hire a Reviewer (change its model so it differs from QA) and a Researcher; on the board add "+ Second review" and "+ Research", choose who does them, Save, start a job: the research notes appear as an artifact, the report has "Second review" and "Research" sections, and a failing second review fails the job.
+- [ ] Fire the Reviewer while the pipeline uses it, then start a job: it is refused with the reason ("Second review needs a reviewer…"), and starts again after "Back to the default".
+- [ ] Save a pipeline while a job runs: the running job keeps its old pipeline, the next one uses the new one.
+- [ ] Real `kiro-cli`: the researcher and second reviewer with their generated agent files (read-only tier); the Night intern chosen as researcher fails the research step with its own message (known limit).

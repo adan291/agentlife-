@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, Project, RegisterProjectResult, Repo, Report, ServerMsg, TeamSuggestion } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, RegisterProjectResult, Repo, Report, ServerMsg, TeamSuggestion } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -45,6 +45,9 @@ export class PanelState {
   /** The Library of the project on the user's floor, and why it could not be read or changed. */
   memory: MemoryState | null = null;
   memoryError: string | null = null;
+  /** The pipeline of the project on the user's floor (board panel), and why it could not be read or saved. */
+  pipeline: PipelineResponse | null = null;
+  pipelineError: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -65,6 +68,8 @@ export class PanelState {
         // The Library belongs to the floor's project.
         this.memory = null;
         this.memoryError = null;
+        this.pipeline = null;
+        this.pipelineError = null;
         return true;
       case "floors":
         this.floors = msg.floors;
@@ -81,6 +86,7 @@ export class PanelState {
         }
         if (msg.panel === "night") this.nightError = null;
         if (msg.panel === "library") this.memoryError = null;
+        if (msg.panel === "board") this.pipelineError = null;
         if (msg.panel === "hr") {
           this.hrError = null;
           this.suggestion = null;
@@ -107,6 +113,13 @@ export class PanelState {
         const same = JSON.stringify(this.memory) === JSON.stringify(msg.state);
         this.memory = msg.state;
         return !same && (this.open === "library" || this.open === "mailbox");
+      }
+      case "pipeline": {
+        // A save answers with the new pipeline; the editor keeps the user's draft until the steps it started from change.
+        const same = JSON.stringify(this.pipeline) === JSON.stringify(msg.state);
+        this.pipeline = msg.state;
+        this.pipelineError = null;
+        return !same && this.open === "board";
       }
       case "build_board":
         this.build = msg.board;
@@ -163,6 +176,10 @@ export class PanelState {
         if (msg.code === "memory_error") {
           this.memoryError = msg.message;
           return this.open === "library" || this.open === "mailbox";
+        }
+        if (msg.code === "pipeline_error") {
+          this.pipelineError = msg.message;
+          return this.open === "board";
         }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;
