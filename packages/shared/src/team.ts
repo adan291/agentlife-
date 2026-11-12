@@ -127,3 +127,71 @@ export type UpdateMemberBody = z.infer<typeof UpdateMemberBodySchema>;
 /** Models a member of each role may use (the account's models limited by the role's allowed list). */
 export const TeamModelsResponseSchema = z.object({ models: z.partialRecord(TeamRoleSchema, z.array(z.string())) });
 export type TeamModelsResponse = z.infer<typeof TeamModelsResponseSchema>;
+
+// ---- Trusted imports (hr-desk task 3) ----
+
+/** An imported file is never larger than this; a bigger answer is refused while it is being read. */
+export const IMPORT_MAX_BYTES = 64 * 1024;
+export const IMPORT_URL_MAX = 300;
+
+/** An address on the list of trusted sources: HTTPS, no spaces. Whether it is *allowed* is decided by the engine's list. */
+export const ImportUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(IMPORT_URL_MAX)
+  .regex(/^https:\/\/\S+$/, "use an https address");
+
+export const ImportBodySchema = z.object({ url: ImportUrlSchema }).strict();
+export type ImportBody = z.infer<typeof ImportBodySchema>;
+
+/** The user approves exactly the content they saw: the body carries the hash of that content. */
+export const ImportApproveBodySchema = z.object({ hash: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
+export type ImportApproveBody = z.infer<typeof ImportApproveBodySchema>;
+
+export const CatalogueSourcesResponseSchema = z.object({ sources: z.array(ImportUrlSchema).max(50) });
+export type CatalogueSourcesResponse = z.infer<typeof CatalogueSourcesResponseSchema>;
+
+/**
+ * What the review found. `pass` means nothing was flagged; `concerns` lists what the user should read before approving.
+ * `checkedBy` says who looked: the engine's fixed checks always, the security agent when it was available.
+ */
+export const ImportReviewSchema = z.object({
+  verdict: z.enum(["pass", "concerns"]),
+  flags: z.array(z.string().max(200)).max(12),
+  checkedBy: z.enum(["checks", "checks+agent"]),
+  /** One sentence for the user, e.g. that the security agent could not be reached. */
+  note: z.string().max(300).optional(),
+});
+export type ImportReview = z.infer<typeof ImportReviewSchema>;
+
+export const ImportStatusSchema = z.enum([
+  /** Never approved: not hireable. */
+  "pending",
+  /** The version the user approved is the one on offer: hireable. */
+  "approved",
+  /** An older version was approved and is still hireable; the new content waits for a new approval. */
+  "update_pending",
+]);
+export type ImportStatus = z.infer<typeof ImportStatusSchema>;
+
+/** An imported template as the HR panel shows it: the full persona, so the user approves what they have read. */
+export const ImportViewSchema = z.object({
+  id: TemplateIdSchema,
+  url: z.string().max(IMPORT_URL_MAX),
+  name: z.string(),
+  role: TeamRoleSchema,
+  tier: TierIdSchema,
+  description: z.string(),
+  persona: z.string(),
+  defaultModel: z.string(),
+  /** sha256 of the content on offer (the value `approve` must carry). */
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+  /** Names of the fields of the file that were dropped for safety (`tools`, `permissions`, ...). */
+  ignored: z.array(z.string().max(60)).max(30),
+  review: ImportReviewSchema,
+  status: ImportStatusSchema,
+  importedAt: z.number().int().nonnegative(),
+});
+export type ImportView = z.infer<typeof ImportViewSchema>;
+export const ImportListResponseSchema = z.array(ImportViewSchema);

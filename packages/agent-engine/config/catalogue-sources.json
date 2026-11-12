@@ -1,0 +1,4 @@
+{
+  "$comment": "Addresses an agent template may be imported from (hr-desk). Each entry is the HTTPS address of one template file, matched exactly. Empty means imports are off. An imported file can only change who the agent is (name, description, persona, default model); permissions always come from the fixed tiers.",
+  "sources": []
+}

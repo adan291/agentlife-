@@ -1,6 +1,11 @@
 import {
   CatalogueResponseSchema,
+  CatalogueSourcesResponseSchema,
   HireBodySchema,
+  ImportApproveBodySchema,
+  ImportBodySchema,
+  ImportListResponseSchema,
+  ImportViewSchema,
   OkResponseSchema,
   TeamMemberSchema,
   TeamModelsResponseSchema,
@@ -10,6 +15,7 @@ import {
 import { NotFoundError } from "../errors.ts";
 import { parseBody, sendJson, type Route } from "../http/server.ts";
 import type { Catalogue } from "./catalogue.ts";
+import type { ImportService } from "./imports.ts";
 import type { ModelDirectory } from "./models.ts";
 import type { TeamService } from "./service.ts";
 
@@ -33,6 +39,49 @@ function idOf(raw: string | undefined): string {
   }
   if (!id || id.length > MAX_ID_CHARS) throw new NotFoundError("unknown id");
   return id;
+}
+
+/**
+ * Trusted imports (hr-desk requirement 3). `GET /catalogue/sources` lists the addresses imports may come from;
+ * `POST /catalogue/imports` fetches one of them; `approve` carries the hash of the content the user read.
+ */
+export function createImportRoutes(imports: ImportService): Route[] {
+  return [
+    {
+      method: "GET",
+      pattern: /^\/catalogue\/sources$/,
+      handle: ({ res }) => sendJson(res, 200, CatalogueSourcesResponseSchema, { sources: imports.sources() }),
+    },
+    {
+      method: "GET",
+      pattern: /^\/catalogue\/imports$/,
+      handle: ({ res }) => sendJson(res, 200, ImportListResponseSchema, imports.list()),
+    },
+    {
+      method: "POST",
+      pattern: /^\/catalogue\/imports$/,
+      handle: async ({ req, res }) => {
+        const body = await parseBody(req, ImportBodySchema);
+        sendJson(res, 201, ImportViewSchema, await imports.importFrom(body.url));
+      },
+    },
+    {
+      method: "POST",
+      pattern: /^\/catalogue\/imports\/([^/]+)\/approve$/,
+      handle: async ({ req, res, params }) => {
+        const body = await parseBody(req, ImportApproveBodySchema);
+        sendJson(res, 200, ImportViewSchema, imports.approve(idOf(params[0]), body.hash));
+      },
+    },
+    {
+      method: "POST",
+      pattern: /^\/catalogue\/imports\/([^/]+)\/reject$/,
+      handle: ({ res, params }) => {
+        imports.reject(idOf(params[0]));
+        sendJson(res, 200, OkResponseSchema, { ok: true });
+      },
+    },
+  ];
 }
 
 /**

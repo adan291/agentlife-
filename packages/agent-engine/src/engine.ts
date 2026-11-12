@@ -37,7 +37,11 @@ import { kiroCliModelLister, loadTeamRules, ModelDirectory } from "./team/models
 import { TeamService } from "./team/service.ts";
 import { TeamStore } from "./team/store.ts";
 import { loadTiers } from "./team/tiers.ts";
-import { createCatalogueRoute, createTeamRoutes } from "./team/routes.ts";
+import { createCatalogueRoute, createImportRoutes, createTeamRoutes } from "./team/routes.ts";
+import { agentImportReviewer } from "./team/import-review.ts";
+import { loadCatalogueSources, type FetchFn } from "./team/import.ts";
+import { ImportService, type ImportReviewer } from "./team/imports.ts";
+import { installServiceAgents, serviceAgentName } from "./team/service-agents.ts";
 
 export interface EngineOptions {
   config?: EngineConfig;
@@ -76,6 +80,17 @@ export interface EngineOptions {
     /** Where agent files of customised teams are written and how they are checked. Default: only with the real pipeline. */
     agents?: { kiroHome: string; validate?: AgentValidator };
   };
+  /** Trusted imports (hr-desk). Fields are for tests; the real process reads `config/catalogue-sources.json`. */
+  imports?: {
+    /** Default: `AGENTLIFE_IMPORTS_FILE` or `<dataDir>/catalogue-imports.json`. */
+    file?: string;
+    sources?: string[];
+    fetch?: FetchFn;
+    timeoutMs?: number;
+    now?: () => number;
+    /** Default: the security agent with the real pipeline, none otherwise (only the fixed checks run). */
+    reviewer?: ImportReviewer;
+  };
   /**
    * Night shift. The routes and the schedule file are always there; the scheduler that starts night jobs runs only when
    * `run` is true (the real process), so tests never start a job because of a schedule that sits in `data/night.json`.
@@ -99,6 +114,7 @@ export interface Engine {
   runner: JobRunner;
   projects: ProjectRegistry;
   team: TeamService;
+  imports: ImportService;
   night: { store: NightStore; scheduler: NightScheduler; summaries: SummaryStore };
   server: http.Server;
   config: EngineConfig;
@@ -165,6 +181,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
   const activity = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
   const real = !steps && usesRealPipeline(config);
   const catalogue = opts.catalogue ?? new Catalogue();
+  const tiers = loadTiers();
   const teamModels =
     opts.team?.models ??
     new ModelDirectory({
@@ -177,7 +194,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     store: new TeamStore({ file: opts.team?.file ?? process.env["AGENTLIFE_TEAMS_FILE"] ?? path.join(paths.root, "teams.json"), logger }),
     catalogue,
     models: teamModels,
-    tiers: loadTiers(),
+    tiers,
     hasProject: (id) => projects.has(id),
     defaultModels: roleModels(config),
     ...(opts.team?.agents
@@ -197,12 +214,40 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     },
     logger,
   });
+  const importReviewer =
+    opts.imports?.reviewer ??
+    (real
+      ? agentImportReviewer({
+          runtime: new KiroCliRuntime({ kiroHome: paths.kiroHome }),
+          agent: serviceAgentName("import-review"),
+          model: teamModels.preferred("claude-haiku-5.5"),
+          cwd: path.join(paths.root, "import-review"),
+          rawLogPath: path.join(paths.runs, "import-review.raw.jsonl"),
+        })
+      : undefined);
+  const imports = new ImportService({
+    file: opts.imports?.file ?? process.env["AGENTLIFE_IMPORTS_FILE"] ?? path.join(paths.root, "catalogue-imports.json"),
+    sources: opts.imports?.sources ?? loadCatalogueSources(),
+    catalogue,
+    logger,
+    ...(importReviewer ? { reviewer: importReviewer } : {}),
+    ...(opts.imports?.fetch ? { fetch: opts.imports.fetch } : {}),
+    ...(opts.imports?.timeoutMs ? { timeoutMs: opts.imports.timeoutMs } : {}),
+    ...(opts.imports?.now ? { now: opts.imports.now } : {}),
+  });
   if (!steps) {
     if (real) {
       const installed = installAgents({ kiroHome: paths.kiroHome });
       logger.info("role agents installed", { dir: installed.dir, agents: installed.installed });
       const synced = await team.syncAgents();
       if (synced.written > 0 || synced.removed > 0) logger.info("team agents synced", synced);
+      try {
+        const serviceFiles = await installServiceAgents({ kiroHome: paths.kiroHome, tiers, validate: kiroCliValidator(paths.kiroHome) });
+        if (serviceFiles.length > 0) logger.info("service agents written", { agents: serviceFiles });
+      } catch (e) {
+        // Without them the import review falls back to the fixed checks; the rest of the engine does not need them.
+        logger.warn("service agents could not be written", { error: e instanceof Error ? e.message : String(e) });
+      }
     }
     const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
     const models = roleModels(config);
@@ -281,6 +326,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       createBranchesRoute({ registry: projects, paths }),
       createCatalogueRoute(catalogue),
       ...createTeamRoutes(team, teamModels),
+      ...createImportRoutes(imports),
       ...createNightRoutes({ store: nightStore, config: nightConfig, summaries: nightSummaries, hasProject: (id) => projects.has(id), ...(opts.night?.now ? { now: opts.night.now } : {}) }),
       ...(opts.extraRoutes ?? []),
     ],
@@ -293,6 +339,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     runner,
     projects,
     team,
+    imports,
     night: { store: nightStore, scheduler: nightScheduler, summaries: nightSummaries },
     server,
     config,

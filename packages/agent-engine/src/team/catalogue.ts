@@ -30,20 +30,29 @@ export function loadTemplates(dir: string = CATALOGUE_DIR): Template[] {
   return out;
 }
 
-/** The templates the user can hire from. */
+/** The templates the user can hire from: the built-in ones, plus the imported ones the user approved. */
 export class Catalogue {
   private readonly templates: Template[];
+  private imported: Template[] = [];
 
   constructor(templates: readonly Template[] = loadTemplates()) {
     this.templates = [...templates];
   }
 
   list(): readonly Template[] {
-    return this.templates;
+    return [...this.templates, ...this.imported];
   }
 
   get(id: string): Template | undefined {
-    return this.templates.find((t) => t.id === id);
+    return this.templates.find((t) => t.id === id) ?? this.imported.find((t) => t.id === id);
+  }
+
+  /**
+   * Replaces the imported templates (the approved ones, kept by the import service). An imported template can never
+   * take the id of a built-in one, so a built-in template cannot be shadowed.
+   */
+  setImported(templates: readonly Template[]): void {
+    this.imported = templates.filter((t) => !this.templates.some((b) => b.id === t.id));
   }
 
   /** The template of the default team for a pipeline role: the one whose id is the role. */
@@ -54,7 +63,7 @@ export class Catalogue {
   }
 
   entries(): CatalogueEntry[] {
-    return this.templates.map((t) => ({
+    return this.list().map((t) => ({
       id: t.id,
       name: t.name,
       role: t.role,

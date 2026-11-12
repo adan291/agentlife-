@@ -8,7 +8,7 @@
   - Hire / rename / change model / fire with the team rules, `data/teams.json`, models list from kiro-cli, engine uses each project's team for jobs, activity lines
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.3_
 
-- [ ] 3. Trusted imports
+- [x] 3. Trusted imports
   - Sources allowlist, parsing with dropped fields, caps and leak scan, security-agent review, user approval bound to the content hash
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 5.2_
 
