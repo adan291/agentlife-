@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-13 (furni-shop tasks 1 and 2 done on branch feat/furni-shop, not merged; task 3 is next; main 27 commits ahead of origin)
+Updated: 2026-11-13 (furni-shop tasks 1-3 done on branch feat/furni-shop, not merged; main 27 commits ahead of origin)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13.
 
@@ -22,7 +22,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-13 (IDE): the steering warned that workflow.md's reference to this file was cut (75 000 characters, budget 50 000). This file was split: the full old text is in docs/STATUS-history.md; workflow.md now asks sessions to keep it short. Conductor relaunched on rows 11-13.
 
 ## Next
-1. Conductor: furni-shop task 3 (placing bought furniture, Playwright buy-place-reload), then team-progress (S31), waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
+1. Conductor: furni-shop is done (review and merge next), then team-progress (S31), waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md (25 open), including the furni-move arrange mode and new default layout.
 3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
 4. Push main when the user agrees (last push fbe1ceb).
@@ -43,7 +43,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | list-mode | 3 / 3 | main | Used once by the user (Deliver button) |
 | pipeline-editor | 3 / 3 | main | Researcher and second review not run live |
 | furni-move | 3 / 3 | main | Arrange button in the stage corner (requirement 2.1 reworded), D14; not looked at by the user |
-| furni-shop | 2 / 3 | feat/furni-shop | Row 11. Wallet, grants, 25-item catalogue, shop counter and panel, buy. Chip with the balance is on the stage, not in the top bar (design.md). Browser tests of the shop pass (58 e2e). Not looked at by the user |
+| furni-shop | 3 / 3 | feat/furni-shop | Row 11. Wallet, grants, 25-item catalogue, shop, buy, and (task 3) the inventory tray in arrange mode: drag or click an item onto the floor, pick up, template pieces protected, removed projects give pieces back. Balance chip is on the stage (design.md). Changed from task 2: the 200-item cap limits purchases only (design.md, Task 3). Playwright: 3 new tests, all e2e pass with Edge. Not looked at by the user |
 | team-progress | 0 / 2 | — | Row 12 |
 | waiting-fun | 0 / 2 | — | Row 13 |
 
@@ -52,7 +52,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - hr-desk D10 (docs/risks-and-decisions.md): import review by the read-only `agentlife-import-review` instead of `agentlife-security`. Explained to the user twice; waiting for a yes.
 - hr-desk review suggestions not done: escape project ids in the regex in `team/service.ts` (~336); stage all agent files before moving them in `commit`; show import flags as a warning on the approve button.
 - Mailbox shows only the latest report of a floor after a restart; older reports of the floor are not kept. Not investigated.
-- Flaky tests seen once each: `pipeline-editor.spec.ts` "board shows the editor above the job card" (e2e timing), `pnpm check` under load while the services restart. The report property test flake was fixed (seed -515305606).
+- Flaky tests seen once each: `pipeline-editor.spec.ts` "board shows the editor above the job card" (e2e timing; it failed once in the full e2e run on 2026-11-13 and passed alone), `pnpm check` under load while the services restart. The report property test flake was fixed (seed -515305606).
+- Playwright config seeds `agentlife-e2e-wallet.json` (500 Ecto) and an empty inventory in the temp folder when the runner loads it. With `reuseExistingServer` an already running test world-server keeps its own in-memory state, so stop it before a run that buys furniture.
 - DiscordIA: one of its own tests failed once in four sandbox runs (not identified).
 - The demo replay and `run-001.json` predate floors, kinds and the game layer: re-record in final-demo.
 - Scratch files outside git that a session could not delete: `data/tmp-pipeline-old.txt`, `data/tmp-demo-dist`, `data/tmp-check.txt` (all git-ignored).
