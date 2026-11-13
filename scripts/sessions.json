@@ -231,6 +231,20 @@
       "model": "claude-sonnet-5.5",
       "effort": "medium",
       "prompt": "Implement tasks 1 to 3 of the list-mode spec (.kiro/specs/list-mode). Follow workflow.md."
+    },
+    {
+      "id": "S27",
+      "spec": "furni-move",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement tasks 1 and 2 of the furni-move spec (.kiro/specs/furni-move). Write its design.md first (layout rules, where anchors live, message shapes). Follow workflow.md."
+    },
+    {
+      "id": "S28",
+      "spec": "furni-move",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 3 of the furni-move spec (.kiro/specs/furni-move), following its design.md. Follow workflow.md."
     }
   ]
 }
