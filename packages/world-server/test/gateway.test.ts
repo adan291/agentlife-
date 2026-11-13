@@ -118,7 +118,7 @@ describe("gateway", () => {
     const g = await setup();
     const c = connect(g.port);
     await c.open;
-    c.ws.send(JSON.stringify({ type: "move", x: 0, y: 2 }));
+    c.ws.send(JSON.stringify({ type: "move", x: 0, y: 6 }));
     expect(await c.next((m) => m.type === "error")).toMatchObject({ code: "no_path" });
   });
 

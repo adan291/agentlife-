@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Default layout and layout rules
+- [x] 1. Default layout and layout rules
   - New `rooms/project-template.json` layout; shared `layout.ts`: apply a saved layout to a room, `checkMove` (bounds, overlap, wall/floor, reachability from the elevator with the existing pathfinder); anchors follow their furniture; property test
   - _Requirements: 1.1, 1.2, 1.3, 3.1, 3.3, 4.1_
 

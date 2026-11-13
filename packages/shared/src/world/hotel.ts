@@ -1,6 +1,8 @@
 import { FURNI_CATALOG } from "../furni.ts";
 import { sanitize } from "../sanitize.ts";
-import { useTile, validateRoom } from "../room.ts";
+import { applyLayout, checkMove, layoutOf } from "../layout.ts";
+import type { Layout, MoveCode, Placement } from "../layout.ts";
+import { footprintTiles, useTile, validateRoom } from "../room.ts";
 import type { RoomDef } from "../room.ts";
 import type { FloorKind } from "../floors.ts";
 import type { WelcomeMsg } from "../protocol.ts";
@@ -39,11 +41,23 @@ export function signText(name: string, fallback: string): string {
 }
 
 /**
- * The floor of a project: the template with the room id of the project and its name as sign text.
- * The result is validated, so a bad template fails here and not when a user walks in.
+ * The floor of a project before anybody arranged it: the template with the room id of the project and its name as sign
+ * text. The result is validated, so a bad template fails here and not when a user walks in.
  */
-export function roomForProject(template: RoomDef, project: ProjectInfo): RoomDef {
+export function baseRoomForProject(template: RoomDef, project: ProjectInfo): RoomDef {
   return validateRoom({ ...template, id: projectRoomId(project.id), kind: "project", name: signText(project.name, project.id) });
+}
+
+/** The floor of a project: its base room with the saved layout applied (a piece that no longer fits stays where the template has it). */
+export function roomForProject(template: RoomDef, project: ProjectInfo, layout?: Layout): RoomDef {
+  const base = baseRoomForProject(template, project);
+  if (!layout) return base;
+  const { room } = applyLayout(base, layout);
+  try {
+    return validateRoom(room);
+  } catch {
+    return base;
+  }
 }
 
 export interface HotelOptions {
@@ -55,6 +69,8 @@ export interface HotelOptions {
   /** Room where a user starts. Default: the lobby. Falls back to the lobby when the room no longer exists. */
   startRoom?: RoomId;
   sim?: WorldSimOptions;
+  /** The saved layout of a project, read when its floor is built. */
+  layoutOf?: (projectId: string) => Layout | undefined;
 }
 
 export interface FloorInfo {
@@ -63,6 +79,14 @@ export interface FloorInfo {
   kind: FloorKind;
 }
 
+export type ArrangeCode = MoveCode | "not_editable" | "save_failed";
+
+export type ArrangeResult =
+  | { ok: true; room: RoomDef; layout: Layout }
+  | { ok: false; code: ArrangeCode; reason: string };
+
+const NOT_EDITABLE: ArrangeResult = { ok: false, code: "not_editable", reason: "Only project floors can be arranged." };
+
 /**
  * The rooms of the hotel: one `WorldSim` each. A user is in exactly one room; moving leaves the old room and joins the
  * new one at its elevator. Pure (no I/O, no timers), like `WorldSim`.
@@ -70,16 +94,20 @@ export interface FloorInfo {
 export class Hotel {
   private readonly sims = new Map<RoomId, WorldSim>();
   private readonly userRooms = new Map<number, RoomId>();
+  /** The floor of each project as the template makes it, to compare a layout with and to go back to. */
+  private readonly bases = new Map<RoomId, RoomDef>();
   private readonly template: RoomDef;
   private readonly clock: () => number;
   private readonly simOptions: WorldSimOptions;
   private readonly startRoom: RoomId;
+  private readonly savedLayout: ((projectId: string) => Layout | undefined) | undefined;
 
   constructor(opts: HotelOptions) {
     this.template = opts.template;
     this.clock = opts.clock;
     this.simOptions = opts.sim ?? {};
     this.startRoom = opts.startRoom ?? LOBBY_ROOM;
+    this.savedLayout = opts.layoutOf;
     this.sims.set(LOBBY_ROOM, new WorldSim({ ...opts.lobby, id: LOBBY_ROOM, kind: "lobby" }, opts.clock, this.simOptions));
     this.sims.set(HR_ROOM, new WorldSim({ ...opts.hr, id: HR_ROOM, kind: "hr" }, opts.clock, this.simOptions));
   }
@@ -109,9 +137,50 @@ export class Hotel {
   addProject(project: ProjectInfo): RoomId {
     const roomId = projectRoomId(project.id);
     if (!this.sims.has(roomId)) {
-      this.sims.set(roomId, new WorldSim(roomForProject(this.template, project), this.clock, this.simOptions));
+      const base = baseRoomForProject(this.template, project);
+      this.bases.set(roomId, base);
+      const room = roomForProject(this.template, project, this.savedLayout?.(project.id));
+      this.sims.set(roomId, new WorldSim(room, this.clock, this.simOptions));
     }
     return roomId;
+  }
+
+  /**
+   * Moves one piece of the user's project floor. `save` gets the floor's whole new layout after the checks and before
+   * the change; if it throws nothing changes. Only project floors can be arranged.
+   */
+  moveFurniture(roomId: string, itemId: string, to: Placement, save?: (layout: Layout) => void): ArrangeResult {
+    const sim = this.sims.get(roomId as RoomId);
+    const base = this.bases.get(roomId as RoomId);
+    if (!sim || !base) return NOT_EDITABLE;
+    const r = checkMove(sim.room, itemId, to, { occupied: sim.tilesInUse() });
+    return r.ok ? this.commit(sim, base, r.room, save) : r;
+  }
+
+  /** Puts every piece of a project floor back where the template has it. Refused while someone stands where a piece goes back to. */
+  resetLayout(roomId: string, save?: (layout: Layout) => void): ArrangeResult {
+    const sim = this.sims.get(roomId as RoomId);
+    const base = this.bases.get(roomId as RoomId);
+    if (!sim || !base) return NOT_EDITABLE;
+    const inUse = new Set(sim.tilesInUse().map((t) => `${t.x},${t.y}`));
+    for (const p of base.furni) {
+      const def = FURNI_CATALOG[p.defId];
+      const now = sim.room.furni.find((q) => q.itemId === p.itemId);
+      if (!def || def.walkable || (now && now.x === p.x && now.y === p.y && now.dir === p.dir)) continue;
+      if (footprintTiles(p, def).some((t) => inUse.has(`${t.x},${t.y}`))) return { ok: false, code: "occupied", reason: "Someone is standing there." };
+    }
+    return this.commit(sim, base, base, save);
+  }
+
+  private commit(sim: WorldSim, base: RoomDef, room: RoomDef, save?: (layout: Layout) => void): ArrangeResult {
+    const layout = layoutOf(base, room);
+    try {
+      save?.(layout);
+    } catch {
+      return { ok: false, code: "save_failed", reason: "The layout could not be saved." };
+    }
+    sim.updateRoom(room);
+    return { ok: true, room, layout };
   }
 
   /** Removes the floor of a project. Users inside are moved to the lobby and returned with their new `welcome`. */
@@ -126,6 +195,7 @@ export class Hotel {
       if (welcome) moved.push({ userId, welcome });
     }
     this.sims.delete(roomId);
+    this.bases.delete(roomId);
     return moved;
   }
 

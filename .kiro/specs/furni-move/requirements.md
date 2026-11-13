@@ -24,7 +24,7 @@ The user asked for this on 2026-11-12, on the DiscordIA floor ("everything is cr
 #### Acceptance Criteria
 1. A move SHALL be a client message (`furni_move { itemId, x, y, dir }`, `furni_reset`) that the world-server validates against the room (bounds, heightmap, overlap, wall items on walls, floor items on the floor) and against reachability of every interactive piece, desk anchor and standing spot from the elevator. A refused move is answered with an error carrying the reason, and the room does not change.
 2. THE world-server SHALL store the layout per project in `data/layouts.json` (git-ignored, atomic write, an unreadable file is moved aside and never overwritten) and apply it when the floor is built, so a restart keeps it. A saved position that no longer fits (template changed) falls back to the template position for that piece.
-3. Anchors the agents use (`desk`, `computer`, `mailbox`, `board`, standing spots) SHALL follow their furniture; the agent-engine does not change (it still speaks semantic anchors).
+3. Anchors the agents use (`desk`, `computer`, `mailbox`, `board`) SHALL follow their furniture, and the standing spots (`home_*`) SHALL stay on their tiles, which no solid piece may cover (see design.md); the agent-engine does not change (it still speaks semantic anchors).
 4. The lobby, the HR office and the demo (replay) SHALL not be editable.
 
 ### Requirement 4: Tests
