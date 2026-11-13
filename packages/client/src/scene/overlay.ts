@@ -1,7 +1,8 @@
 import { Container, Graphics, Sprite, Text } from "pixi.js";
-import type { AgentState } from "@agentlife/shared";
+import type { AgentState, Mood } from "@agentlife/shared";
 import { PALETTE } from "../palette.ts";
 import { bubbleTextStyle, labelStyle } from "./label-style.ts";
+import { MOOD_FACE_WIDTH, drawMoodFace } from "./mood-face.ts";
 import type { SpriteProvider } from "./textures.ts";
 import { bubbleDurationMs, shortStatus } from "./timing.ts";
 import { prefersReducedMotion } from "./glow.ts";
@@ -22,6 +23,7 @@ export class AvatarOverlay {
   private readonly tag = new Container();
   private bubbleUntil = 0;
   private state: AgentState | null = null;
+  private mood: Mood | null = null;
   /** Sign of the state above the ghost (thought cloud, candle, envelope, ...). Only agents have one. */
   private readonly fx: WorkingFx | null;
   private readonly reducedMotion = prefersReducedMotion();
@@ -53,13 +55,31 @@ export class AvatarOverlay {
     const text = label(this.name, 11, this.colour);
     const padX = 6;
     const padY = 2;
+    // The face of the mood (desk ghosts only) sits before the name.
+    const faceW = this.mood ? MOOD_FACE_WIDTH : 0;
     const bg = new Graphics()
-      .roundRect(0, 0, text.width + padX * 2, text.height + padY * 2, 4)
+      .roundRect(0, 0, faceW + text.width + padX * 2, text.height + padY * 2, 4)
       .fill({ color: PALETTE.tagBg, alpha: 0.9 })
       .stroke({ color: this.colour, width: 1, alpha: 0.8 });
-    text.position.set(padX, padY);
+    text.position.set(padX + faceW, padY);
     this.tag.addChild(bg, text);
+    if (this.mood) {
+      const face = new Graphics();
+      drawMoodFace(face, this.mood, padX + 4, bg.height / 2);
+      this.tag.addChild(face);
+    }
     this.tag.position.set(-bg.width / 2, -66 - bg.height / 2);
+  }
+
+  /** Shows the mood of a desk ghost as a small face on its name tag, or none (`null`). */
+  setMood(mood: Mood | null): void {
+    if (mood === this.mood) return;
+    this.mood = mood;
+    this.drawTag();
+  }
+
+  get currentMood(): Mood | null {
+    return this.mood;
   }
 
   /** Change the name tag text (the Builder shows its session label). */

@@ -94,3 +94,43 @@ test.describe("wisps with reduced motion", () => {
     await expect(page.locator(".al-wisp:not([hidden])")).toHaveCount(0, { timeout: 15_000 });
   });
 });
+
+test.describe("emotes and sitting", () => {
+  test("the bar sits the avatar on the sofa of the lobby and gets it up again, and the keys work except in a text field", async ({ page }) => {
+    test.setTimeout(60_000);
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await open(page);
+    await expect(page.locator(".al-floor-label")).toHaveText("Lobby");
+    const bar = page.getByRole("toolbar", { name: "Emotes" });
+    await expect(bar.getByRole("button")).toHaveCount(4);
+
+    // Key 4 sits on the nearest free seat; the walk takes a few seconds, then the button says Stand.
+    const sit = bar.locator('[data-emote="sit"]');
+    await expect(sit).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("4");
+    await expect(sit).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+    await expect(sit).toContainText("Stand");
+
+    // Emotes while seated: no error, and the button stays pressed.
+    await page.keyboard.press("1");
+    await page.keyboard.press("2");
+    await bar.locator('[data-emote="cheer"]').click();
+    await expect(sit).toHaveAttribute("aria-pressed", "true");
+
+    // The same key gets up.
+    await page.keyboard.press("4");
+    await expect(sit).toHaveAttribute("aria-pressed", "false", { timeout: 10_000 });
+
+    // A number typed in a text field is a number: the palette's search box takes it and nothing is sent.
+    await page.keyboard.press("Control+k");
+    const input = page.locator(".al-palette-input");
+    await expect(input).toBeFocused();
+    await page.keyboard.type("4");
+    await expect(input).toHaveValue("4");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".al-palette-wrap")).toBeHidden();
+    await expect(sit).toHaveAttribute("aria-pressed", "false");
+    expect(errors).toEqual([]);
+  });
+});

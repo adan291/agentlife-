@@ -109,12 +109,14 @@ describe("pickFurni", () => {
     expect(pickFurni(room, base.sx, base.sy - 2.2 * 16)?.itemId).toBe("mailbox_1");
   });
 
-  it("returns nothing on empty floor and ignores walkable decoration", () => {
+  it("returns nothing on empty floor and ignores walkable decoration, but picks a chair: it is a seat", () => {
     const empty = tileToScreen({ x: 6, y: 5 });
     expect(pickFurni(room, empty.sx, empty.sy)).toBeUndefined();
+    const web = { itemId: "web_1", defId: "cobweb", x: 6, y: 5, dir: 4 as const };
+    expect(pickFurni({ ...room, furni: [...room.furni, web] }, empty.sx, empty.sy)).toBeUndefined();
     const chair = byId("chair_1");
     const c = tileToScreen({ x: chair.x, y: chair.y });
-    expect(pickFurni(room, c.sx, c.sy)).toBeUndefined();
+    expect(pickFurni(room, c.sx, c.sy)?.itemId).toBe("chair_1");
   });
 
   it("picks every non-walkable furniture tile (property)", () => {

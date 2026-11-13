@@ -4,6 +4,7 @@ import { applyLayout, checkMove, layoutOf, layoutProblem } from "../layout.ts";
 import type { Layout, MoveCode, Placement } from "../layout.ts";
 import { footprintTiles, useTile, validateRoom } from "../room.ts";
 import type { PlacedFurni, RoomDef } from "../room.ts";
+import { isTemplatePiece } from "../shop.ts";
 import type { FloorKind } from "../floors.ts";
 import type { WelcomeMsg } from "../protocol.ts";
 import { WorldSim } from "./sim.ts";
@@ -223,7 +224,7 @@ export class Hotel {
     const base = this.bases.get(roomId as RoomId);
     if (!sim || !base) return NOT_EDITABLE;
     const def = FURNI_CATALOG[piece.defId];
-    if (!def || def.interaction !== undefined || def.id === "agent_desk") return { ok: false, code: "unknown_item", reason: "That piece cannot be placed." };
+    if (!def || isTemplatePiece(def)) return { ok: false, code: "unknown_item", reason: "That piece cannot be placed." };
     if (sim.room.furni.some((p) => p.itemId === piece.itemId)) return { ok: false, code: "duplicate", reason: "That piece is already on the floor." };
     const candidate: RoomDef = { ...sim.room, furni: [...sim.room.furni, piece] };
     const r = checkMove(candidate, piece.itemId, { x: piece.x, y: piece.y, dir: piece.dir }, { occupied: sim.tilesInUse() });

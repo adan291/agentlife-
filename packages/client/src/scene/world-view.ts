@@ -1,7 +1,7 @@
 import { Container } from "pixi.js";
 import type { Application, FederatedPointerEvent } from "pixi.js";
-import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, isGuestId, isPinned, screenToTile, tileToScreen } from "@agentlife/shared";
-import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, RoomDef, ServerMsg, StaffId, Tile, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
+import { FURNI_CATALOG, HEIGHT_UNIT, LAYER, depthKey, footprintSize, footprintTiles, isGuestId, isPinned, isSeatDef, moodLine, screenToTile, tileToScreen } from "@agentlife/shared";
+import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, Mood, RoomDef, ServerMsg, StaffId, Tile, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
 import { FloorPeople } from "./floor-people.ts";
 import { LevelUpFx } from "./levelup-fx.ts";
 import { CatchFx, WispFx } from "./wisp-fx.ts";
@@ -120,6 +120,8 @@ export class WorldView {
   /** The catchable wisp (waiting-fun) and the catch effects that are playing. At most one wisp at a time. */
   private wisp: WispFx | null = null;
   private catches: CatchFx[] = [];
+  /** The mood of each desk ghost of the floor (`mood`): the tag face and the tooltip line. */
+  private readonly moods = new Map<AgentId, Mood>();
 
   constructor(
     private readonly app: Application,
@@ -195,9 +197,18 @@ export class WorldView {
       return guestTooltip(g?.name ?? "Team member", g ? roleLabel(g.role) : "Team member", g?.model, extra);
     }
     const s = this.agentStatus.get(agent);
-    const tip = agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent), Date.now(), extra);
+    const mood = this.moods.get(agent);
+    const tip = agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent), Date.now(), mood ? [...extra, moodLine(mood)] : extra);
     const name = this.seatNames.get(agent);
     return name && name !== tip.title ? { ...tip, title: `${name} (${tip.title})` } : tip;
+  }
+
+  /** The mood of each desk ghost (`mood`): a face on its name tag, and a line in its tooltip. */
+  private applyMoods(moods: Partial<Record<AgentId, Mood>>): void {
+    for (const [role, mood] of Object.entries(moods) as [AgentId, Mood][]) {
+      this.moods.set(role, mood);
+      this.avatars.get(role)?.overlay.setMood(mood);
+    }
   }
 
   /** Plays the level-up effect over the ghost at `slot`. Returns false when that ghost is not in the room. */
@@ -309,6 +320,19 @@ export class WorldView {
         break;
       case "room_layout":
         this.applyRoomLayout(msg);
+        break;
+      case "sit": {
+        const piece = msg.itemId ? this.room?.room.furni.find((f) => f.itemId === msg.itemId) : undefined;
+        const def = piece ? FURNI_CATALOG[piece.defId] : undefined;
+        const depth = piece && def ? depthKey({ x: piece.x, y: piece.y, w: footprintSize(def, piece.dir).w, l: footprintSize(def, piece.dir).l, layer: LAYER.furni }) : undefined;
+        this.avatars.get(msg.id)?.view.setSitting(msg.sitting, msg.dir, depth);
+        break;
+      }
+      case "emote":
+        this.avatars.get(msg.id)?.view.playEmote(msg.emote, now);
+        break;
+      case "mood":
+        if (msg.roomId === this.roomId) this.applyMoods(msg.moods);
         break;
       case "wisp":
         this.showWisp(msg.wispId, msg.x, msg.y, msg.ttlMs, now);
@@ -545,6 +569,7 @@ export class WorldView {
     this.dropWisp();
     for (const c of this.catches) c.destroy();
     this.catches = [];
+    this.moods.clear();
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
     this.hrGhost?.overlay.destroy();
@@ -613,12 +638,15 @@ export class WorldView {
     if (h.item) {
       const def = FURNI_CATALOG[h.item.defId];
       if (def) {
-        h.room.setHover(footprintTiles(h.item, def), def.interaction ? "use" : "floor");
-        this.app.canvas.style.cursor = def.interaction ? "pointer" : "default";
+        const seat = isSeatDef(def);
+        h.room.setHover(footprintTiles(h.item, def), def.interaction || seat ? "use" : "floor");
+        this.app.canvas.style.cursor = def.interaction || seat ? "pointer" : "default";
         if (def.interaction) this.hoveredItem = h.item.itemId;
         if (def.interaction && def.hint) {
           const hint = def.hint;
           this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.global.x, e.global.y, () => ({ title: def.name, lines: [hint] }));
+        } else if (seat) {
+          this.hooks.tooltip?.hover(`item:${h.item.itemId}`, e.global.x, e.global.y, () => ({ title: def.name, lines: ["Click to sit down."] }));
         } else {
           this.hooks.tooltip?.hide();
         }

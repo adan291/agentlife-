@@ -9,6 +9,8 @@ import {
   LOBBY_ROOM,
   MAX_MESSAGES_PER_SECOND,
   MAX_MESSAGE_BYTES,
+  MOOD_BUSY_MS,
+  MOOD_TIRED_MS,
   PROTOCOL_VERSION,
   SEATED_ROLES,
   ServerMsgSchema,
@@ -66,6 +68,7 @@ import type { TrackedFact } from "./progress-tracker.ts";
 import type { ProgressStore } from "./progress-store.ts";
 import { Wisps } from "./wisps.ts";
 import type { Wisp, WispOptions } from "./wisps.ts";
+import { MoodKeeper } from "./mood.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -108,6 +111,8 @@ export interface GatewayOptions {
   >;
   /** Test knobs of the wisps (waiting-fun): how often they appear, how long they live and the random source. Defaults: 20 to 60 s and 8 s. */
   wisps?: WispOptions;
+  /** Test knobs of the mood of the desk agents: the work that makes them busy and tired, and how often a crossing is looked for. Defaults: 20 min, 60 min and 15 s. */
+  mood?: { busyMs?: number; tiredMs?: number; pollMs?: number };
   /**
    * XP, levels and stats (team-progress). Without it the hotel has no progress: no `progress` message is sent and nothing
    * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
@@ -190,6 +195,8 @@ function newFloor(): Floor {
 
 /** Reports kept in a floor's mailbox; older ones remain in the engine and in the run folder. */
 export const MAILBOX_REPORTS_MAX = 10;
+/** A delivered job older than this when its event arrives (a replay after a restart) makes the ghosts neither cheer nor sulk. */
+const FRESH_DELIVERY_MS = 60_000;
 
 export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const { hotel } = options;
@@ -343,6 +350,62 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (!wisp) return;
     const spot = wispSpot();
     if (spot.roomId !== wisp.roomId || spot.taskId !== wisp.taskId) endWisp(wisps?.clear(), false);
+  };
+
+  // ---- mood of the desk agents, cheer and glum, coffee (waiting-fun task 2): all for show, none of it reaches a job ----
+
+  const moodKeeper = new MoodKeeper({ limits: { busyMs: options.mood?.busyMs ?? MOOD_BUSY_MS, tiredMs: options.mood?.tiredMs ?? MOOD_TIRED_MS } });
+  /** What each project's moods looked like when they were last sent, so only a change is sent again. */
+  const lastMoods = new Map<string, string>();
+  const moodMsg = (projectId: string): ServerMsg => ({ type: "mood", roomId: projectRoomId(projectId), moods: moodKeeper.moods(projectId) });
+  /** Tells the user the moods of a project's floor when they changed (or `force`). */
+  const pushMoods = (projectId: string, force = false): void => {
+    const msg = moodMsg(projectId);
+    const key = JSON.stringify(msg);
+    if (!force && lastMoods.get(projectId) === key) return;
+    lastMoods.set(projectId, key);
+    toUser(projectRoomId(projectId), msg);
+  };
+  // A mood crosses its threshold between two events while an agent works: one look every few seconds catches it.
+  const moodPoll = setInterval(() => {
+    const room = userRoom();
+    const projectId = room === undefined ? undefined : projectIdOfRoom(room);
+    if (projectId !== undefined) pushMoods(projectId);
+  }, options.mood?.pollMs ?? 15_000);
+  moodPoll.unref();
+
+  /** Every ghost that is on a floor now: the desk roles and the team members at the spots, not those who left by the elevator. */
+  const ghostsOn = (roomId: string): (SeatedRole | GuestId)[] => {
+    const projectId = projectIdOfRoom(roomId);
+    const shown = projectId === undefined ? undefined : seatsShown.get(projectId);
+    const here = (slot: SlotId): boolean => !absent.has(`${roomId}|${slot}`);
+    return [...SEATED_ROLES.filter(here), ...GUEST_IDS.filter((g) => shown?.has(g) === true && here(g))];
+  };
+
+  /** A job was delivered: the ghosts of the floor cheer when it passed and look glum when it did not. */
+  const reactToDelivery = (roomId: string, taskId: string, ts: number): void => {
+    // An event from before the connection (the replay after a restart) is old news.
+    if (Date.now() - ts > FRESH_DELIVERY_MS) return;
+    const facts = grantTracker.facts(taskId);
+    if (!facts) return;
+    const emote = facts.failed || facts.verdict === "fail" ? "glum" : facts.verdict === "pass" ? "cheer" : undefined;
+    if (!emote) return;
+    for (const id of ghostsOn(roomId)) toUser(roomId, { type: "emote", id, emote });
+  };
+
+  /**
+   * The user used the coffee machine: the desk agent that is the most tired gets a cup and is rested. When nobody is tired
+   * the user says so. Never throws.
+   */
+  const serveCoffee = (roomId: string): void => {
+    const projectId = projectIdOfRoom(roomId);
+    if (projectId === undefined || !current) return;
+    const role = moodKeeper.mostTired(projectId);
+    if (!role) return toUser(roomId, { type: "say", id: current.userId, text: "Nobody here needs coffee." });
+    moodKeeper.serveCoffee(projectId, role);
+    toUser(roomId, { type: "say", id: role, text: "Thanks for the coffee!" });
+    toUser(roomId, { type: "emote", id: role, emote: "cheer" });
+    pushMoods(projectId, true);
   };
 
   const sendJobUpdate = async (roomId: string) => {
@@ -641,6 +704,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
     if (economy) send(ws, { type: "wallet", balance: economy.balance });
     if (progress) send(ws, { type: "progress", state: progress.view() });
+    // The mood of the desk agents of a project floor, for the tags over their heads and their tooltips.
+    const moodProject = projectIdOfRoom(roomId);
+    if (moodProject !== undefined) {
+      const mood = moodMsg(moodProject);
+      lastMoods.set(moodProject, JSON.stringify(mood));
+      send(ws, mood);
+    }
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of f?.approvals.values() ?? []) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     // A morning summary nobody opened yet is announced again to a client that just arrived in the lobby.
@@ -676,6 +746,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       const target = current?.ws;
       if (!target || userRoom() !== roomId) return; // the user left the room meanwhile
       if (m.type === "open_panel") {
+        // The coffee machine is not a panel: arriving at it serves the coffee.
+        if (m.panel === "coffee") {
+          serveCoffee(roomId);
+          continue;
+        }
         if (m.panel === "door") {
           const to = (m.data as { to?: unknown } | undefined)?.to;
           if (typeof to === "string" && hotel.has(to)) await enterRoom(to);
@@ -1117,13 +1192,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const onEngineEvent = (ev: AgentEvent) => {
     enqueue(async () => {
       // Before any room lookup: a job on a floor that has no room yet still earns and still counts.
-      if (economy || progress) {
-        const candidates = grantTracker.observe(ev);
-        if (economy) for (const c of candidates) grantEcto(c.reason, c.ref, c.ts);
-        if (progress) for (const tracked of progressTracker.observe(ev, grantTracker)) await recordFact(tracked);
-      }
+      const candidates = grantTracker.observe(ev);
+      if (economy) for (const c of candidates) grantEcto(c.reason, c.ref, c.ts);
+      if (progress) for (const tracked of progressTracker.observe(ev, grantTracker)) await recordFact(tracked);
+      const worked = moodKeeper.observe(ev);
+      if (worked) pushMoods(worked.projectId);
       const roomId = roomOfEvent(ev);
       if (!roomId) return;
+      if (ev.type === "task.state_changed" && ev.state === "delivered") reactToDelivery(roomId, ev.taskId, ev.ts);
       // A project registered after the gateway started has no floor yet.
       if (!hotel.has(roomId)) await syncProjects();
       const sim = hotel.sim(roomId);
@@ -1654,6 +1730,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             clearTimeout(overviewTimer);
             clearTimeout(wispTimer);
             clearTimeout(wispExpiry);
+            clearInterval(moodPoll);
             for (const t of swapTimers) clearTimeout(t);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();

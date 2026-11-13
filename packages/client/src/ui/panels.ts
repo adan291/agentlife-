@@ -168,6 +168,8 @@ const TITLES: Record<PanelName, string> = {
   hr: "HR desk",
   shop: "Shop",
   profile: "Profile",
+  // The coffee machine is not a panel: the world-server serves the coffee when the user arrives, and never sends this.
+  coffee: "Coffee machine",
 };
 
 /** The shop needs the real hotel: the recorded demo shows this instead of the catalogue. */

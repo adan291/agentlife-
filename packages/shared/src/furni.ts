@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const InteractionSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop"]);
+export const InteractionSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop", "coffee"]);
 export type Interaction = z.infer<typeof InteractionSchema>;
 
 export const FurniDefSchema = z.object({
@@ -80,6 +80,8 @@ const DEFS: FurniDef[] = [
   def("coffee_table", "Coffee table", 2, 1, 1.2, false),
   def("round_table", "Round table", 2, 2, 1.8, false),
   def("potion_bar", "Potion bar", 3, 1, 2.2, false),
+  // Sold in the shop and the only piece for sale that can be used: it serves coffee to a tired desk agent (waiting-fun).
+  def("coffee_machine", "Coffee machine", 1, 1, 2.6, false, "coffee", "Serve coffee to a tired agent"),
   // Lights
   def("candelabra", "Candelabra", 1, 1, 3.6, false),
   def("floor_torch", "Floor torch", 1, 1, 5, false),

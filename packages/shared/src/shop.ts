@@ -44,9 +44,15 @@ export type CatalogueItem = z.infer<typeof CatalogueItemSchema>;
 export const CatalogueFileSchema = z.object({ version: z.literal(1), items: z.array(CatalogueItemSchema).max(200) });
 export type CatalogueFile = z.infer<typeof CatalogueFileSchema>;
 
+/**
+ * Interactions a piece that is for sale may have. Nothing sold starts work: the coffee machine only changes the mood of a
+ * ghost, which is for show. Any other interaction belongs to the template.
+ */
+export const SHOP_INTERACTIONS: readonly string[] = ["coffee"];
+
 /** A definition the template needs: the shop never sells it. */
-function isTemplatePiece(def: FurniDef): boolean {
-  return def.interaction !== undefined || def.id === "agent_desk";
+export function isTemplatePiece(def: FurniDef): boolean {
+  return (def.interaction !== undefined && !SHOP_INTERACTIONS.includes(def.interaction)) || def.id === "agent_desk";
 }
 
 /** Every problem of a catalogue, in words. Empty means the shop can open. */

@@ -9,6 +9,7 @@
     { "id": "coffee_table", "name": "Coffee table", "page": "tables", "price": 28, "defId": "coffee_table" },
     { "id": "round_table", "name": "Round table", "page": "tables", "price": 48, "defId": "round_table" },
     { "id": "potion_bar", "name": "Potion bar", "page": "tables", "price": 70, "defId": "potion_bar" },
+    { "id": "coffee_machine", "name": "Coffee machine", "page": "tables", "price": 40, "defId": "coffee_machine" },
     { "id": "candelabra", "name": "Candelabra", "page": "lights", "price": 22, "defId": "candelabra" },
     { "id": "floor_torch", "name": "Floor torch", "page": "lights", "price": 26, "defId": "floor_torch" },
     { "id": "lava_lamp", "name": "Lava lamp", "page": "lights", "price": 20, "defId": "lava_lamp" },

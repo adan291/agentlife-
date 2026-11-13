@@ -29,6 +29,11 @@ export const PALETTE = {
   arrangeBad: 0xff4d5e,
   arrangeSpot: 0xe8e0ff,
 
+  /** The little face on the name tag of a desk ghost (waiting-fun). The shape of the face says the mood too, not only the colour. */
+  moodRested: 0x7fe3a0,
+  moodBusy: 0xffc857,
+  moodTired: 0x8fa4e8,
+
   teal: 0x2fd4c2,
   pumpkin: 0xff8a1f,
   purple: 0xb06bff,

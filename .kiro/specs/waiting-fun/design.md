@@ -55,7 +55,7 @@ Small things to do while the agents work. Nothing here changes a job, a model or
 
 ### Mood (requirement 3.1)
 - `shared/fun.ts`: `Mood` (`rested`, `busy`, `tired`), `MOOD_BUSY_MS` = 20 min and `MOOD_TIRED_MS` = 60 min of work today, `moodOf(workedMs, limits)` (pure, monotonic), `moodLine(mood)` for the tooltip.
-- `MoodKeeper` (`world-server/src/mood.ts`) measures work. It follows `agent.state_changed` of the three desk roles of each project: from `thinking` or `working` until any other state is one interval. An interval counts for the local day in which it ends, from its start or midnight, and an open interval counts for at most 2 h (an engine that died with an agent "working" must not tire it forever). Events that go back in time are ignored (a replay while connected counts once). `workedMs` of a role is the closed intervals plus the open one up to now, minus the amount at the last coffee. A new local day starts at zero.
+- `MoodKeeper` (`world-server/src/mood.ts`) measures work. It follows `agent.state_changed` of the three desk roles of each project: from `thinking` or `working` until any other state is one interval. An interval counts for the local day in which it ends, from its start or midnight, and an open interval counts for at most 2 h (an engine that died with an agent "working" must not tire it forever). Events that go back in time are ignored (a replay while connected counts once). `workedMs` of a role is the closed intervals plus the open one up to now. A new local day starts at zero.
 - Mood is kept in memory only. It is a visual thing; after a restart the agents are rested, and the replay of the latest jobs rebuilds what happened today.
 - Messages: `mood { roomId, moods: { architect, developer, qa } }` after the `welcome` of a project floor and whenever a mood changed. A poll every 15 s (`moodPollMs`) catches the crossing of a threshold between events.
 - Client: `WorldView.setMoods`; the tag over a desk ghost gets a small face (`overlay.setMood`: two eyes and a mouth, one shape per mood, colour per mood); the tooltip gets "Mood: Tired. Only for show: it never changes a job, a model or a permission." (requirement 3.2).
@@ -65,6 +65,14 @@ Small things to do while the agents work. Nothing here changes a job, a model or
 - **Changed from furni-shop.** The shop sold only definitions without an interaction. The rule meant "nothing sold starts work"; the coffee machine does not. `SHOP_INTERACTIONS = ["coffee"]` (shared, `shop.ts`) are the interactions a bought piece may have: `checkCatalogue` and `Hotel.placeFurniture` refuse any other. A piece with an interaction also keeps its use tile free (`checkMove`), so a coffee machine can never be walled in.
 - `use` of the machine walks to it and, on arrival, the sim sends `open_panel { panel: "coffee" }`. The gateway answers it like it answers a door: it never reaches the client as a panel. `serveCoffee(roomId)` picks the most tired desk agent (the most work today; ties by role order) and resets its work counter, so it is `rested`. That ghost says "Thanks for the coffee!" and cheers; the user's avatar says "Nobody here needs coffee." when no desk agent is tired. The new moods are sent. One cup per use.
 - The mood tooltip never says coffee changes anything else.
+
+### Changes from the first plan (recorded while building)
+- Coffee forgets the counted work (`closedMs = 0`, an open interval restarts now) instead of keeping a baseline: with a baseline the 2 h cap of an open interval made the work after the coffee stop counting.
+- `sit { id, sitting, dir?, itemId? }`: `itemId` is the seat piece, so the client draws the sitter in front of it (`depthKey` of the piece plus 0.5). Without it the sofa hid the sitter (seen in a screenshot).
+- The Sit button of the bar is a toggle: `aria-pressed` and the text "Stand" while the user sits (the client learns it from `sit` for its own avatar id).
+- `pickFurni` lets seats through (`isSeatDef`), a seat shows a "Click to sit down." tooltip, and every pose fits the 32x60 sprite frame (a test checks each pose, view and frame).
+- Reduced motion: an emote holds frame 0; the cheer sparks are only on frame 1, so there are none.
+- Every visit starts in the lobby, whose sofa is also a seat: the Playwright test sits there.
 
 ## Tests (requirement 4)
 - shared (`fun.test.ts`, `sim.test.ts`): the wisp constants and `wispsToday`; `moodOf` monotonic (fast-check); the new messages; seats (sit, occupied refused, getting up, claim dropped when the piece moves, `sit_toggle` nearest and none free, emotes); catalogue and placing the coffee machine; `SHOP_INTERACTIONS`.
