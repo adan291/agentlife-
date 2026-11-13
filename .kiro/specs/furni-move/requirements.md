@@ -15,7 +15,7 @@ The user asked for this on 2026-11-12, on the DiscordIA floor ("everything is cr
 
 ### Requirement 2: Arrange mode
 #### Acceptance Criteria
-1. An "Arrange" button in the top bar (project floors only, live mode only) SHALL switch the floor into arrange mode; Esc or "Done" leaves it. While arranging, clicking furniture does not open its panel.
+1. An "Arrange" button (project floors only, live mode only) SHALL switch the floor into arrange mode; Esc or "Done" leaves it. While arranging, clicking furniture does not open its panel. The button sits in the top right corner of the stage, not in the top bar: the bar has no room for one more button without taking the labels from the job stepper (measured: 599 px free at 1366 px wide, 657 px needed).
 2. In arrange mode the user SHALL pick a piece with a click, move it by dragging or with the arrow keys, rotate it with R (or a button), and see the target tiles in green when the move is allowed and red when it is not, with the reason ("blocks the path to the mailbox", "tile taken", "outside the room").
 3. "Undo" SHALL revert the last move and "Reset layout" SHALL restore the template layout after a confirmation.
 4. The elevator and the room's door SHALL not move. Agents keep working while the user arranges; a desk that moves takes its agent's seat with it.

@@ -24,6 +24,11 @@ export const PALETTE = {
   hoverFloor: 0xff8a1f,
   hoverUse: 0x2fd4c2,
 
+  /** Arrange mode: where a piece may go (green), where it may not (red, with a cross), and the team's standing spots. */
+  arrangeOk: 0x4be08a,
+  arrangeBad: 0xff4d5e,
+  arrangeSpot: 0xe8e0ff,
+
   teal: 0x2fd4c2,
   pumpkin: 0xff8a1f,
   purple: 0xb06bff,

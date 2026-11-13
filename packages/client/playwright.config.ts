@@ -1,9 +1,13 @@
 import { defineConfig } from "@playwright/test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /** Ports are not the dev defaults (5173, 8787), so a running dev session does not collide with the test. */
 const WORLD_PORT = 8795;
 const WEB_PORT = 5199;
 const channel = process.env["E2E_CHANNEL"];
+/** The arrange tests save layouts; they go to a scratch file, never to `data/layouts.json`. */
+const LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-layouts.json");
 
 /**
  * Layout smoke test (`pnpm --filter @agentlife/client e2e`). Not part of `pnpm check`: it needs a browser.
@@ -30,6 +34,7 @@ export default defineConfig({
       env: {
         PORT: String(WORLD_PORT),
         ENGINE: "fake",
+        AGENTLIFE_LAYOUTS_FILE: LAYOUTS_FILE,
         // The page is served from WEB_PORT, so the Origin check must allow it.
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`,
       },

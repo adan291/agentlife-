@@ -177,6 +177,8 @@ export interface Panels {
   open(panel: PanelName): void;
   /** Opens the mailbox with this report in the viewer (toast "Open report"). */
   openReport(reportId: string): void;
+  /** Arrange mode: while locked no panel opens (by the server, a toast or a button), and the open one closes. */
+  lock(on: boolean): void;
   readonly state: PanelState;
 }
 
@@ -211,6 +213,8 @@ export function createPanels(
   document.head.appendChild(style);
 
   const state = new PanelState();
+  /** Arrange mode is on: no panel opens. */
+  let arranging = false;
   const computer = createComputerPanel(document, { startJob: (repoId, goal) => send(startJobMessage(repoId, goal)) }, hooks.lockedGoal);
   const kindActions: KindFormActions = {
     startJob: (repoId, goal, kind, target) => send(startJobMessage(repoId, goal, kind, target)),
@@ -480,6 +484,7 @@ export function createPanels(
   };
 
   const openReport = (reportId: string) => {
+    if (arranging) return;
     if (state.open !== "mailbox") state.apply({ type: "open_panel", panel: "mailbox" });
     state.view(reportId);
     hooks.onReportOpened?.(reportId);
@@ -515,12 +520,19 @@ export function createPanels(
   return {
     state,
     close,
+    lock(on) {
+      arranging = on;
+      if (on && state.open) close();
+    },
     open(panel) {
+      if (arranging) return;
       if (state.apply({ type: "open_panel", panel })) render();
       if (panel === "board") requestDetails();
     },
     openReport,
     handle(msg) {
+      // Arranging the floor: a panel the server wants to open (the avatar arrived at some furniture) stays shut.
+      if (arranging && msg.type === "open_panel") return;
       const changed = state.apply(msg);
       if (state.open === "build" && isBuilderMessage(msg)) scheduleBuildRefresh();
       if (state.open === "board") {
