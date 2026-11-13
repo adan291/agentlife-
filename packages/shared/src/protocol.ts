@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { BranchesResponseSchema, JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
 import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
+import { BALANCE_MAX, GRANT_AMOUNT_MAX, GrantReasonSchema } from "./economy.ts";
 import { FloorStatusSchema } from "./floors.ts";
 import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
@@ -321,6 +322,15 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     roomId: z.string().min(1).max(100),
     furni: z.array(PlacedFurniSchema).max(200),
     anchors: z.array(AnchorSchema).max(100),
+  }),
+  /**
+   * The Ecto balance of the user. Sent after every `welcome` and after a grant (`grant` says what was earned, for the
+   * toast) or a purchase (no `grant`). Never sent when the hotel has no economy (fake engine).
+   */
+  z.object({
+    type: z.literal("wallet"),
+    balance: z.number().int().min(0).max(BALANCE_MAX),
+    grant: z.object({ amount: z.number().int().min(1).max(GRANT_AMOUNT_MAX), reason: GrantReasonSchema }).optional(),
   }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);

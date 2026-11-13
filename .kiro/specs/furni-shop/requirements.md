@@ -12,7 +12,7 @@ Asked by the user on 2026-11-13 ("housing like in classic hotel sims, a bit of R
 1. THE world-server SHALL keep one Ecto balance per user in `data/wallet.json` (git-ignored, atomic write, an unreadable file is moved aside and never overwritten) and a ledger of the last 200 entries (amount, reason, task id, time).
 2. Ecto SHALL be granted only from engine events the gateway already receives, once per task (idempotent by task id and reason): a delivered job with verdict pass, a branch delivered to the user's repository, a branch review finished, a memory note accepted, a morning summary with at least one finished night job. The amounts live in `config/economy.json`.
 3. No client message SHALL add Ecto; a client can only spend it. A grant whose event was already counted (gateway replay after a restart) adds nothing.
-4. THE top bar SHALL show the balance; a grant shows a short toast ("+20 Ecto: branch delivered").
+4. THE balance SHALL always be visible, in a chip in the top left corner of the stage (not in the top bar: with the chip in the bar the job stepper lost its labels at 1366 px and overflowed at 800 px, 6 existing Playwright tests failed; the same reason that put the Arrange button on the stage). A grant shows a short toast ("+20 Ecto: branch delivered").
 
 ### Requirement 2: Shop and catalogue
 #### Acceptance Criteria

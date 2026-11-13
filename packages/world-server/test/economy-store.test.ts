@@ -1,0 +1,100 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { EconomyConfigSchema } from "@agentlife/shared";
+import { Economy, loadEconomyConfig } from "../src/economy-store.ts";
+
+let dir: string;
+let file: string;
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "agentlife-wallet-"));
+  file = join(dir, "wallet.json");
+});
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
+
+const config = EconomyConfigSchema.parse({ version: 1, grants: { job_passed: 15, branch_delivered: 20, review_finished: 10, memory_accepted: 5, night_summary: 25 } });
+const open = (now = 1000, logs: string[] = []) => new Economy({ walletFile: file, config, now: () => now, onLog: (m) => logs.push(m) });
+const saved = () => JSON.parse(readFileSync(file, "utf8")) as { since: number; balance: number; ledger: unknown[]; granted: string[] };
+
+describe("Economy", () => {
+  it("ships a config that passes the schema", () => {
+    const shipped = loadEconomyConfig();
+    expect(shipped.grants.branch_delivered).toBeGreaterThan(0);
+  });
+
+  it("creates the wallet file at once, so its start time survives a restart", () => {
+    open(1234);
+    expect(saved()).toMatchObject({ since: 1234, balance: 0, ledger: [], granted: [] });
+    expect(open(9999).since).toBe(1234);
+  });
+
+  it("grants the amount from the config for each reason and saves it", () => {
+    const e = open();
+    const reasons = ["job_passed", "branch_delivered", "review_finished", "memory_accepted", "night_summary"] as const;
+    const expected = [15, 20, 10, 5, 25];
+    reasons.forEach((r, i) => expect(e.grant(r, `task-${i}`, 2000)?.amount).toBe(expected[i]));
+    expect(e.balance).toBe(75);
+    expect(saved().balance).toBe(75);
+    expect(saved().ledger).toHaveLength(5);
+  });
+
+  it("counts a grant once, also across a restart (a gateway replay)", () => {
+    const first = open();
+    expect(first.grant("job_passed", "task-1", 2000)).toBeDefined();
+    expect(first.grant("job_passed", "task-1", 2000)).toBeUndefined();
+    const second = open(5000);
+    expect(second.balance).toBe(15);
+    expect(second.grant("job_passed", "task-1", 2000)).toBeUndefined();
+    expect(second.grant("branch_delivered", "task-1", 2000)).toBeDefined();
+    expect(second.balance).toBe(35);
+  });
+
+  it("pays nothing for an event older than the wallet", () => {
+    const e = open(5000);
+    expect(e.grant("job_passed", "task-old", 4999)).toBeUndefined();
+    expect(e.balance).toBe(0);
+    expect(saved().granted).toEqual([]);
+  });
+
+  it("moves an unreadable file aside, starts empty and never overwrites the old content", () => {
+    writeFileSync(file, "{ not json", "utf8");
+    const logs: string[] = [];
+    const e = open(7000, logs);
+    expect(e.balance).toBe(0);
+    expect(e.since).toBe(7000);
+    const aside = readdirSync(dir).filter((n) => n.startsWith("wallet.json.bad-"));
+    expect(aside).toHaveLength(1);
+    expect(readFileSync(join(dir, aside[0]!), "utf8")).toBe("{ not json");
+    expect(logs.join("\n")).toContain("moved aside");
+  });
+
+  it("moves a file that fails the schema aside too (a negative balance)", () => {
+    writeFileSync(file, JSON.stringify({ version: 1, since: 0, balance: -5, ledger: [], granted: [] }), "utf8");
+    expect(open().balance).toBe(0);
+    expect(readdirSync(dir).some((n) => n.startsWith("wallet.json.bad-"))).toBe(true);
+  });
+
+  it("writes through a temporary file: no .tmp is left behind", () => {
+    const e = open();
+    e.grant("job_passed", "task-1", 2000);
+    expect(readdirSync(dir).filter((n) => n.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("counts nothing when the file cannot be written, and counts it later when it can", () => {
+    const logs: string[] = [];
+    // A folder where the file should be: the rename fails.
+    const e = open(1000, logs);
+    rmSync(file);
+    mkdirSync(file);
+    expect(e.grant("job_passed", "task-1", 2000)).toBeUndefined();
+    expect(e.balance).toBe(0);
+    expect(logs.some((m) => m.includes("cannot write the wallet"))).toBe(true);
+    rmSync(file, { recursive: true });
+    expect(e.grant("job_passed", "task-1", 2000)?.amount).toBe(15);
+    expect(e.balance).toBe(15);
+    expect(existsSync(file)).toBe(true);
+  });
+});

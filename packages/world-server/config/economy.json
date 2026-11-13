@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "grants": {
+    "job_passed": 15,
+    "branch_delivered": 20,
+    "review_finished": 10,
+    "memory_accepted": 5,
+    "night_summary": 25
+  }
+}

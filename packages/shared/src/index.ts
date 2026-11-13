@@ -9,6 +9,7 @@ export * from "./geometry/pathfind.ts";
 export * from "./furni.ts";
 export * from "./room.ts";
 export * from "./layout.ts";
+export * from "./economy.ts";
 export * from "./roles.ts";
 export * from "./job-kinds.ts";
 export * from "./events.ts";

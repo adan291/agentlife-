@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Wallet and grants
+- [x] 1. Wallet and grants
   - Shared schemas (wallet, ledger, catalogue item, messages); `config/economy.json`; world-server wallet store and idempotent grants from engine events; balance in the top bar and grant toast; property test
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.1_
 

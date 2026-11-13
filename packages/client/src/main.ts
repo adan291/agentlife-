@@ -35,6 +35,7 @@ import { createToasts } from "./ui/toast.ts";
 import { createTransition } from "./ui/transition.ts";
 import { elevatorLabel, floorTag, loadFloor, restoreTarget, saveFloor } from "./ui/floors.ts";
 import { reportVerdict } from "./ui/report-viewer.ts";
+import { GRANT_TOAST_MS, grantToastText } from "./ui/wallet.ts";
 
 /**
  * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
@@ -410,6 +411,9 @@ transport.onMessage((msg) => {
   } else if (msg.type === "night_clock") {
     nightLook.set(msg);
     world.setNight(msg.open);
+  } else if (msg.type === "wallet") {
+    hud.setBalance(msg.balance);
+    if (msg.grant) hud.toast(grantToastText(msg.grant), GRANT_TOAST_MS);
   } else if (msg.type === "activity") {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {

@@ -28,6 +28,7 @@ import type {
   ErrorCode,
   FloorStatus,
   GuestId,
+  GrantReason,
   Hotel,
   HrAction,
   Layout,
@@ -52,6 +53,8 @@ import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import type { LayoutStore } from "./layout-store.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
+import type { Economy } from "./economy-store.ts";
+import { GrantTracker } from "./grants.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -84,6 +87,11 @@ export interface GatewayOptions {
   clock?: () => number;
   /** Where arrangements of project floors are saved. Without it a move still works but is not kept across restarts. */
   layouts?: Pick<LayoutStore, "set">;
+  /**
+   * The user's Ecto (furni-shop). Without it the hotel has no economy: no `wallet` message is sent and nothing is
+   * granted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
+   */
+  economy?: Pick<Economy, "balance" | "grant">;
 }
 
 export interface Gateway {
@@ -207,6 +215,20 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   let outbox: Promise<void> = Promise.resolve();
   const enqueue = (task: () => Promise<void> | void) => {
     outbox = outbox.then(task).catch(() => undefined);
+  };
+
+  // ---- Ecto: grants from verified events (furni-shop) ----
+
+  const economy = options.economy;
+  const grantTracker = new GrantTracker();
+  /**
+   * Counts a grant once (the wallet remembers each `reason` and `ref`) and, when it paid, tells the user who is connected
+   * so the top bar and the toast follow. A grant while nobody is connected is in the balance the next time.
+   */
+  const grantEcto = (reason: GrantReason, ref: string, ts: number): void => {
+    if (!economy) return;
+    const entry = economy.grant(reason, ref, ts);
+    if (entry && current) send(current.ws, { type: "wallet", balance: economy.balance, grant: { amount: entry.amount, reason } });
   };
 
   const sendJobUpdate = async (roomId: string) => {
@@ -342,6 +364,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
     const lobby = floorOf(LOBBY_ROOM);
     const news: Report[] = [];
+    // A night in which at least one job finished pays once, whenever the summary is first seen.
+    for (const s of list) if (s.counts.done >= 1) grantEcto("night_summary", s.nightKey, s.writtenAt);
     for (const s of [...list].reverse()) {
       const id = morningReportId(s.nightKey);
       const report: Report = { reportId: id, taskId: id, title: morningTitle(s.nightKey), markdown: s.markdown, ts: s.writtenAt, kind: "night" };
@@ -482,6 +506,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     });
     const lines = f?.activity ?? [];
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
+    if (economy) send(ws, { type: "wallet", balance: economy.balance });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of f?.approvals.values() ?? []) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     // A morning summary nobody opened yet is announced again to a client that just arrived in the lobby.
@@ -799,9 +824,20 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         case "delete":
           await memory.remove(projectId, act.entryId);
           break;
-        case "accept":
+        case "accept": {
+          // The proposal's job pays once, however many of its proposals are accepted. Read it before the engine moves it.
+          let source: string | undefined;
+          if (economy) {
+            try {
+              source = (await memory.state(projectId)).proposals.find((p) => p.id === act.proposalId)?.sourceTaskId;
+            } catch {
+              source = undefined;
+            }
+          }
           await memory.accept(projectId, act.proposalId, { ...(act.kind ? { kind: act.kind } : {}), ...(act.text === undefined ? {} : { text: act.text }) });
+          if (source) grantEcto("memory_accepted", source, Date.now());
           break;
+        }
         case "dismiss":
           await memory.dismiss(projectId, act.proposalId);
           break;
@@ -872,6 +908,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   const onEngineEvent = (ev: AgentEvent) => {
     enqueue(async () => {
+      // Before any room lookup: a job on a floor that has no room yet still earns.
+      if (economy) for (const c of grantTracker.observe(ev)) grantEcto(c.reason, c.ref, c.ts);
       const roomId = roomOfEvent(ev);
       if (!roomId) return;
       // A project registered after the gateway started has no floor yet.
