@@ -18,7 +18,7 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 8 | `list-mode` | S26 | no | done | List view and command palette for daily use |
 | 9 | `pipeline-editor` | S19 | no | done | Choose and order roles per project with fixed safety rules |
 | 10 | `furni-move` | S27 S28 | yes | needs-check | Better default floor layout; move and rotate furniture on a project floor, saved and checked by the server |
-| 11 | `furni-shop` | S29 S30 | yes | todo | Housing: Ecto earned from real work, shop in the lobby, inventory, place bought furniture |
+| 11 | `furni-shop` | S29 S30 | yes | needs-check | Housing: Ecto earned from real work, shop in the lobby, inventory, place bought furniture |
 | 12 | `team-progress` | S31 | yes | todo | RPG: XP and levels from real stats, badges, daily quests |
 | 13 | `waiting-fun` | S32 | yes | todo | While you wait: catch wisps, sit and emotes, ghost mood with a coffee machine |
 | 14 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
