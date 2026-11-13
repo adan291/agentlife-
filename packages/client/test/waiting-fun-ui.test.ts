@@ -6,9 +6,8 @@ import { MOOD_FACE_WIDTH, drawMoodFace, moodFace } from "../src/scene/mood-face.
 import { EMOTE_FRAME_MS, isSeatedPose, poseFor } from "../src/scene/pose.ts";
 import { PALETTE } from "../src/palette.ts";
 import type { RoleKey } from "../src/palette.ts";
-import { EMOTE_KEYS, createEmoteBar, emoteKey } from "../src/ui/emotes.ts";
-import { FakeDocument, findAll, textOf } from "./fake-dom.ts";
-import type { FakeElement } from "./fake-dom.ts";
+import { EMOTE_KEYS, actionItems, emoteKey } from "../src/ui/emotes.ts";
+import { nextEnabled } from "../src/ui/menu-model.ts";
 
 describe("the emote keys", () => {
   it("map 1 to wave, 2 to dance, 3 to cheer and 4 to sit or stand", () => {
@@ -37,44 +36,45 @@ describe("the emote keys", () => {
   });
 });
 
-describe("the emote bar", () => {
-  function parts() {
-    const doc = new FakeDocument();
-    const host = new FakeDocument().createElement("div");
-    const calls: string[] = [];
-    const bar = createEmoteBar(doc as unknown as Document, host as unknown as HTMLElement, { emote: (e) => calls.push(e), sit: () => calls.push("sit") });
-    const buttons = findAll(bar.element, (e) => e.tagName === "button");
-    return { bar, buttons, calls, el: bar.element as unknown as FakeElement };
-  }
+describe("the Actions menu items", () => {
+  const rested = { sitting: false, hasSeat: true };
 
-  it("has four buttons, each with its key in the label and the title", () => {
-    const { buttons, el } = parts();
-    expect(el.getAttribute("role")).toBe("toolbar");
-    expect(buttons.map((b) => textOf(b))).toEqual(["1Wave", "2Dance", "3Cheer", "4Sit"]);
-    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Wave, key 1", "Dance, key 2", "Cheer, key 3", "Sit down on the nearest seat, or stand up, key 4"]);
-    expect(buttons.map((b) => b.title)).toEqual(EMOTE_KEYS.map((k) => `${k.title} (${k.key})`));
+  it("list Wave, Dance, Cheer and Sit with their keys, in the order of the keys", () => {
+    const items = actionItems(rested);
+    expect(items.map((i) => [i.id, i.label, i.shortcut])).toEqual([
+      ["wave", "Wave", "1"],
+      ["dance", "Dance", "2"],
+      ["cheer", "Cheer", "3"],
+      ["sit", "Sit down", "4"],
+    ]);
+    expect(items.map((i) => i.shortcut)).toEqual(EMOTE_KEYS.map((k) => k.key));
+    expect(items.every((i) => !i.disabled)).toBe(true);
   });
 
-  it("sends what a button says, and can be hidden", () => {
-    const { buttons, calls, el, bar } = parts();
-    for (const b of buttons) b.click();
-    expect(calls).toEqual(["wave", "dance", "cheer", "sit"]);
-    bar.setVisible(false);
-    expect(el.hidden).toBe(true);
-    bar.setVisible(true);
-    expect(el.hidden).toBe(false);
+  it("say Stand up while the user sits, and a seated avatar cannot choose Dance", () => {
+    const items = actionItems({ sitting: true, hasSeat: true });
+    const byId = (id: string) => items.find((i) => i.id === id)!;
+    expect(byId("sit").label).toBe("Stand up");
+    expect(byId("sit").disabled).toBeUndefined();
+    expect(byId("dance").disabled).toBe(true);
+    expect(byId("dance").note).toBe("Stand up to dance.");
+    // Wave and Cheer work from a seat.
+    expect(byId("wave").disabled).toBeUndefined();
+    expect(byId("cheer").disabled).toBeUndefined();
   });
 
-  it("shows that the user sits: the Sit button is pressed and says Stand", () => {
-    const { buttons, bar } = parts();
-    const sit = buttons[3]!;
-    expect(sit.getAttribute("aria-pressed")).toBe("false");
-    bar.setSitting(true);
-    expect(sit.getAttribute("aria-pressed")).toBe("true");
-    expect(textOf(sit)).toBe("4Stand");
-    bar.setSitting(false);
-    expect(sit.getAttribute("aria-pressed")).toBe("false");
-    expect(textOf(sit)).toBe("4Sit");
+  it("disable Sit when the room has no seat, and say why; a sitting user can always stand up", () => {
+    const none = actionItems({ sitting: false, hasSeat: false }).find((i) => i.id === "sit")!;
+    expect(none.disabled).toBe(true);
+    expect(none.note).toBe("There is no seat in this room.");
+    expect(actionItems({ sitting: true, hasSeat: false }).find((i) => i.id === "sit")!.disabled).toBeUndefined();
+  });
+
+  it("are skipped by the arrow keys when disabled", () => {
+    const items = actionItems({ sitting: true, hasSeat: true });
+    // Down from Wave skips Dance; up from Cheer skips Dance too.
+    expect(nextEnabled(items, 0, 1)).toBe(2);
+    expect(nextEnabled(items, 2, -1)).toBe(0);
   });
 });
 

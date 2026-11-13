@@ -77,11 +77,13 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] A hotel with the plain scripted engine and no wallet file has no wisps. If the user expects wisps there, 1.1 needs a decision (design.md condition 1 of Spawn).
 - [ ] Both specs state "first to cut if late": merge decision is the user's.
 
-## ui-tidy tasks 1-2 (on feat/ui-tidy, not merged)
+## ui-tidy tasks 1-3 (on feat/ui-tidy, not merged)
 - [ ] Look at the new top bar at your usual window size: Elevator, Hotel / List, Edit room, the Ecto and level chips, Menu. With a job running, the stepper keeps its labels at 1366 px (the bar buttons got narrower side padding to make room); check that it still looks balanced.
 - [ ] Open the Menu with the mouse and with the keyboard (Tab to it, Enter, arrows, Esc): Commands, Zoom, Text smaller and larger, Help. Narrow the window under 900 px and check that Hotel / List, Edit room and Profile are the first items.
 - [ ] Press Edit room (and the E key) in the lobby, in the HR office and on a project floor: the banner under the top bar says "Editing <room>", Esc and Done leave. Look at how much of the room the banner takes at a small window height.
 - [ ] Move a piece, then press on it again where you dropped it, several times in a row (mouse and arrow keys), also next to the sofa and the desks. Press on a piece that was not selected and sits behind a taller one: you may have to press on its drawing above the tile (known limit, design.md of ui-tidy).
 - [ ] Turn the mailbox, the board, a plant and the lamps with R. Against a wall they face the room and say why they cannot turn; one step away from the wall they turn all the way round.
 - [ ] Arrange the lobby and the HR office, restart the world-server and check that both rooms keep the arrangement. A `data/layouts.json` written before this change is read and rewritten with `project:<id>` keys (back it up first if it matters).
+- [ ] Actions button at the bottom left of the stage: closed by default, opens upwards with Wave, Dance, Cheer and Sit down and their keys. Keys 1 to 4 still work with it closed. After sitting it reads Stand up and Dance is greyed. Look at it with the dock open and closed.
+- [ ] Builder after a dead build session: stop the conductor in the middle of a session and wait 10 minutes; the Builder ghost and its row should go back to idle (also after reloading the page or restarting the world-server).
 - [ ] The HR agent stands on a spot no piece can cover (the dots in edit mode); the lobby Builder's desk takes its seat when moved.

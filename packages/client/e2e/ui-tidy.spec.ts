@@ -227,3 +227,99 @@ test("below 900 px the Menu starts Edit room and the same item reads Done editin
   await menu(page).getByRole("menuitem", { name: /^Done editing/ }).click();
   await expect(editBar(page)).toBeHidden();
 });
+
+// ---- Actions menu (task 3) ----
+
+const actionsButton = (page: Page) => page.getByRole("button", { name: /^Actions/ });
+const actionsMenu = (page: Page) => page.getByRole("menu", { name: "Actions" });
+
+test.describe("the Actions menu", () => {
+  test("is a closed menu by default, opens with the keyboard and Wave sends the emote", async ({ page }) => {
+    const sent: string[] = [];
+    page.on("websocket", (ws) => ws.on("framesent", (f) => sent.push(String(f.payload))));
+    const errors = await open(page);
+    await expect(actionsButton(page)).toBeVisible();
+    await expect(actionsButton(page)).toHaveAttribute("aria-expanded", "false");
+    await expect(actionsMenu(page)).toBeHidden();
+    await expect(page.getByRole("toolbar", { name: "Emotes" })).toHaveCount(0);
+
+    await actionsButton(page).focus();
+    await page.keyboard.press("Enter");
+    await expect(actionsMenu(page)).toBeVisible();
+    const items = actionsMenu(page).getByRole("menuitem");
+    await expect(items).toHaveText([/^Wave\s*1$/, /^Dance\s*2$/, /^Cheer\s*3$/, /^Sit down\s*4$/]);
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    // Closed again, the focus is back on the button, and the emote went to the server.
+    await expect(actionsMenu(page)).toBeHidden();
+    await expect(actionsButton(page)).toBeFocused();
+    await expect.poll(() => sent.some((p) => p.includes('"type":"emote"') && p.includes('"emote":"wave"'))).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test("the keys 1 to 4 still work without opening it, and Esc and a click outside close it", async ({ page }) => {
+    const sent: string[] = [];
+    page.on("websocket", (ws) => ws.on("framesent", (f) => sent.push(String(f.payload))));
+    await open(page);
+    await page.keyboard.press("3");
+    await expect.poll(() => sent.some((p) => p.includes('"emote":"cheer"'))).toBe(true);
+
+    await actionsButton(page).click();
+    await expect(actionsMenu(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(actionsMenu(page)).toBeHidden();
+    await actionsButton(page).click();
+    await expect(actionsMenu(page)).toBeVisible();
+    await page.locator(".al-stage > canvas").click({ position: { x: 300, y: 100 } });
+    await expect(actionsMenu(page)).toBeHidden();
+  });
+
+  test("is out of the way while editing the room and in the list view", async ({ page }) => {
+    await open(page);
+    await page.keyboard.press("e");
+    await expect(editBar(page)).toBeVisible();
+    await expect(actionsButton(page)).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(actionsButton(page)).toBeVisible();
+    await page.keyboard.press("l");
+    await expect(actionsButton(page)).toBeHidden();
+    await page.keyboard.press("l");
+    await expect(actionsButton(page)).toBeVisible();
+  });
+});
+
+for (const [width, height] of [
+  [360, 640],
+  [800, 600],
+  [1366, 768],
+] as const) {
+  test(`the Actions button and its menu are inside the stage and not cut by the dock at ${width}x${height}`, async ({ page }) => {
+    await open(page, width, height);
+    const stage = (await page.locator(".al-stage").boundingBox())!;
+    const dock = (await page.locator(".al-dock").boundingBox())!;
+    // The stage ends where the dock starts: nothing of the stage lies under the dock.
+    expect(stage.y + stage.height).toBeLessThanOrEqual(dock.y + 0.5);
+
+    const button = (await actionsButton(page).boundingBox())!;
+    expect(button.x).toBeGreaterThanOrEqual(stage.x - 0.5);
+    expect(button.y).toBeGreaterThanOrEqual(stage.y - 0.5);
+    expect(button.x + button.width).toBeLessThanOrEqual(stage.x + stage.width + 0.5);
+    expect(button.y + button.height).toBeLessThanOrEqual(stage.y + stage.height + 0.5);
+    // At the bottom left of the stage.
+    expect(button.x - stage.x).toBeLessThan(stage.width / 2);
+    expect(stage.y + stage.height - (button.y + button.height)).toBeLessThan(stage.height / 4);
+
+    await actionsButton(page).click();
+    const list = (await actionsMenu(page).boundingBox())!;
+    expect(list.x).toBeGreaterThanOrEqual(stage.x - 0.5);
+    expect(list.y).toBeGreaterThanOrEqual(stage.y - 0.5);
+    expect(list.x + list.width).toBeLessThanOrEqual(stage.x + stage.width + 0.5);
+    expect(list.y + list.height).toBeLessThanOrEqual(stage.y + stage.height + 0.5);
+    // Opened upwards: it does not reach the button's bottom edge.
+    expect(list.y + list.height).toBeLessThanOrEqual(button.y + 0.5);
+    const doc = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+    expect(doc.sw).toBeLessThanOrEqual(doc.cw);
+    await page.screenshot({ path: `test-results/ui-tidy-actions-${width}.png` });
+  });
+}

@@ -1,4 +1,6 @@
 import type { UserEmote } from "@agentlife/shared";
+import { createMenu } from "./menu.ts";
+import type { MenuItem } from "./menu-model.ts";
 import { inTextField } from "./view-mode.ts";
 import { UI_COLOURS } from "./theme.ts";
 
@@ -14,7 +16,7 @@ interface KeyLike {
   target?: unknown;
 }
 
-/** The keys of the emote bar, in the order of its buttons. */
+/** The keys of the avatar's actions, in the order of the Actions menu. */
 export const EMOTE_KEYS: readonly { key: string; action: EmoteKeyAction; label: string; title: string }[] = [
   { key: "1", action: { kind: "emote", emote: "wave" }, label: "Wave", title: "Wave" },
   { key: "2", action: { kind: "emote", emote: "dance" }, label: "Dance", title: "Dance" },
@@ -32,70 +34,97 @@ export function emoteKey(e: KeyLike, blocked = false): EmoteKeyAction | null {
   return EMOTE_KEYS.find((k) => k.key === e.key)?.action ?? null;
 }
 
+export type ActionId = "wave" | "dance" | "cheer" | "sit";
+
+/** What the Actions menu needs to know to list its items. */
+export interface ActionState {
+  /** The user's avatar sits on a seat now. */
+  sitting: boolean;
+  /** The room has a seat piece. */
+  hasSeat: boolean;
+}
+
+/** The items of the Actions menu, in the order of the keys: Wave (1), Dance (2), Cheer (3) and Sit or Stand (4). */
+export function actionItems(s: ActionState): MenuItem<ActionId>[] {
+  return EMOTE_KEYS.map((k): MenuItem<ActionId> => {
+    if (k.action.kind === "sit") {
+      return {
+        id: "sit",
+        label: s.sitting ? "Stand up" : "Sit down",
+        shortcut: k.key,
+        note: k.title,
+        ...(!s.sitting && !s.hasSeat ? { disabled: true, note: "There is no seat in this room." } : {}),
+      };
+    }
+    const id: ActionId = k.action.emote;
+    // A seated avatar does not dance (the same rule as the server's).
+    const noDance = id === "dance" && s.sitting;
+    return { id, label: k.label, shortcut: k.key, note: noDance ? "Stand up to dance." : k.title, ...(noDance ? { disabled: true } : {}) };
+  });
+}
+
 const CSS = `
-.al-emotes { position: absolute; z-index: 11; right: var(--al-s2); bottom: var(--al-s2); display: flex; gap: var(--al-s1); padding: var(--al-s1); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-shadow: var(--al-shadow); }
-.al-emotes[hidden] { display: none; }
-.al-emote-key { opacity: 0.8; margin-right: 4px; }
+.al-actions { position: absolute; z-index: 11; left: var(--al-s2); bottom: var(--al-s2); }
+.al-actions[hidden] { display: none; }
+.al-actions .al-menu-button { background: ${UI_COLOURS.panelBg}; box-shadow: var(--al-shadow); }
+.al-actions .al-menu-list { min-width: 200px; max-width: calc(100% - var(--al-s4)); }
 `;
 
-export interface EmoteBarActions {
+export interface ActionsActions {
   emote(emote: UserEmote): void;
   sit(): void;
 }
 
-export interface EmoteBar {
+export interface ActionsMenu {
   readonly element: HTMLElement;
-  /** Shows or hides the bar (hidden while arranging and in the list view). */
+  /** Shows or hides the button (hidden while arranging and in the list view). */
   setVisible(visible: boolean): void;
-  /** The user sat down or got up: the Sit button says "Stand" and is pressed while the user sits. */
+  /** The user sat down or got up. */
   setSitting(sitting: boolean): void;
+  /** Whether the room the user is in has a seat. */
+  setSeat(hasSeat: boolean): void;
+  readonly isOpen: boolean;
+  close(): void;
 }
 
-/** The row of four buttons at the bottom right of the stage: Wave, Dance, Cheer and Sit, each with its key. */
-export function createEmoteBar(doc: Document, host: HTMLElement, actions: EmoteBarActions): EmoteBar {
+/**
+ * The Actions button at the bottom left of the stage (ui-tidy): a closed menu with Wave, Dance, Cheer and Sit, each with
+ * its key, which keep working without it. It lists the items again each time it opens, so a label is never stale.
+ */
+export function createActionsMenu(doc: Document, host: HTMLElement, actions: ActionsActions): ActionsMenu {
   const style = doc.createElement("style");
   style.textContent = CSS;
   doc.head.appendChild(style);
 
-  const bar = doc.createElement("div");
-  bar.className = "al-emotes";
-  bar.setAttribute("role", "toolbar");
-  bar.setAttribute("aria-label", "Emotes");
-  let sitText: HTMLElement | undefined;
-  let sitButton: HTMLElement | undefined;
-  for (const k of EMOTE_KEYS) {
-    const b = doc.createElement("button");
-    b.type = "button";
-    b.className = "al-btn al-emote";
-    b.dataset["emote"] = k.action.kind === "emote" ? k.action.emote : "sit";
-    b.title = `${k.title} (${k.key})`;
-    b.setAttribute("aria-label", `${k.title}, key ${k.key}`);
-    const key = doc.createElement("span");
-    key.className = "al-emote-key";
-    key.textContent = k.key;
-    const text = doc.createElement("span");
-    text.textContent = k.label;
-    b.append(key, text);
-    if (k.action.kind === "sit") {
-      b.setAttribute("aria-pressed", "false");
-      sitText = text;
-      sitButton = b;
-    }
-    b.addEventListener("click", () => {
-      if (k.action.kind === "emote") actions.emote(k.action.emote);
-      else actions.sit();
-    });
-    bar.appendChild(b);
-  }
-  host.appendChild(bar);
+  const state: ActionState = { sitting: false, hasSeat: true };
+  const menu = createMenu<ActionId>(doc, {
+    className: "al-actions",
+    label: "Actions ▴",
+    title: "Wave, dance, cheer or sit down (keys 1 to 4)",
+    ariaLabel: "Actions",
+    placement: "above",
+    items: () => actionItems(state),
+    choose: (id) => {
+      if (id === "sit") actions.sit();
+      else actions.emote(id);
+    },
+  });
+  host.appendChild(menu.element);
   return {
-    element: bar,
+    element: menu.element,
     setVisible(visible) {
-      bar.hidden = !visible;
+      menu.element.hidden = !visible;
+      if (!visible) menu.close();
     },
     setSitting(sitting) {
-      if (sitText) sitText.textContent = sitting ? "Stand" : "Sit";
-      sitButton?.setAttribute("aria-pressed", String(sitting));
+      state.sitting = sitting;
     },
+    setSeat(hasSeat) {
+      state.hasSeat = hasSeat;
+    },
+    get isOpen() {
+      return menu.isOpen;
+    },
+    close: () => menu.close(),
   };
 }

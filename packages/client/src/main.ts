@@ -1,6 +1,6 @@
 import { Application } from "pixi.js";
-import { FURNI_CATALOG, RunExportSchema, levelText, validateRoom } from "@agentlife/shared";
-import type { FloorStatus, OverviewFloor, RunExport, ServerMsg } from "@agentlife/shared";
+import { FURNI_CATALOG, RunExportSchema, isSeatDef, levelText, validateRoom } from "@agentlife/shared";
+import type { FloorStatus, OverviewFloor, PlacedFurni, RunExport, ServerMsg } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
 import { DEMO_RUN_PATH, assetUrl, currentMode } from "./mode.ts";
 import { ReplayTransport } from "./replay/transport.ts";
@@ -40,7 +40,7 @@ import { reportVerdict } from "./ui/report-viewer.ts";
 import { GRANT_TOAST_MS, grantToastText } from "./ui/wallet.ts";
 import { ProgressModel, levelUpText, progressLines } from "./ui/progress.ts";
 import { createWispButton } from "./ui/wisp.ts";
-import { createEmoteBar, emoteKey } from "./ui/emotes.ts";
+import { createActionsMenu, emoteKey } from "./ui/emotes.ts";
 import { editButtonState } from "./ui/menu-model.ts";
 
 /**
@@ -301,17 +301,21 @@ function openPalette(): void {
   );
 }
 
-// ---- emotes and sitting (waiting-fun): four buttons and the keys 1 to 4 ----
+// ---- avatar actions (waiting-fun, ui-tidy): the Actions menu and the keys 1 to 4 ----
 
-const emotes = createEmoteBar(document, stageEl, {
+const emotes = createActionsMenu(document, stageEl, {
   emote: (emote) => transport.send({ type: "emote", emote }),
   sit: () => transport.send({ type: "sit_toggle" }),
 });
 /** The id of the user's own avatar (from `welcome`), to tell the `sit` messages of the user from the others. */
 let myAvatar: number | undefined;
-/** The bar belongs to the hotel view and is out of the way while the user arranges the furniture. */
+/** The button belongs to the hotel view and is out of the way while the user arranges the furniture. */
 function refreshEmotes(): void {
   emotes.setVisible(view === "hotel" && !arranging);
+}
+/** Whether a room has a seat piece, for the Sit item of the Actions menu. */
+function hasSeat(furni: readonly PlacedFurni[]): boolean {
+  return furni.some((p) => isSeatDef(FURNI_CATALOG[p.defId]));
 }
 window.addEventListener("keydown", (e) => {
   // A panel that is open owns the keyboard, and so does arrange mode.
@@ -389,6 +393,7 @@ function enteredRoom(msg: Extract<ServerMsg, { type: "welcome" }>): void {
   currentRoomName = msg.room.name;
   // A new room (or the same one after a reconnect): arrange mode stops, and the model learns the room's pieces.
   arrange.setRoom(msg.room);
+  emotes.setSeat(hasSeat(msg.room.furni));
   elevatorItemId = msg.room.furni.find((p) => FURNI_CATALOG[p.defId]?.interaction === "elevator")?.itemId;
   hud.setFloor(currentRoomName);
   arrangeBar.setFloor(currentRoomName);
@@ -488,7 +493,10 @@ transport.onMessage((msg) => {
   } else if (msg.type === "error" && msg.code === "layout_error") {
     arrange.onRefused(msg.message);
   } else if (msg.type === "room_layout") {
-    if (msg.roomId === currentRoom) arrange.onLayout(msg.furni, msg.anchors);
+    if (msg.roomId === currentRoom) {
+      arrange.onLayout(msg.furni, msg.anchors);
+      emotes.setSeat(hasSeat(msg.furni));
+    }
   } else if (msg.type === "shop") {
     arrange.onShop(msg.state);
   } else if (msg.type === "error" && msg.code === "bad_message") {

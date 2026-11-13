@@ -69,6 +69,7 @@ import type { ProgressStore } from "./progress-store.ts";
 import { Wisps } from "./wisps.ts";
 import type { Wisp, WispOptions } from "./wisps.ts";
 import { MoodKeeper } from "./mood.ts";
+import { BuilderWatch } from "./builder-watch.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -113,6 +114,8 @@ export interface GatewayOptions {
   wisps?: WispOptions;
   /** Test knobs of the mood of the desk agents: the work that makes them busy and tired, and how often a crossing is looked for. Defaults: 20 min, 60 min and 15 s. */
   mood?: { busyMs?: number; tiredMs?: number; pollMs?: number };
+  /** Test knobs of the Builder's stale state: how long it may stay silent while busy, and how often that is looked at. Defaults: 10 min and 30 s. */
+  builder?: { staleMs?: number; pollMs?: number };
   /**
    * XP, levels and stats (team-progress). Without it the hotel has no progress: no `progress` message is sent and nothing
    * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
@@ -373,6 +376,22 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (projectId !== undefined) pushMoods(projectId);
   }, options.mood?.pollMs ?? 15_000);
   moodPoll.unref();
+
+  // ---- the Builder that stopped reporting (ui-tidy): back to idle after the stale time ----
+
+  const builderWatch = new BuilderWatch(options.builder?.staleMs);
+  /** Sends the Builder to idle when it has been busy and silent for too long. The lobby sim keeps the state, so a reload shows it. */
+  const sweepBuilder = (): void => {
+    const now = Date.now();
+    if (!builderWatch.expired(now)) return;
+    enqueue(async () => {
+      const sim = hotel.sim(LOBBY_ROOM);
+      if (!sim) return;
+      await sendSim(LOBBY_ROOM, sim.handleAgentEvent({ type: "agent.state_changed", seq: 0, ts: now, taskId: "builder-idle", agentId: "builder", state: "idle" }));
+    });
+  };
+  const builderPoll = setInterval(sweepBuilder, options.builder?.pollMs ?? 30_000);
+  builderPoll.unref();
 
   /** Every ghost that is on a floor now: the desk roles and the team members at the spots, not those who left by the elevator. */
   const ghostsOn = (roomId: string): (SeatedRole | GuestId)[] => {
@@ -1190,6 +1209,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   const onEngineEvent = (ev: AgentEvent) => {
+    builderWatch.observe(ev);
     enqueue(async () => {
       // Before any room lookup: a job on a floor that has no room yet still earns and still counts.
       const candidates = grantTracker.observe(ev);
@@ -1599,6 +1619,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const { you, welcome } = hotel.join();
     current = { ws, userId: you, activityAll: false, overviewWatch: false };
     sendWelcome(ws, hotel.roomOf(you) ?? LOBBY_ROOM, welcome);
+    sweepBuilder();
     // A project registered since the last connection gets its floor now.
     if (engine) {
       enqueue(syncProjects);
@@ -1739,6 +1760,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             clearTimeout(wispTimer);
             clearTimeout(wispExpiry);
             clearInterval(moodPoll);
+            clearInterval(builderPoll);
             for (const t of swapTimers) clearTimeout(t);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();

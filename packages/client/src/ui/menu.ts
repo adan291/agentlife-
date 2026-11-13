@@ -6,6 +6,7 @@ const CSS = `
 .al-menu-wrap { position: relative; }
 .al-menu-list { position: absolute; z-index: 30; top: calc(100% + var(--al-s1)); right: 0; min-width: 240px; max-width: calc(100vw - var(--al-s4)); margin: 0; padding: var(--al-s1); box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); }
 .al-menu-list[hidden] { display: none; }
+.al-menu-list[data-place="above"] { top: auto; bottom: calc(100% + var(--al-s1)); left: 0; right: auto; }
 .al-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--al-s4); width: 100%; box-sizing: border-box; text-align: left; border-color: transparent; background: transparent; }
 .al-menu-item:focus-visible, .al-menu-item[data-active="true"] { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
 .al-menu-key { color: ${UI_COLOURS.muted}; white-space: nowrap; }
@@ -13,12 +14,23 @@ const CSS = `
 .al-menu-sep { height: 1px; margin: var(--al-s1) 0; background: var(--al-border); }
 `;
 
-export interface MenuOptions {
+export interface MenuOptions<Id extends string = MenuItemId> {
   /** The items to list now. Called each time the menu opens. */
-  items(): MenuItem[];
+  items(): MenuItem<Id>[];
   /** The user chose an item. The menu has already closed. */
-  choose(id: MenuItemId): void;
+  choose(id: Id): void;
+  /** Text and help of the button; the defaults are those of the top bar's Menu. */
+  label?: string;
+  title?: string;
+  ariaLabel?: string;
+  /** Where the list opens: under the button and to its left (top bar, the default) or above it and to its right (stage corner). */
+  placement?: "below" | "above";
+  /** Extra class of the wrapper, so a place can position it. */
+  className?: string;
 }
+
+/** The documents that already have the menu styles (two menus share them). */
+const styled = new WeakSet<Document>();
 
 export interface Menu {
   readonly element: HTMLElement;
@@ -33,28 +45,32 @@ export interface Menu {
  * handles the keyboard: Enter, Space or ArrowDown on the button open it, arrows, Home and End move, Enter or Space choose,
  * Esc closes and gives the focus back, Tab and a click outside close.
  */
-export function createMenu(doc: Document, options: MenuOptions): Menu {
-  const style = doc.createElement("style");
-  style.textContent = CSS;
-  doc.head.appendChild(style);
+export function createMenu<Id extends string = MenuItemId>(doc: Document, options: MenuOptions<Id>): Menu {
+  if (!styled.has(doc)) {
+    styled.add(doc);
+    const style = doc.createElement("style");
+    style.textContent = CSS;
+    doc.head.appendChild(style);
+  }
 
   const wrap = doc.createElement("div");
-  wrap.className = "al-menu-wrap";
+  wrap.className = options.className ? `al-menu-wrap ${options.className}` : "al-menu-wrap";
   const button = doc.createElement("button");
   button.type = "button";
   button.className = "al-btn al-menu-button";
-  button.textContent = "Menu ▾";
-  button.title = "Commands, zoom, text size and help";
+  button.textContent = options.label ?? "Menu ▾";
+  button.title = options.title ?? "Commands, zoom, text size and help";
   button.setAttribute("aria-haspopup", "menu");
   button.setAttribute("aria-expanded", "false");
   const list = doc.createElement("div");
   list.className = "al-menu-list";
   list.setAttribute("role", "menu");
-  list.setAttribute("aria-label", "Menu");
+  list.setAttribute("aria-label", options.ariaLabel ?? "Menu");
+  list.dataset["place"] = options.placement ?? "below";
   list.hidden = true;
   wrap.append(button, list);
 
-  let items: MenuItem[] = [];
+  let items: MenuItem<Id>[] = [];
   let buttons: HTMLButtonElement[] = [];
   let opened = false;
 
@@ -74,7 +90,7 @@ export function createMenu(doc: Document, options: MenuOptions): Menu {
     if (refocus) button.focus();
   };
 
-  const run = (item: MenuItem): void => {
+  const run = (item: MenuItem<Id>): void => {
     if (item.disabled) return;
     close(true);
     options.choose(item.id);

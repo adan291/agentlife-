@@ -5,8 +5,9 @@ export const BREAK_MENU_PX = 900;
 
 export type MenuItemId = "view" | "edit" | "profile" | "commands" | "zoom" | "text-smaller" | "text-larger" | "help";
 
-export interface MenuItem {
-  id: MenuItemId;
+/** An entry of a dropdown. The Menu of the top bar uses `MenuItemId`; the Actions menu has its own ids. */
+export interface MenuItem<Id extends string = MenuItemId> {
+  id: Id;
   label: string;
   /** Key shown on the right, as the user would press it. */
   shortcut?: string;
@@ -102,7 +103,7 @@ export function isHelpKey(e: { key: string; ctrlKey?: boolean; metaKey?: boolean
 }
 
 /** Index of the next enabled item when moving by `step` (1 or -1) from `from` (-1: none yet), wrapping. -1 when every item is disabled. */
-export function nextEnabled(items: readonly MenuItem[], from: number, step: 1 | -1): number {
+export function nextEnabled<T extends { id: string; disabled?: boolean }>(items: readonly T[], from: number, step: 1 | -1): number {
   const n = items.length;
   if (n === 0) return -1;
   // Nothing is active yet: going down starts at the first item, going up at the last.

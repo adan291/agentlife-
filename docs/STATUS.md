@@ -1,6 +1,6 @@
 ﻿# Status
 
-Updated: 2026-11-13 (ui-tidy tasks 1-2 done on branch feat/ui-tidy, not merged; waiting-fun and the rest of the game layer are merged into main; main 57 commits ahead of origin)
+Updated: 2026-11-13 (ui-tidy tasks 1-3 done on branch feat/ui-tidy, not merged; waiting-fun and the rest of the game layer are merged into main; main 57 commits ahead of origin)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13.
 
@@ -29,7 +29,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-13 21:30 (IDE): user tried arranging: a moved piece could not be selected again (bug), many places refused, wants to turn almost everything in place (mailbox on its own tile), every room editable (lobby, HR), and the emote bar as a closed menu. Added to ui-tidy as requirement 6 and task 2 (3 tasks now, S33 tasks 1-2, S34 task 3). Hotel stopped; conductor started on ui-tidy (log data/sessions/conduct-run10.txt).
 
 ## Next
-1. Conductor: ui-tidy task 3 (Actions menu replacing the emote bar, stale Builder), then review and merge ui-tidy, then final-demo. Never cut final-demo.
+1. Conductor: review and merge ui-tidy (all 3 tasks done), then final-demo. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md, including the new top bar, Menu, Edit room in every room and the ui-tidy list at its end.
 3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
 4. Push main when the user agrees (last push fbe1ceb).
@@ -53,7 +53,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | furni-shop | 3 / 3 | main | Row 11. Wallet, grants, 25-item catalogue, shop, buy, inventory tray in arrange mode (design.md). Balance chip is in the stage corner. Not looked at by the user |
 | team-progress | 2 / 2 | main | Row 12. XP and levels from real events (`progress.json`, same keyed idempotence as grants), stats, 18 badges, 3 seeded daily quests that pay Ecto once, Profile panel (level chip next to the Ecto chip), level-up effect, level lines in team bar, tooltips and HR cards. Needs `AGENTLIFE_PROGRESS_FILE` or the real engine. Playwright: second test server (8796/5198). Not looked at by the user |
 | waiting-fun | 2 / 2 | main | Row 13. Wisps (server decides, 1 Ecto, DOM button over the canvas), sit on seats (click, key 4), emotes (keys 1-3), ghosts cheer or look glum on a delivered job, mood face on the desk ghosts' tags, coffee machine in the shop (design.md). Playwright: third test server (8797/5197, `AGENTLIFE_WISP_MS`). Not looked at by the user |
-| ui-tidy | 2 / 3 | feat/ui-tidy | Row 14. Task 1: top bar (Elevator, Hotel/List, Edit room, Ecto and level chips, Menu; the group collapses into the Menu under 900 px), Menu with keyboard, keys E and ?, edit banner under the top bar. Task 2: re-select bug fixed (the selected piece wins under the pointer, `pickAllFurni`), wall pieces free in the room and facing the room against a wall, named refusals, lobby and HR office editable, layouts keyed by room id (old file converted), `home_hr` anchor; bought furniture stays on project floors. Next: task 3 (Actions menu, stale Builder). Not looked at by the user. All 86 e2e pass with Edge |
+| ui-tidy | 3 / 3 | feat/ui-tidy | Row 14. Task 1: top bar (Elevator, Hotel/List, Edit room, Ecto and level chips, Menu; the group collapses into the Menu under 900 px), Menu with keyboard, keys E and ?, edit banner under the top bar. Task 2: re-select bug fixed (the selected piece wins under the pointer, `pickAllFurni`), wall pieces free in the room and facing the room against a wall, named refusals, lobby and HR office editable, layouts keyed by room id (old file converted), `home_hr` anchor; bought furniture stays on project floors. Task 3: Actions button (bottom left of the stage) replaces the emote bar, same dropdown component as the Menu, keys 1-4 kept; `BuilderWatch` sends the Builder to idle after 10 min without events (design.md). Not looked at by the user. 25 e2e of ui-tidy and waiting-fun pass with Edge |
 
 ## Open problems
 - ui-tidy: a piece that is not selected and stands behind a taller one is picked by pressing on its drawing above the tile; picking by drawn pixels was not done (design.md of ui-tidy). `pnpm check` failed once under load in two world-server timing tests (`fun-gateway`, `wisp-gateway`) and passed alone and on the second run.
