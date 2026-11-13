@@ -16,7 +16,7 @@ Plan of record: docs/TASKMAP.md (run with `pnpm conduct`).
 
 ## End of session
 1. `pnpm check` must pass.
-2. Update docs/STATUS.md: what was done, what is next, open problems. When the session talked with the user (IDE chat), add one dated line to ## Last conversation with the user (what was asked, decided and left pending), so a Discord session can continue the thread.
+2. Update docs/STATUS.md: what was done, what is next, open problems. Keep it short (under 15 000 characters, it is loaded into every session): one line per spec in the table, implementation details in the spec's design.md, and move entries that are no longer current to docs/STATUS-history.md. When the session talked with the user (IDE chat), add one dated line to ## Last conversation with the user (what was asked, decided and left pending), so a Discord session can continue the thread.
 3. Commit. Do not push or merge unless the user asks.
 
 ## Current status
