@@ -112,3 +112,49 @@ export async function writeAgentFile(file: AgentFile, opts: WriteAgentOptions): 
   }
   return { path: target, changed: true };
 }
+
+/** A file of a team change that the check refused; `name` says which member it belongs to. */
+export class AgentFileRefusedError extends Error {
+  constructor(
+    readonly agentName: string,
+    cause: unknown,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause));
+  }
+}
+
+/**
+ * Writes several agent files as one change: every changed file is staged and checked first, and only when all of them
+ * pass are they moved into `<kiroHome>/agents`. A refused file leaves every agent file of the change as it was.
+ */
+export async function writeAgentFiles(files: readonly AgentFile[], opts: WriteAgentOptions): Promise<{ changed: number }> {
+  const dir = path.join(opts.kiroHome, "agents");
+  const stagingDir = path.join(opts.kiroHome, "agents-staging");
+  const pending: { staged: string; target: string; name: string }[] = [];
+  for (const file of files) {
+    if (!AGENT_NAME_RE.test(file.name)) throw new Error(`agent name is not safe: ${JSON.stringify(file.name).slice(0, 80)}`);
+  }
+  mkdirSync(stagingDir, { recursive: true });
+  mkdirSync(dir, { recursive: true });
+  try {
+    for (const file of files) {
+      const text = agentFileText(file);
+      const target = path.join(dir, `${file.name}.json`);
+      if (existsSync(target) && readFileSync(target, "utf8") === text) continue;
+      const staged = path.join(stagingDir, `${file.name}.json`);
+      writeFileSync(staged, text, "utf8");
+      pending.push({ staged, target, name: file.name });
+    }
+    for (const p of pending) {
+      try {
+        if (opts.validate) await opts.validate(p.staged);
+      } catch (e) {
+        throw new AgentFileRefusedError(p.name, e);
+      }
+    }
+    for (const p of pending) renameSync(p.staged, p.target);
+  } finally {
+    for (const p of pending) rmSync(p.staged, { force: true });
+  }
+  return { changed: pending.length };
+}

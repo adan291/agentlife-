@@ -336,8 +336,11 @@ export function createHrPanel(doc: Document, actions: HrActions) {
     card.appendChild(el(doc, "pre", "al-plain", i.persona));
     const row = el(doc, "div", "al-row al-wrap");
     if (i.status !== "approved") {
-      const approve = button(doc, i.status === "update_pending" ? "Approve the update" : "Approve", () => actions.approve(i.id, i.hash), "Make this template hireable");
+      const flagged = i.review.flags.length > 0;
+      const label = `${i.status === "update_pending" ? "Approve the update" : "Approve"}${flagged ? ` (${i.review.flags.length} concern${i.review.flags.length === 1 ? "" : "s"})` : ""}`;
+      const approve = button(doc, label, () => actions.approve(i.id, i.hash), flagged ? "The review found concerns: read them above before you make this template hireable" : "Make this template hireable");
       approve.dataset["action"] = "approve";
+      if (flagged) approve.dataset["flagged"] = "true";
       row.appendChild(approve);
     }
     const reject = button(doc, i.status === "approved" ? "Keep as it is" : "Reject", () => actions.reject(i.id));

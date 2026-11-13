@@ -276,6 +276,9 @@ describe("Imports tab", () => {
     expect(text).toContain("<b>bold</b>");
     expect(findAll(card, (e) => e.tagName === "b")).toHaveLength(0);
     expect(html(card)).toContain("&lt;b&gt;bold&lt;/b&gt;");
+    // The concerns are on the button too, so they are not missed (review suggestion).
+    expect(textOf(byAction(card, "approve")[0]!)).toBe("Approve (1 concern)");
+    expect(byAction(card, "approve")[0]!.dataset["flagged"]).toBe("true");
     byAction(card, "approve")[0]!.click();
     byAction(card, "reject")[0]!.click();
     expect(h.calls).toEqual(["approve:poet-qa:aaaa", "reject:poet-qa"]);

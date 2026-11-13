@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TEAM_ROLES, TIER_IDS, TemplateSchema, tierForRole, type TeamRole } from "@agentlife/shared";
 import { agentName, AGENTS_DIR, loadAgentFile, ROLES } from "../src/agents.ts";
 import { Catalogue, CATALOGUE_DIR, loadTemplates } from "../src/team/catalogue.ts";
-import { agentFileFor, agentFileText, kiroCliValidator, writeAgentFile, ROLE_INSTRUCTIONS } from "../src/team/generate.ts";
+import { agentFileFor, agentFileText, kiroCliValidator, writeAgentFile, writeAgentFiles, AgentFileRefusedError, ROLE_INSTRUCTIONS } from "../src/team/generate.ts";
 import { loadTier, loadTiers, TIERS_DIR } from "../src/team/tiers.ts";
 
 let tmp: string;
@@ -195,6 +195,26 @@ describe("agentFileFor", () => {
   });
 });
 
+describe("writeAgentFiles", () => {
+  const fileOf = (name: string) => agentFileFor({ agentName: name, model: "claude-haiku-5.5" }, catalogue.defaultFor("architect"), tiers["read-only"]);
+  it("moves nothing when one file of the change is refused", async () => {
+    const kiroHome = path.join(tmp, "kh-many");
+    const refuse = async (file: string) => {
+      if (path.basename(file) === "alpha-b.json") throw new Error("bad file");
+    };
+    const err = await writeAgentFiles([fileOf("alpha-a"), fileOf("alpha-b")], { kiroHome, validate: refuse }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentFileRefusedError);
+    expect((err as AgentFileRefusedError).agentName).toBe("alpha-b");
+    expect(existsSync(path.join(kiroHome, "agents", "alpha-a.json"))).toBe(false);
+    expect(readdirSync(path.join(kiroHome, "agents-staging"))).toEqual([]);
+  });
+  it("moves every changed file when all pass, and skips identical ones", async () => {
+    const kiroHome = path.join(tmp, "kh-many-ok");
+    expect((await writeAgentFiles([fileOf("alpha-a"), fileOf("alpha-b")], { kiroHome, validate: async () => {} })).changed).toBe(2);
+    expect((await writeAgentFiles([fileOf("alpha-a"), fileOf("alpha-b")], { kiroHome, validate: async () => {} })).changed).toBe(0);
+    expect(existsSync(path.join(kiroHome, "agents", "alpha-b.json"))).toBe(true);
+  });
+});
 describe("writeAgentFile", () => {
   const sample = () => agentFileFor({ agentName: "alpha-architect-2", model: "claude-haiku-5.5" }, catalogue.defaultFor("architect"), tiers["read-only"]);
 
