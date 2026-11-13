@@ -21,6 +21,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-13 (IDE): user asked to move furniture like in classic hotel sims: spec furni-move, done by the conductor (S27, S28), PASS and merged. User then described the goal: housing plus a light RPG / sims game layer, fun while waiting for the agents. Specs written: furni-shop (Ecto earned only from verified work, shop, inventory), team-progress (XP and levels from real stats, badges, daily quests), waiting-fun (wisp catching, sit and emotes, visual ghost mood); TASKMAP rows 11-13, sessions S29-S32. The user liked the plan.
 - 2026-11-13 (IDE): the steering warned that workflow.md's reference to this file was cut (75 000 characters, budget 50 000). This file was split: the full old text is in docs/STATUS-history.md; workflow.md now asks sessions to keep it short. Conductor relaunched on rows 11-13.
 
+- 2026-11-13 (IDE): user: "fix what needs fixing and continue". Done in a separate worktree (data/fix-wt, branch fix/backlog) while the conductor ran, then merged into main (f217cf4): the mailbox keeps the newest 10 reports of a floor across jobs (it was emptied on every new job); hr-desk review suggestions (escaped project id in the stale-file regex, all agent files of a team change checked before any is moved, the import approve button shows its concerns); the conductor keeps both sides of a STATUS.md merge conflict (union) instead of the branch's only (it takes effect from the next conductor start). An S29 session had started outside the conductor at 15:16 and stopped at 15:46; its work was kept as a wip commit and finished by the conductor. furni-shop PASS and merged; conductor on team-progress.
+
 ## Next
 1. Conductor: furni-shop is done (review and merge next), then team-progress (S31), waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md (25 open), including the furni-move arrange mode and new default layout.
@@ -50,8 +52,6 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 ## Open problems
 - Playwright's own Chromium is not installed on this machine (`pnpm --filter @agentlife/client e2e` fails to launch it). Run `$env:E2E_CHANNEL='msedge'` first to use the installed Edge. Not installed by a session (global tool).
 - hr-desk D10 (docs/risks-and-decisions.md): import review by the read-only `agentlife-import-review` instead of `agentlife-security`. Explained to the user twice; waiting for a yes.
-- hr-desk review suggestions not done: escape project ids in the regex in `team/service.ts` (~336); stage all agent files before moving them in `commit`; show import flags as a warning on the approve button.
-- Mailbox shows only the latest report of a floor after a restart; older reports of the floor are not kept. Not investigated.
 - Flaky tests seen once each: `pipeline-editor.spec.ts` "board shows the editor above the job card" (e2e timing; it failed once in the full e2e run on 2026-11-13 and passed alone), `pnpm check` under load while the services restart. The report property test flake was fixed (seed -515305606).
 - Playwright config seeds `agentlife-e2e-wallet.json` (500 Ecto) and an empty inventory in the temp folder when the runner loads it. With `reuseExistingServer` an already running test world-server keeps its own in-memory state, so stop it before a run that buys furniture.
 - DiscordIA: one of its own tests failed once in four sandbox runs (not identified).
