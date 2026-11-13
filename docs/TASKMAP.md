@@ -21,7 +21,7 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 11 | `furni-shop` | S29 S30 | yes | needs-check | Housing: Ecto earned from real work, shop in the lobby, inventory, place bought furniture |
 | 12 | `team-progress` | S31 | yes | needs-check | RPG: XP and levels from real stats, badges, daily quests |
 | 13 | `waiting-fun` | S32 | yes | needs-check | While you wait: catch wisps, sit and emotes, ghost mood with a coffee machine |
-| 14 | `ui-tidy` | S33 S34 | yes | todo | Clean top bar: Edit room button, Menu dropdown, Actions menu for the avatar; no stale Builder |
+| 14 | `ui-tidy` | S33 S34 | yes | needs-check | Clean top bar: Edit room button, Menu dropdown, Actions menu for the avatar; no stale Builder |
 | 15 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
