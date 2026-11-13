@@ -34,3 +34,10 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Fire the Reviewer while the pipeline uses it, then start a job: it is refused with the reason ("Second review needs a reviewer…"), and starts again after "Back to the default".
 - [ ] Save a pipeline while a job runs: the running job keeps its old pipeline, the next one uses the new one.
 - [ ] Real `kiro-cli`: the researcher and second reviewer with their generated agent files (read-only tier); the Night intern chosen as researcher fails the research step with its own message (known limit).
+
+## furni-move (merged 2026-11-13)
+- [ ] Look at arrange mode in a real browser: the green and red tile overlay, the red cross, the selected outline, the standing-spot dots, the tool bar at the bottom left, and that the Arrange button in the top right corner does not cover the room under about 900 px width (STATUS says this was not checked by eye).
+- [ ] Look at the new default layout of a project floor (wall pieces, west-wall board and mailbox, agents walking between the new spots, name tags).
+- [ ] Requirement 2.4c: start a job on a floor with the real engine, move a desk and other pieces during the job, and confirm the agents keep walking and working; confirm the next walk of a moved desk's agent goes to the new seat.
+- [ ] Open the recorded demo and confirm there is no Arrange button (`pnpm --filter @agentlife/client e2e:demo` was not run in this verification).
+- [ ] Not run live: a real engine with a real registered project (only the scripted engine was used by the e2e).
