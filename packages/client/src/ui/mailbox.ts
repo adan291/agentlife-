@@ -102,6 +102,17 @@ export function renderMailbox(doc: Document, data: PanelData, actions: MailboxAc
       mark.textContent = "NEW";
       item.appendChild(mark);
     }
+    // The row is a button; say so, and say when the report holds a branch waiting to be delivered (user feedback 2026-11-13).
+    if (r.delivery?.state === "available") {
+      const chip = doc.createElement("span");
+      chip.className = "al-new";
+      chip.textContent = "Branch ready";
+      item.appendChild(chip);
+    }
+    const open = doc.createElement("span");
+    open.className = "al-report-open";
+    open.textContent = "Open ›";
+    item.appendChild(open);
     item.addEventListener("click", () => actions.openReport(r.reportId));
     root.appendChild(item);
   }

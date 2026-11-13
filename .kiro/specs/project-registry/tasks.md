@@ -21,6 +21,6 @@
   - Reception furniture and panel (register with confirmation of findings, remove with confirmation), computer panel lists projects, Report viewer "Deliver as branch"
   - _Requirements: 3.1, 6.1, 6.2, 6.3, 5.1_
 
-- [ ] 6. Live check
+- [x] 6. Live check
   - Register a small real project under D:\AgentHotel, run one job, deliver; record in docs/STATUS.md
   - _Requirements: 7.4_
