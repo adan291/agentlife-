@@ -13,6 +13,7 @@ import {
   RolesConfigResponseSchema,
   StartJobBodySchema,
   StartJobResponseSchema,
+  reviewBaseOf,
 } from "@agentlife/shared";
 import type { EngineConfig } from "../config.ts";
 import { ConflictError, NotFoundError } from "../errors.ts";
@@ -38,8 +39,8 @@ export interface EngineServerDeps {
   extraRoutes?: Route[];
   /** Registered projects. Without it only the repos of config/repos.json exist. */
   projects?: ProjectRegistry;
-  /** Local branches of a project, for `review-branch` jobs. Without it that kind is refused. */
-  branches?: (repoId: string) => Promise<string[]>;
+  /** Local branches of a project and the checked-out one, for `review-branch` jobs. Without it that kind is refused. */
+  branches?: (repoId: string) => Promise<{ current: string | null; branches: string[] }>;
 }
 
 export interface RouteContext {
@@ -127,7 +128,7 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
       method: "GET",
       pattern: /^\/health$/,
       handle: ({ res }) =>
-        sendJson(res, 200, HealthResponseSchema, { ok: true, protocol: PROTOCOL_VERSION, lastSeq: store.lastSeq() }),
+        sendJson(res, 200, HealthResponseSchema, { ok: true, protocol: PROTOCOL_VERSION, lastSeq: store.lastSeq(), restoreSeq: store.restoreSeq() }),
     },
     {
       method: "GET",
@@ -168,10 +169,16 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
         }
         if (body.kind === "review-branch" && body.target) {
           // Requirement 2.2: a branch is chosen from the project's local branches, never typed free.
-          const names = await deps.branches?.(body.repoId).catch(() => undefined);
-          if (!names || !names.includes(body.target)) {
+          const list = await deps.branches?.(body.repoId).catch(() => undefined);
+          if (!list || !list.branches.includes(body.target)) {
             throw new BadRequestError("unknown_branch", "that is not a local branch of the project", [
               { path: "target", message: "not a branch of this project" },
+            ]);
+          }
+          // A branch with nothing to compare with (a project with only `main`) is refused before a job exists.
+          if (!reviewBaseOf(body.target, list.current, list.branches)) {
+            throw new BadRequestError("nothing_to_compare", "there is no other branch to compare it with", [
+              { path: "target", message: "no other branch to compare with" },
             ]);
           }
         }

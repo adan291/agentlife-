@@ -64,6 +64,8 @@ const CSS = `
 .al-report-item { display: flex; align-items: center; gap: var(--al-s3); width: 100%; margin: var(--al-s1) 0; padding: var(--al-s2); text-align: left; background: none; color: inherit; font: inherit; cursor: pointer; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-sizing: border-box; }
 .al-report-item:hover { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
 .al-report-item[data-unread="true"] { border-color: var(--al-accent); }
+.al-report-open { flex: none; padding: 0 var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); color: var(--al-accent); }
+.al-report-item:hover .al-report-open, .al-report-item:focus-visible .al-report-open { border-color: var(--al-accent); }
 .al-report-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-new { flex: none; padding: 0 var(--al-s2); border-radius: var(--al-s1); background: var(--al-accent); color: ${UI_COLOURS.inputBg}; font-weight: bold; }
 .al-floor-list { list-style: none; margin: 0; padding: 0; }

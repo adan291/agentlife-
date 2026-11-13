@@ -8,7 +8,7 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 
 | # | Spec | Sessions | Live | Status | What it gives the user |
 |---|---|---|---|---|---|
-| 1 | `project-registry` | S14 | yes | needs-check | Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch |
+| 1 | `project-registry` | S14 | yes | done | Reception, real projects under D:\AgentHotel, jobs on them, delivery as a branch |
 | 2 | `hotel-floors` | S15 S16 | yes | done | Lobby, elevator with live floor status, one floor per project, two jobs at once |
 | 3 | `build-board` | S15B | no | done | Construction board in the lobby: TASKMAP rows, tasks per spec, conductor phase, what waits for you |
 | 4 | `job-types` | S20 S21 | no | done | Review my branch, write tests, document: each from its own furniture |
@@ -17,7 +17,8 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 7 | `project-memory` | S25 | no | done | The Library: what agents learned, used in every next job |
 | 8 | `list-mode` | S26 | no | done | List view and command palette for daily use |
 | 9 | `pipeline-editor` | S19 | no | done | Choose and order roles per project with fixed safety rules |
-| 10 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
+| 10 | `furni-move` | S27 S28 | yes | todo | Better default floor layout; move and rotate furniture on a project floor, saved and checked by the server |
+| 11 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
 

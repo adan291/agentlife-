@@ -130,7 +130,8 @@ describe("buildReport", () => {
       fc.property(fc.string({ maxLength: 300 }), fc.string({ maxLength: 300 }), fc.string({ maxLength: 600 }), (goal, note, log) => {
         const r = buildReport({ ...PASSING, goal, review: { verdict: "pass", notes: [note], risk: "low" }, test: { passed: true, log }, diff: `diff --git a/f b/f\n+${note}\n ${log}\n` });
         expect(fenceLines(r.markdown) % 2).toBe(0);
-        expect(r.markdown.match(/^## /gm)?.length).toBe(6);
+        // Only headings outside code blocks count: a test log line "## x" stays inside its fence (found by seed -515305606).
+        expect(stripFences(r.markdown).match(/^## /gm)?.length).toBe(6);
         expect(r.title.length).toBeLessThanOrEqual(200);
         expect(r.title).not.toMatch(/[\r\n]/);
         // The summary stays three or four list lines whatever the goal contains.

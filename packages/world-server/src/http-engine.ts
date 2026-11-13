@@ -308,8 +308,10 @@ export class HttpEngineLink implements EngineLink {
     while (!this.closer.signal.aborted) {
       try {
         const health = HealthResponseSchema.parse(await this.request("GET", "/health"));
-        // First connect: only new events. Engine database reset (lower seq): start over from its head.
-        if (this.lastSeq === undefined || health.lastSeq < this.lastSeq) this.lastSeq = health.lastSeq;
+        // First connect: replay the latest jobs of every project so the mailboxes come back after a restart
+        // (older engines send no restoreSeq: only new events). Engine database reset (lower seq): start over from its head.
+        if (this.lastSeq === undefined) this.lastSeq = Math.min(health.restoreSeq ?? health.lastSeq, health.lastSeq);
+        else if (health.lastSeq < this.lastSeq) this.lastSeq = health.lastSeq;
         await this.stream(() => {
           delay = this.reconnectMs;
         });

@@ -50,7 +50,7 @@ async function openWith(page: Page, width: number, height: number, inject: strin
   await page.addInitScript(() => {
     localStorage.clear();
     localStorage.setItem("agentlife-guide-seen", "1");
-    localStorage.setItem("agentlife-floor", "project:haunted-todo");
+    sessionStorage.setItem("agentlife-floor", "project:haunted-todo");
   });
   await page.routeWebSocket(WORLD_URL, (ws) => {
     const server = ws.connectToServer();

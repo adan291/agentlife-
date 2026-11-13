@@ -1,4 +1,4 @@
-import { GOAL_MAX_CHARS, JOB_TARGET_MAX_CHARS, targetProblem } from "@agentlife/shared";
+import { GOAL_MAX_CHARS, JOB_TARGET_MAX_CHARS, reviewBaseOf, targetProblem } from "@agentlife/shared";
 import type { JobKind } from "@agentlife/shared";
 import type { PanelContent } from "./computer.ts";
 import type { PanelData } from "./panel-state.ts";
@@ -63,6 +63,11 @@ export function defaultBranch(branches: readonly string[], current: string | nul
   return branches.find((b) => b !== current) ?? "";
 }
 
+/** The branches a review can take: those with another branch to compare with (same rule as the engine). */
+export function reviewableBranches(branches: readonly string[], current: string | null): string[] {
+  return branches.filter((b) => reviewBaseOf(b, current, branches) !== undefined);
+}
+
 const JOB_ENDED = ["report_ready", "delivered", "failed", "cancelled"];
 
 /**
@@ -109,19 +114,27 @@ export function createKindPanel(doc: Document, kind: FurnitureKind, actions: Kin
     let problem: HTMLElement | undefined;
 
     if (kind === "review-branch") {
-      const list = data.branches?.branches ?? [];
+      const all = data.branches?.branches ?? [];
+      const current = data.branches?.current ?? null;
+      // Only branches that have something to be compared with: the review base itself is not offered.
+      const list = reviewableBranches(all, current);
       if (list.length === 0) {
-        note("al-muted", "This project has no local branches.");
+        note(
+          "al-muted",
+          all.length === 0
+            ? "This project has no local branches."
+            : `Nothing to review yet: this project only has ${all.map((b) => `'${b}'`).join(", ")}. Create a branch in the project, commit to it, and it shows up here.`,
+        );
         return { body: root };
       }
-      if (!list.includes(branch)) branch = defaultBranch(list, data.branches?.current ?? null);
+      if (!list.includes(branch)) branch = defaultBranch(list, current);
       const field = doc.createElement("div");
       field.className = "al-field";
       field.append(doc.createTextNode(text.field));
       const select = createSelect(doc, {
         label: text.field,
         value: branch,
-        options: list.map((b) => ({ value: b, label: b === data.branches?.current ? `${b} (checked out)` : b })),
+        options: list.map((b) => ({ value: b, label: `${b} (compared with ${reviewBaseOf(b, current, all)})` })),
         onChange: (v) => {
           branch = v;
         },

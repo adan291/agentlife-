@@ -171,6 +171,26 @@ export class Store {
     return rows.map((r) => this.rowToEvent(r));
   }
 
+  /**
+   * Where a freshly started gateway replays from: the seq just before the oldest `task.created` among the latest
+   * `perRepo` jobs of every project, looking at no more than `maxJobs` jobs. The head when there is no job.
+   */
+  restoreSeq(perRepo = 5, maxJobs = 50): number {
+    const rows = this.db
+      .prepare("SELECT task_id, seq FROM events WHERE type = 'task.created' ORDER BY seq DESC LIMIT ?")
+      .all(maxJobs) as { task_id: string; seq: number }[];
+    const taken = new Map<string, number>();
+    let oldest: number | undefined;
+    for (const r of rows) {
+      const repo = this.views.get(r.task_id)?.repoId ?? "";
+      const n = taken.get(repo) ?? 0;
+      if (n >= perRepo) continue;
+      taken.set(repo, n + 1);
+      oldest = r.seq;
+    }
+    return oldest === undefined ? this.lastSeq() : oldest - 1;
+  }
+
   lastSeq(): number {
     const r = this.db.prepare("SELECT COALESCE(MAX(seq), 0) AS m FROM events").get() as { m: number };
     return r.m;

@@ -393,7 +393,10 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     logger,
     token: opts.token,
     projects,
-    branches: async (repoId) => (await listBranches({ registry: projects, paths, repoId })).branches,
+    branches: async (repoId) => {
+      const out = await listBranches({ registry: projects, paths, repoId });
+      return { current: out.current, branches: [...out.branches] };
+    },
     extraRoutes: [
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
       createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),

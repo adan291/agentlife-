@@ -2,7 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { GOAL_MAX_CHARS, JOB_TARGET_MAX_CHARS } from "@agentlife/shared";
 import type { FurnitureKind } from "../src/ui/kind-forms.ts";
-import { createKindPanel, defaultBranch, kindGoal } from "../src/ui/kind-forms.ts";
+import { createKindPanel, defaultBranch, kindGoal, reviewableBranches } from "../src/ui/kind-forms.ts";
 import type { PanelData } from "../src/ui/panel-state.ts";
 import { fakeDoc, findAll, textOf } from "./fake-dom.ts";
 import type { FakeElement } from "./fake-dom.ts";
@@ -58,6 +58,16 @@ describe("kindGoal", () => {
   });
 });
 
+describe("reviewableBranches", () => {
+  it("offers only branches with something to compare with, never the review base itself", () => {
+    expect(reviewableBranches(["main"], "main")).toEqual([]);
+    expect(reviewableBranches(["main", "feature/x"], "main")).toEqual(["feature/x"]);
+    // On a feature branch checkout, main can be reviewed against it and the feature against main.
+    expect(reviewableBranches(["main", "feature/x"], "feature/x")).toEqual(["main", "feature/x"]);
+    expect(reviewableBranches(["a", "b"], null)).toEqual([]);
+  });
+});
+
 describe("defaultBranch", () => {
   it("starts on a branch that is not the checked-out one", () => {
     expect(defaultBranch(["main", "feature/x"], "main")).toBe("feature/x");
@@ -69,10 +79,10 @@ describe("defaultBranch", () => {
 });
 
 describe("review desk form", () => {
-  it("lists the local branches, marks the checked-out one and reviews the first other branch", () => {
+  it("lists the branches that can be reviewed with their base, and reviews the first one", () => {
     const { render, starts } = harness("review-branch");
     const { body, footer } = render();
-    expect(options(body).map((o) => textOf(o))).toEqual(["main (checked out)", "feature/login", "fix/typo"]);
+    expect(options(body).map((o) => textOf(o))).toEqual(["feature/login (compared with main)", "fix/typo (compared with main)"]);
     expect(textOf(footer)).toBe("Review branch");
     footer?.click();
     expect(starts).toEqual([{ repoId: "my-app", goal: "Review branch feature/login", kind: "review-branch", target: "feature/login" }]);
@@ -80,7 +90,7 @@ describe("review desk form", () => {
 
   it("reviews the branch the user picked, and keeps the choice when the panel renders again", () => {
     const { render, starts } = harness("review-branch");
-    findAll(render().body, (e) => e.attributes.get("role") === "option")[2]?.click();
+    findAll(render().body, (e) => e.attributes.get("role") === "option")[1]?.click();
     const again = render();
     again.footer?.click();
     expect(starts.map((s) => s.target)).toEqual(["fix/typo"]);
@@ -92,6 +102,14 @@ describe("review desk form", () => {
     expect(textOf(body)).toContain("no local branches");
     expect(footer).toBeUndefined();
     expect(textOf(render(data({ branches: null })).body)).toContain("no local branches");
+  });
+
+  it("explains that a project with only main has nothing to review, and offers no button", () => {
+    const { render } = harness("review-branch");
+    const { body, footer } = render(data({ branches: { current: "main", branches: ["main"] } }));
+    expect(textOf(body)).toContain("Nothing to review yet");
+    expect(textOf(body)).toContain("'main'");
+    expect(footer).toBeUndefined();
   });
 });
 

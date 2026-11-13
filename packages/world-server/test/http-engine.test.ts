@@ -14,6 +14,8 @@ class MockEngine {
   readonly clients = new Set<http.ServerResponse>();
   readonly seenTokens: (string | undefined)[] = [];
   readonly seenSince: number[] = [];
+  /** Sent in /health when set (newer engines). */
+  restoreSeq: number | undefined;
   exportBody: RunExport | undefined;
   startStatus = 201;
   private readonly server: http.Server;
@@ -27,7 +29,10 @@ class MockEngine {
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(body));
       };
-      if (url.pathname === "/health") return json(200, { ok: true, protocol: 1, lastSeq: this.events.at(-1)?.seq ?? 0 });
+      if (url.pathname === "/health") {
+        const lastSeq = this.events.at(-1)?.seq ?? 0;
+        return json(200, { ok: true, protocol: 1, lastSeq, ...(this.restoreSeq === undefined ? {} : { restoreSeq: this.restoreSeq }) });
+      }
       if (url.pathname === "/repos") return json(200, [{ id: "haunted-todo", name: "haunted-todo" }]);
       if (url.pathname === "/tasks" && req.method === "POST") {
         if (this.startStatus === 409) return json(409, { error: "busy", message: "another job is still running" });
@@ -161,7 +166,7 @@ describe("HttpEngineLink commands", () => {
 });
 
 describe("HttpEngineLink events", () => {
-  it("starts at the engine head: old events are not replayed, new ones arrive in order", async () => {
+  it("with an older engine (no restoreSeq) starts at the head: old events are not replayed, new ones arrive in order", async () => {
     const { mock, link } = await setup();
     mock.push(say(1), say(2), say(3));
     const it = link.events()[Symbol.asyncIterator]();
@@ -170,6 +175,15 @@ describe("HttpEngineLink events", () => {
     mock.push(say(4), say(5));
     expect(seqs(await pending)).toEqual([4, 5]);
     expect(mock.seenSince[0]).toBe(3);
+  });
+
+  it("replays from the engine's restoreSeq on the first connect, so mailboxes come back after a restart", async () => {
+    const { mock, link } = await setup();
+    mock.restoreSeq = 1;
+    mock.push(say(1), say(2), say(3));
+    const it = link.events()[Symbol.asyncIterator]();
+    expect(seqs(await take(it, 2))).toEqual([2, 3]);
+    expect(mock.seenSince[0]).toBe(1);
   });
 
   it("reconnects with the last seen seq and loses nothing", async () => {

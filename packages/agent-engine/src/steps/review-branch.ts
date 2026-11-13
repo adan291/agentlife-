@@ -8,6 +8,7 @@ import {
   RiskSchema,
   VerdictSchema,
   isSafeBranchName,
+  reviewBaseOf,
   type BranchReview,
   type FindingSeverity,
 } from "@agentlife/shared";
@@ -22,8 +23,6 @@ import { runStructured } from "./extract-json.ts";
 import { cloneProject, isReservedAgentPath } from "./materialise.ts";
 import { diffForPrompt } from "./review.ts";
 
-/** Names tried as the base of the comparison when the branch under review is the checked-out one. */
-const BASE_CANDIDATES = ["main", "master"] as const;
 const HEAD_REF = "refs/al-review/head";
 const BASE_REF = "refs/al-review/base";
 const DIFF_FLAGS = ["--no-color", "--no-ext-diff", "--no-textconv", "--no-renames"] as const;
@@ -56,10 +55,8 @@ export function finalizeBranchReview(raw: z.infer<typeof RawBranchReviewSchema>)
   return { verdict: high ? "fail" : raw.verdict, risk: raw.risk, findings };
 }
 
-/** Picks the branch the review compares with: the checked-out one, else `main`, else `master`. */
-export function pickBase(branch: string, current: string | null, branches: readonly string[]): string | undefined {
-  return [current, ...BASE_CANDIDATES].find((n): n is string => n !== null && n !== branch && branches.includes(n));
-}
+/** Picks the branch the review compares with: the checked-out one, else `main`, else `master` (rule in shared). */
+export const pickBase = reviewBaseOf;
 
 /** Refuses a branch whose files could reach outside the checkout (links) or shadow the product's agents. */
 export async function checkBranchTree(dir: string, ref: string, signal?: AbortSignal): Promise<void> {

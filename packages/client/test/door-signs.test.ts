@@ -11,10 +11,10 @@ const load = (file: string): RoomDef => validateRoom(JSON.parse(readFileSync(joi
 const template = load("project-template.json");
 
 describe("door signs", () => {
-  it("writes the project's name over the elevator and over the board of its floor", () => {
+  it("writes the project's name on one plaque over the elevator of its floor", () => {
     const room = roomForProject(template, { id: "todo", name: "Haunted Todo" });
     const signs = signsFor(room);
-    expect(signs.map((s) => s.itemId).sort()).toEqual(["board_1", "elevator_1"]);
+    expect(signs.map((s) => s.itemId)).toEqual(["elevator_1"]);
     for (const s of signs) expect(s.text).toBe("Haunted Todo");
   });
 

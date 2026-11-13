@@ -69,3 +69,14 @@ export function jobKindLabel(kind: JobKind): string {
 export function kindWritesFiles(kind: JobKind): boolean {
   return kind === "change" || kind === "write-tests" || kind === "document";
 }
+
+/** Names tried as the base of a branch review when the branch under review is the checked-out one. */
+export const REVIEW_BASE_CANDIDATES = ["main", "master"] as const;
+
+/**
+ * The branch a branch review compares with: the checked-out one, else `main`, else `master`, never the branch itself.
+ * Undefined: nothing to compare with, so the branch cannot be reviewed. Shared by the engine and the review desk form.
+ */
+export function reviewBaseOf(branch: string, current: string | null, branches: readonly string[]): string | undefined {
+  return [current, ...REVIEW_BASE_CANDIDATES].find((n): n is string => n !== null && n !== branch && branches.includes(n));
+}

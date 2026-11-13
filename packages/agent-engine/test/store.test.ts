@@ -167,3 +167,22 @@ describe("Store", () => {
     s.close();
   });
 });
+
+describe("restoreSeq", () => {
+  it("starts just before the oldest of the latest jobs of every project, and at the head with no job", () => {
+    const s = new Store({ dbPath: ":memory:", runsDir: tmp() });
+    expect(s.restoreSeq()).toBe(0);
+    const created = (taskId: string, repoId: string) => s.appendEvent({ type: "task.created", taskId, repoId, goal: "g" }).seq;
+    const a1 = created("a1", "alpha");
+    s.appendEvent({ type: "task.state_changed", taskId: "a1", state: "analyzing" });
+    const b1 = created("b1", "beta");
+    created("a2", "alpha");
+    created("a3", "alpha");
+    // Two per project: alpha keeps a2 and a3, beta keeps b1, so the replay starts before b1 and skips a1.
+    expect(s.restoreSeq(2)).toBe(b1 - 1);
+    expect(s.restoreSeq(5)).toBe(a1 - 1);
+    // Never more than maxJobs jobs back.
+    expect(s.restoreSeq(5, 1)).toBe(s.lastSeq() - 1);
+    s.close();
+  });
+});
