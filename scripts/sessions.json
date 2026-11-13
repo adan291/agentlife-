@@ -273,6 +273,20 @@
       "model": "claude-sonnet-5.5",
       "effort": "medium",
       "prompt": "Implement tasks 1 and 2 of the waiting-fun spec (.kiro/specs/waiting-fun). Write its design.md first. Follow workflow.md."
+    },
+    {
+      "id": "S33",
+      "spec": "ui-tidy",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 1 of the ui-tidy spec (.kiro/specs/ui-tidy). Write its design.md first (top bar layout, menu model, where each control goes). Follow workflow.md."
+    },
+    {
+      "id": "S34",
+      "spec": "ui-tidy",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement task 2 of the ui-tidy spec (.kiro/specs/ui-tidy), following its design.md. Follow workflow.md."
     }
   ]
 }
