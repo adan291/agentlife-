@@ -146,7 +146,9 @@ describe("stock and messages", () => {
   it("checks the inventory file", () => {
     expect(InventoryFileSchema.safeParse({ version: 1, stock: { fern: 2 } }).success).toBe(true);
     expect(InventoryFileSchema.safeParse({ version: 1, stock: { fern: 0 } }).success).toBe(false);
-    expect(InventoryFileSchema.safeParse({ version: 1, stock: { fern: 201 } }).success).toBe(false);
+    // Purchases stop at 200 items, but pieces that come back always fit.
+    expect(InventoryFileSchema.safeParse({ version: 1, stock: { fern: 201 } }).success).toBe(true);
+    expect(InventoryFileSchema.safeParse({ version: 1, stock: { fern: 100_001 } }).success).toBe(false);
     expect(InventoryFileSchema.safeParse({ version: 1, stock: { "Bad Id": 1 } }).success).toBe(false);
     expect(InventoryFileSchema.safeParse({ version: 1, stock: { __proto__x: 1 } }).success).toBe(false);
   });

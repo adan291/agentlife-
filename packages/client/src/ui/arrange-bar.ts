@@ -16,6 +16,8 @@ const CSS = `
 export interface ArrangeBarActions {
   rotate(): void;
   undo(): void;
+  /** Takes the selected bought piece back into the inventory. */
+  pickUp(): void;
   /** Called after the user confirmed. */
   reset(): void;
   done(): void;
@@ -60,12 +62,14 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
   rotate.addEventListener("click", () => actions.rotate());
   const undo = button("Undo", "Undo the last move (Ctrl+Z)");
   undo.addEventListener("click", () => actions.undo());
+  const pickUp = button("Pick up", "Take the selected piece back into your inventory (only pieces you bought)");
+  pickUp.addEventListener("click", () => actions.pickUp());
   const reset = button("Reset layout", "Put every piece back where the template has it");
   const done = button("Done", "Leave arrange mode (Esc)");
   done.addEventListener("click", () => actions.done());
   const buttons = doc.createElement("div");
   buttons.className = "al-arrange-buttons";
-  buttons.append(rotate, undo, reset, done);
+  buttons.append(rotate, undo, pickUp, reset, done);
 
   const confirm = doc.createElement("div");
   confirm.className = "al-arrange-confirm";
@@ -73,7 +77,7 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
   confirm.setAttribute("role", "alertdialog");
   confirm.setAttribute("aria-label", "Reset the layout");
   const question = doc.createElement("p");
-  question.textContent = "Put every piece back where the template has it? Your arrangement of this floor is lost.";
+  question.textContent = "Put every piece back where the template has it? Your arrangement of this floor is lost. Pieces you bought stay where they are.";
   const yes = button("Yes, reset", "Reset the layout");
   const no = button("Keep my layout", "Cancel");
   confirm.append(question, yes, no);
@@ -108,6 +112,7 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
       status.dataset["tone"] = view.tone;
       rotate.disabled = !view.canRotate;
       undo.disabled = !view.canUndo;
+      pickUp.disabled = !view.canPickUp;
       reset.disabled = view.busy;
       done.disabled = false;
       root.dataset["busy"] = String(view.busy);

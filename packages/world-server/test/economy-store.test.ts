@@ -190,3 +190,122 @@ describe("Economy purchases", () => {
     expect(savedStock()).toEqual({ fern: 1 });
   });
 });
+
+describe("Economy placed pieces", () => {
+  const inventory = () => join(dir, "inventory.json");
+  const onDisk = () => JSON.parse(readFileSync(inventory(), "utf8")) as { stock: Record<string, number>; placed: Record<string, { id: string; itemId: string }[]>; seq: number };
+  const make = (logs: string[] = []) => new Economy({ walletFile: file, inventoryFile: inventory(), config, now: () => 1000, onLog: (m) => logs.push(m) });
+  /** 100 Ecto: two fern and a cactus bought. */
+  const owner = () => {
+    const e = make();
+    for (let i = 0; i < 4; i++) e.grant("night_summary", `2026-11-${10 + i}`, 2000);
+    for (const id of ["fern", "fern", "cactus"]) expect(e.buy(id).ok).toBe(true);
+    return e;
+  };
+  const to = { x: 2, y: 1, dir: 4 as const };
+
+  it("a plan changes nothing until it is committed, then writes the file and the memory", () => {
+    const e = owner();
+    const plan = e.planPlace("alpha", "fern", to);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.piece).toEqual({ itemId: "bought_1", defId: "fern", x: 2, y: 1, dir: 4 });
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 2 }, { itemId: "cactus", count: 1 }]);
+    expect(e.placedFurni("alpha")).toEqual([]);
+    plan.commit();
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 1 }, { itemId: "cactus", count: 1 }]);
+    expect(e.placedFurni("alpha")).toEqual([plan.piece]);
+    expect(onDisk()).toMatchObject({ stock: { fern: 1, cactus: 1 }, seq: 1, placed: { alpha: [{ id: "bought_1", itemId: "fern" }] } });
+  });
+
+  it("refuses an item that is not in stock and a floor that is full", () => {
+    const e = owner();
+    expect(e.planPlace("alpha", "armchair", to)).toEqual({ ok: false, reason: "You do not have that item." });
+    expect(e.planPickUp("alpha", "bought_1")).toEqual({ ok: false, reason: "That piece is not one of yours." });
+    expect(e.planMove("alpha", "bought_1", to)).toEqual({ ok: false, reason: "That piece is not one of yours." });
+  });
+
+  it("a commit that cannot write throws and leaves the memory and the file as they were", () => {
+    const logs: string[] = [];
+    const e = make(logs);
+    for (let i = 0; i < 2; i++) e.grant("night_summary", `2026-11-${10 + i}`, 2000);
+    e.buy("fern");
+    const plan = e.planPlace("alpha", "fern", to);
+    if (!plan.ok) throw new Error(plan.reason);
+    rmSync(inventory());
+    mkdirSync(inventory()); // a folder where the file should be
+    expect(() => plan.commit()).toThrow("cannot write the inventory");
+    expect(e.placedFurni("alpha")).toEqual([]);
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 1 }]);
+    expect(logs.some((m) => m.includes("cannot write") && m.includes("inventory.json"))).toBe(true);
+  });
+
+  it("keeps the pieces and the numbering across a restart", () => {
+    const first = owner();
+    const a = first.planPlace("alpha", "fern", to);
+    if (!a.ok) throw new Error(a.reason);
+    a.commit();
+    const mv = first.planMove("alpha", "bought_1", { x: 5, y: 5, dir: 2 });
+    if (!mv.ok) throw new Error(mv.reason);
+    mv.commit();
+
+    const second = make();
+    expect(second.placedFurni("alpha")).toEqual([{ itemId: "bought_1", defId: "fern", x: 5, y: 5, dir: 2 }]);
+    const b = second.planPlace("alpha", "fern", to);
+    expect(b.ok && b.piece.itemId).toBe("bought_2");
+    const back = second.planPickUp("alpha", "bought_1");
+    if (!back.ok) throw new Error(back.reason);
+    back.commit();
+    expect(second.placedFurni("alpha")).toEqual([]);
+    expect(second.shop().stock).toEqual([{ itemId: "fern", count: 2 }, { itemId: "cactus", count: 1 }]);
+  });
+
+  it("gives back the pieces of the floors the engine no longer lists, and keeps the others", () => {
+    const e = owner();
+    for (const [project, item] of [["alpha", "fern"], ["beta", "fern"], ["beta", "cactus"]] as const) {
+      const p = e.planPlace(project, item, to);
+      if (!p.ok) throw new Error(p.reason);
+      p.commit();
+    }
+    expect(e.shop().stock).toEqual([]);
+    expect(e.returnAbsentFloors(new Set(["alpha"]))).toBe(true);
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 1 }, { itemId: "cactus", count: 1 }]);
+    expect(e.placedFurni("alpha")).toHaveLength(1);
+    expect(e.placedFurni("beta")).toEqual([]);
+    expect(e.returnAbsentFloors(new Set(["alpha"]))).toBe(false);
+    expect(onDisk().placed).toEqual({ alpha: [expect.objectContaining({ itemId: "fern" })] });
+  });
+
+  it("gives back the pieces the floor does not show, and a piece whose item left the catalogue", () => {
+    const e = owner();
+    for (let i = 0; i < 2; i++) {
+      const p = e.planPlace("alpha", "fern", { ...to, x: 2 + i });
+      if (!p.ok) throw new Error(p.reason);
+      p.commit();
+    }
+    expect(e.returnHiddenPieces("alpha", new Set(["bought_1", "bought_2"]))).toBe(false);
+    expect(e.returnHiddenPieces("alpha", new Set(["bought_2"]))).toBe(true);
+    expect(e.placedFurni("alpha").map((p) => p.itemId)).toEqual(["bought_2"]);
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 1 }, { itemId: "cactus", count: 1 }]);
+
+    // An item that is no longer sold is not drawn, and the floor then does not show it either.
+    const gone = new Economy({
+      walletFile: file,
+      inventoryFile: inventory(),
+      config,
+      catalogue: [{ id: "cactus", name: "Cactus", page: "plants", price: 12, defId: "cactus" }],
+      now: () => 1000,
+    });
+    expect(gone.placedFurni("alpha")).toEqual([]);
+    expect(gone.returnHiddenPieces("alpha", new Set())).toBe(true);
+    expect(onDisk().placed).toEqual({});
+  });
+
+  it("opens a file written before pieces could be placed", () => {
+    writeFileSync(inventory(), JSON.stringify({ version: 1, stock: { fern: 2 } }), "utf8");
+    const e = make();
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 2 }]);
+    expect(e.placedFurni("alpha")).toEqual([]);
+    const p = e.planPlace("alpha", "fern", to);
+    expect(p.ok && p.piece.itemId).toBe("bought_1");
+  });
+});

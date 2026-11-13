@@ -24,7 +24,6 @@ function loadRooms() {
 
 const hotelRooms = loadRooms();
 const layouts = new LayoutStore({ file: defaultLayoutsFile(), onLog: (m) => console.warn(m) });
-const hotel = new Hotel({ ...hotelRooms, clock: Date.now, layoutOf: (projectId) => layouts.get(projectId) });
 const port = Number(process.env["PORT"] ?? 8787);
 const host = process.env["HOST"] ?? "127.0.0.1";
 const allowedOrigins = parseAllowedOrigins(process.env["WORLD_ALLOWED_ORIGINS"]);
@@ -57,6 +56,14 @@ if (engineKind === "http" || process.env["AGENTLIFE_WALLET_FILE"]) {
     process.exit(1);
   }
 }
+
+// The floors are built from the template, the saved layout and the bought pieces the user placed.
+const hotel = new Hotel({
+  ...hotelRooms,
+  clock: Date.now,
+  layoutOf: (projectId) => layouts.get(projectId),
+  extrasOf: (projectId) => economy?.placedFurni(projectId) ?? [],
+});
 
 const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins, layouts, ...(economy ? { economy } : {}) });
 console.log(`world-server listening on ws://${host}:${gateway.port} (allowed origins: ${allowedOrigins.join(", ")})`);

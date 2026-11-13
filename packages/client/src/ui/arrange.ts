@@ -1,5 +1,5 @@
-import { FURNI_CATALOG, checkMove, footprintTiles, isPinned } from "@agentlife/shared";
-import type { Anchor, ClientMsg, PlacedFurni, Placement, RoomDef, Tile } from "@agentlife/shared";
+import { FURNI_CATALOG, checkMove, footprintTiles, isBoughtId, isPinned } from "@agentlife/shared";
+import type { Anchor, ClientMsg, PlacedFurni, Placement, RoomDef, ShopState, Tile } from "@agentlife/shared";
 import { inTextField } from "./view-mode.ts";
 
 /**
@@ -7,9 +7,21 @@ import { inTextField } from "./view-mode.ts";
  * This file is the whole behaviour and knows neither the DOM nor Pixi: pointer and key events come in, `furni_move`
  * and `furni_reset` messages go out, and `overlay()` / `view()` say what to draw. The rules are the shared `checkMove`,
  * so the colours on the floor agree with the server, which repeats the check (and also knows who is standing where).
+ *
+ * furni-shop, task 3: the same mode places bought furniture. The user takes an item out of the inventory tray
+ * (`carry`), moves it over the floor (a green or red preview, checked like a move) and drops it (`furni_place`). A bought
+ * piece on the floor can be moved like any other and picked up (`furni_pickup`); the pieces of the template cannot.
  */
 
 export type Tone = "info" | "ok" | "bad";
+
+/** An item of the inventory tray: bought and not placed. */
+export interface TrayItem {
+  itemId: string;
+  name: string;
+  defId: string;
+  count: number;
+}
 
 /** What the scene draws while arranging. */
 export interface ArrangeOverlay {
@@ -34,6 +46,12 @@ export interface ArrangeView {
   canRotate: boolean;
   /** A move is on its way to the server. */
   busy: boolean;
+  /** The selected piece is a bought one: it can be picked up. */
+  canPickUp: boolean;
+  /** Catalogue id of the item being carried from the tray, or null. */
+  carrying: string | null;
+  /** What the inventory tray lists (bought, not placed). */
+  tray: TrayItem[];
 }
 
 /** A key press while arranging. Arrows move one tile along the floor axes, R turns, Esc leaves, Ctrl+Z undoes. */
@@ -80,13 +98,28 @@ const FACING: Record<number, string> = { 0: "north", 2: "east", 4: "south", 6: "
 
 const HINT_NONE = "Click a piece to select it. Then drag it, or use the arrow keys. R turns it.";
 const HINT_PIECE = "Drag it, or use the arrow keys. R turns it.";
+const HINT_CARRY = "Move over the floor and click to place it. R turns it. Esc puts it back.";
+const HINT_BOUGHT = "Drag it, or use the arrow keys. R turns it. Pick up returns it to your inventory.";
+/** Room item id of the piece that is being carried, only used to run `checkMove` on a room that has it. */
+const CARRY_ID = "carry_preview";
 
 type Intent = { kind: "step"; dx: number; dy: number } | { kind: "rotate" };
 
 type Pending =
   | { mode: "move"; itemId: string; from: Placement; to: Placement }
   | { mode: "undo"; itemId: string; entry: UndoEntry; to: Placement }
+  | { mode: "place"; itemId: string; to: Placement }
+  | { mode: "pickup"; itemId: string }
   | { mode: "reset" };
+
+/** An item taken from the tray: where the pointer is (null before it has been over the floor) and which way it faces. */
+interface Carrying {
+  itemId: string;
+  defId: string;
+  name: string;
+  dir: Placement["dir"];
+  tile: Tile | null;
+}
 
 interface UndoEntry {
   itemId: string;
@@ -106,6 +139,8 @@ export class ArrangeModel {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private drag: { itemId: string; grabX: number; grabY: number; to: Placement } | null = null;
   private preview: { tiles: Tile[]; ok: boolean } | null = null;
+  private carrying: Carrying | null = null;
+  private shop: ShopState | null = null;
   private status = HINT_NONE;
   private tone: Tone = "info";
   private readonly listeners: (() => void)[] = [];
@@ -166,6 +201,7 @@ export class ArrangeModel {
     this.queue = [];
     this.pending = null;
     this.drag = null;
+    this.carrying = null;
     this.preview = null;
     this.say(HINT_NONE, "info");
   }
@@ -195,6 +231,7 @@ export class ArrangeModel {
   /** The room after the server's answer (`room_layout`). */
   onLayout(furni: PlacedFurni[], anchors: Anchor[]): void {
     if (!this.room) return;
+    const had = new Set(this.room.furni.map((p) => p.itemId));
     this.room = { ...this.room, furni, anchors };
     const pending = this.pending;
     this.settle();
@@ -203,6 +240,15 @@ export class ArrangeModel {
       this.say("Saved.", "ok");
     } else if (pending?.mode === "undo") {
       this.say("Undone.", "ok");
+    } else if (pending?.mode === "place") {
+      // The new piece is the one the floor did not have: select it, so the user can adjust it at once.
+      this.carrying = null;
+      this.selected = furni.find((p) => !had.has(p.itemId))?.itemId ?? null;
+      this.say("Placed.", "ok");
+    } else if (pending?.mode === "pickup") {
+      this.undoStack = this.undoStack.filter((u) => u.itemId !== pending.itemId);
+      this.selected = null;
+      this.say("Back in your inventory.", "ok");
     } else if (pending?.mode === "reset") {
       this.undoStack = [];
       this.selected = null;
@@ -220,7 +266,9 @@ export class ArrangeModel {
     this.settle();
     this.queue = [];
     if (pending?.mode === "undo") this.undoStack.push(pending.entry);
-    this.preview = pending && pending.mode !== "reset" ? { tiles: this.tilesAt(pending.itemId, pending.to), ok: false } : null;
+    if (pending?.mode === "place") this.preview = this.carryPreview(pending.to, false);
+    else if (pending && pending.mode !== "reset" && pending.mode !== "pickup") this.preview = { tiles: this.tilesAt(pending.itemId, pending.to), ok: false };
+    else this.preview = null;
     this.say(reason, "bad");
     this.changed();
   }
@@ -270,7 +318,7 @@ export class ArrangeModel {
     }
     this.selected = itemId;
     this.preview = null;
-    this.say(HINT_PIECE, "info");
+    this.say(isBoughtId(itemId) ? HINT_BOUGHT : HINT_PIECE, "info");
     this.changed();
     return true;
   }
@@ -281,12 +329,20 @@ export class ArrangeModel {
   pointerDown(itemId: string | null, tile: Tile): void {
     if (!this.active || this.pending) return;
     this.drag = null;
+    if (this.carrying) {
+      this.carryTo(tile);
+      return;
+    }
     if (!this.select(itemId)) return;
     const at = itemId === null ? undefined : this.placementOf(itemId);
     if (itemId !== null && at) this.drag = { itemId, grabX: tile.x - at.x, grabY: tile.y - at.y, to: at };
   }
 
   pointerMove(tile: Tile): void {
+    if (this.carrying && this.active) {
+      if (!this.pending) this.carryTo(tile);
+      return;
+    }
     const d = this.drag;
     if (!d || !this.active) return;
     const at = this.placementOf(d.itemId);
@@ -307,12 +363,154 @@ export class ArrangeModel {
   }
 
   pointerUp(): void {
+    if (this.carrying && this.active) {
+      if (!this.pending) this.drop();
+      return;
+    }
     const d = this.drag;
     this.drag = null;
     if (!d || !this.active) return;
     const at = this.placementOf(d.itemId);
     if (at && !sameSpot(d.to, at)) this.attempt(d.itemId, d.to);
     else this.changed();
+  }
+
+  /** The pointer left the canvas: a carried item has no place to land until it is over the floor again. */
+  pointerLeave(): void {
+    if (!this.carrying?.tile) return;
+    this.carrying.tile = null;
+    this.preview = null;
+    this.say(HINT_CARRY, "info");
+    this.changed();
+  }
+
+  // ---- placing bought furniture (furni-shop) ----
+
+  /** The shop as the server last sent it: the stock of the tray comes from it. */
+  onShop(shop: ShopState): void {
+    this.shop = shop;
+    if (this.carrying && this.stockOf(this.carrying.itemId) < 1) {
+      this.carrying = null;
+      this.preview = null;
+      this.say(HINT_NONE, "info");
+    }
+    this.changed();
+  }
+
+  private stockOf(itemId: string): number {
+    return this.shop?.stock.find((s) => s.itemId === itemId)?.count ?? 0;
+  }
+
+  /** The items the user owns and has not placed, in catalogue order. */
+  tray(): TrayItem[] {
+    const shop = this.shop;
+    if (!shop) return [];
+    return shop.stock.flatMap((s) => {
+      const item = shop.items.find((i) => i.id === s.itemId);
+      return item && FURNI_CATALOG[item.defId] ? [{ itemId: item.id, name: item.name, defId: item.defId, count: s.count }] : [];
+    });
+  }
+
+  /** Takes an item out of the tray. Pressing the same item again puts it back. */
+  carry(itemId: string): boolean {
+    if (!this.active || this.pending) return false;
+    if (this.carrying?.itemId === itemId) {
+      this.cancelCarry();
+      return false;
+    }
+    const item = this.shop?.items.find((i) => i.id === itemId);
+    if (!item || !FURNI_CATALOG[item.defId] || this.stockOf(itemId) < 1) return false;
+    this.drag = null;
+    this.selected = null;
+    this.queue = [];
+    this.preview = null;
+    this.carrying = { itemId, defId: item.defId, name: item.name, dir: 4, tile: null };
+    this.say(HINT_CARRY, "info");
+    this.changed();
+    return true;
+  }
+
+  /** The carried item goes back to the tray. */
+  cancelCarry(): void {
+    if (!this.carrying) return;
+    this.carrying = null;
+    this.preview = null;
+    this.say(HINT_NONE, "info");
+    this.changed();
+  }
+
+  /** Esc: first put down what is carried, then leave arrange mode. */
+  escape(): void {
+    if (this.carrying) this.cancelCarry();
+    else this.leave();
+  }
+
+  private carryPlacement(): Placement | null {
+    const c = this.carrying;
+    return c?.tile ? { x: c.tile.x, y: c.tile.y, dir: c.dir } : null;
+  }
+
+  /** The room with the carried piece on it, and whether it may stand at `to` (the server repeats the check). */
+  private carryCheck(to: Placement): { ok: true } | { ok: false; reason: string } {
+    const c = this.carrying;
+    if (!c || !this.room) return { ok: false, reason: "That piece is not in this room." };
+    const piece: PlacedFurni = { itemId: CARRY_ID, defId: c.defId, ...to };
+    const r = checkMove({ ...this.room, furni: [...this.room.furni, piece] }, CARRY_ID, to);
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
+  }
+
+  private carryPreview(to: Placement, ok: boolean): { tiles: Tile[]; ok: boolean } | null {
+    const def = this.carrying ? FURNI_CATALOG[this.carrying.defId] : undefined;
+    if (!this.carrying || !def) return null;
+    return { tiles: footprintTiles({ itemId: CARRY_ID, defId: this.carrying.defId, ...to }, def), ok };
+  }
+
+  /** The pointer is over `tile` while carrying: show where the piece would stand. */
+  private carryTo(tile: Tile): void {
+    if (!this.carrying) return;
+    this.carrying.tile = { x: tile.x, y: tile.y };
+    const to = this.carryPlacement()!;
+    const result = this.carryCheck(to);
+    this.preview = this.carryPreview(to, result.ok);
+    if (result.ok) this.say("Click to place it here.", "ok");
+    else this.say(result.reason, "bad");
+    this.changed();
+  }
+
+  /** Asks the server to place the carried item where the preview is, when the check here passes. */
+  private drop(): void {
+    const c = this.carrying;
+    const to = this.carryPlacement();
+    if (!c || !to) return;
+    const result = this.carryCheck(to);
+    if (!result.ok) {
+      this.preview = this.carryPreview(to, false);
+      this.say(result.reason, "bad");
+      this.changed();
+      return;
+    }
+    this.preview = this.carryPreview(to, true);
+    this.say("Placing…", "info");
+    this.awaitAnswer({ mode: "place", itemId: c.itemId, to });
+    this.send({ type: "furni_place", itemId: c.itemId, ...to });
+    this.changed();
+  }
+
+  /** The selected piece must be a bought one. The pieces of the template stay on the floor. */
+  get canPickUp(): boolean {
+    return this.active && this.selected !== null && isBoughtId(this.selected) && !this.pending && !this.carrying;
+  }
+
+  /** Takes the selected bought piece back into the inventory. */
+  pickUp(): void {
+    if (!this.canPickUp || this.selected === null) return;
+    const itemId = this.selected;
+    this.queue = [];
+    this.preview = null;
+    this.say("Picking up…", "info");
+    this.awaitAnswer({ mode: "pickup", itemId });
+    this.send({ type: "furni_pickup", itemId });
+    this.changed();
   }
 
   // ---- moving ----
@@ -348,8 +546,14 @@ export class ArrangeModel {
     this.enqueue({ kind: "step", dx, dy });
   }
 
-  /** Turn the selected piece a quarter turn (the next turn that fits, when one does not). */
+  /** Turn the selected piece a quarter turn (the next turn that fits, when one does not). A carried item turns before it is placed. */
   rotate(): void {
+    if (this.carrying) {
+      this.carrying.dir = ((this.carrying.dir + 2) % 8) as Placement["dir"];
+      if (this.carrying.tile) this.carryTo(this.carrying.tile);
+      else this.changed();
+      return;
+    }
     this.enqueue({ kind: "rotate" });
   }
 
@@ -399,6 +603,7 @@ export class ArrangeModel {
   undo(): void {
     if (!this.canUndo) return;
     const entry = this.undoStack.pop()!;
+    this.carrying = null;
     this.selected = entry.itemId;
     this.queue = [];
     this.preview = null;
@@ -412,6 +617,7 @@ export class ArrangeModel {
   resetLayout(): void {
     if (!this.active || this.pending) return;
     this.queue = [];
+    this.carrying = null;
     this.preview = null;
     this.say("Resetting…", "info");
     this.awaitAnswer({ mode: "reset" });
@@ -422,17 +628,21 @@ export class ArrangeModel {
   // ---- what to show ----
 
   view(): ArrangeView {
+    const c = this.carrying;
     const p = this.selected === null ? undefined : this.piece(this.selected);
     const def = p ? FURNI_CATALOG[p.defId] : undefined;
     return {
       active: this.active,
-      piece: def ? def.name : null,
-      where: p ? `tile ${p.x}, ${p.y}, facing ${FACING[p.dir] ?? "south"}` : null,
+      piece: c ? c.name : def ? def.name : null,
+      where: c ? (c.tile ? `tile ${c.tile.x}, ${c.tile.y}, facing ${FACING[c.dir] ?? "south"}` : `facing ${FACING[c.dir] ?? "south"}`) : p ? `tile ${p.x}, ${p.y}, facing ${FACING[p.dir] ?? "south"}` : null,
       status: this.status,
       tone: this.tone,
       canUndo: this.canUndo,
-      canRotate: this.active && p !== undefined && !this.pending,
+      canRotate: this.active && (c !== null || p !== undefined) && !this.pending,
       busy: this.pending !== null,
+      canPickUp: this.canPickUp,
+      carrying: c ? c.itemId : null,
+      tray: this.tray(),
     };
   }
 

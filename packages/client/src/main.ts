@@ -24,6 +24,7 @@ import type { ViewMode } from "./ui/view-mode.ts";
 import { createGuide } from "./ui/guide.ts";
 import { ArrangeModel, arrangeKey } from "./ui/arrange.ts";
 import { createArrangeBar } from "./ui/arrange-bar.ts";
+import { createArrangeTray } from "./ui/arrange-tray.ts";
 import { MailboxState } from "./ui/mailbox-state.ts";
 import { createTerminal } from "./ui/terminal.ts";
 import { createTheme } from "./ui/theme.ts";
@@ -105,6 +106,8 @@ if (DEMO_BUILD || mode === "demo") {
   transport = live;
 }
 const sprites = new ProceduralSprites(app.renderer);
+/** Pictures of furniture for the shop panel and the inventory tray: the room's own sprites. */
+const furniPreview = createFurniPreviews(sprites, app.renderer);
 
 // ---- floors: where the user is, the floor list, the elevator and the remembered floor ----
 
@@ -152,7 +155,8 @@ const hud = createHud(
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   // A refused move is explained in the arrange bar, with the red tiles; a toast on top would say it twice.
   onError: (code, message) => {
-    if (code !== "layout_error") hud.toast(code === "no_path" ? "Can't get there." : message);
+    // The inventory tray asks for the shop too; a closed shop is already said by the empty tray.
+    if (code !== "layout_error" && !(code === "shop_error" && arranging)) hud.toast(code === "no_path" ? "Can't get there." : message);
   },
   tooltip: createTooltip(stageEl),
   onZoomChange: (z) => hud.setZoomLabel(z),
@@ -194,7 +198,7 @@ const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl
   onReportOpened: (id) => void mailbox.markRead(id),
   goTo,
   hrThinking: () => world.setHrThinking(true),
-  shopPreview: createFurniPreviews(sprites, app.renderer),
+  shopPreview: furniPreview,
   ...(replay
     ? {
         lockedGoal: replay.recordedGoal,
@@ -283,9 +287,11 @@ const arrange = new ArrangeModel((msg) => transport.send(msg));
 const arrangeBar = createArrangeBar(document, stageEl, {
   rotate: () => arrange.rotate(),
   undo: () => arrange.undo(),
+  pickUp: () => arrange.pickUp(),
   reset: () => arrange.resetLayout(),
   done: () => arrange.leave(),
 });
+const arrangeTray = createArrangeTray(document, stageEl, { carry: (itemId) => arrange.carry(itemId) }, { preview: furniPreview });
 /** Whether the scene and the panels were last told that the user is arranging. */
 let arranging = false;
 
@@ -293,6 +299,7 @@ let arranging = false;
 function syncArrange(): void {
   const state = arrange.view();
   arrangeBar.update(state);
+  arrangeTray.update(state);
   world.showArrange(arrange.overlay());
   // Only the live hotel can arrange; the recorded demo has no world-server to save a layout.
   hud.setArrange(live !== undefined && arrange.available, state.active);
@@ -300,7 +307,9 @@ function syncArrange(): void {
   arranging = state.active;
   panels.lock(arranging);
   world.setArrangeInput(
-    arranging ? { down: (itemId, tile) => arrange.pointerDown(itemId, tile), move: (tile) => arrange.pointerMove(tile), up: () => arrange.pointerUp() } : null,
+    arranging
+      ? { down: (itemId, tile) => arrange.pointerDown(itemId, tile), move: (tile) => arrange.pointerMove(tile), up: () => arrange.pointerUp(), leave: () => arrange.pointerLeave() }
+      : null,
   );
 }
 arrange.subscribe(syncArrange);
@@ -316,6 +325,8 @@ function toggleArrange(): void {
   }
   if (view === "list") setView("hotel");
   arrange.enter();
+  // The inventory tray lists what the user bought: ask for the stock (the answer is the same `shop` message the panel uses).
+  transport.send({ type: "shop_state" });
 }
 
 window.addEventListener("keydown", (e) => {
@@ -326,7 +337,7 @@ window.addEventListener("keydown", (e) => {
   if (key.kind === "step") arrange.step(key.dx, key.dy);
   else if (key.kind === "rotate") arrange.rotate();
   else if (key.kind === "undo") arrange.undo();
-  else arrange.leave();
+  else arrange.escape();
 });
 // The remembered view is applied only now: switching to the list leaves arrange mode, which must exist by then.
 setView(view);
@@ -424,6 +435,8 @@ transport.onMessage((msg) => {
     arrange.onRefused(msg.message);
   } else if (msg.type === "room_layout") {
     if (msg.roomId === currentRoom) arrange.onLayout(msg.furni, msg.anchors);
+  } else if (msg.type === "shop") {
+    arrange.onShop(msg.state);
   } else if (msg.type === "error" && msg.code === "bad_message") {
     // A refused floor change (not at the elevator, floor gone): the doors open again on the same floor.
     transition.abort();

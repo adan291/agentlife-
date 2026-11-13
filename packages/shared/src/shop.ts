@@ -66,10 +66,50 @@ export function checkCatalogue(items: readonly CatalogueItem[], catalog: Readonl
 
 // ---- data/inventory.json ----
 
-export const StockSchema = z.record(CatalogueItemIdSchema, z.number().int().min(1).max(INVENTORY_MAX));
+/**
+ * Most of one item in stock. `INVENTORY_MAX` limits purchases only: pieces that come back (picked up, or from a removed
+ * project) always fit, so a stock may pass 200 without the file becoming invalid.
+ */
+export const STOCK_COUNT_MAX = 100_000;
+export const StockSchema = z.record(CatalogueItemIdSchema, z.number().int().min(1).max(STOCK_COUNT_MAX));
 export type Stock = z.infer<typeof StockSchema>;
 
-export const InventoryFileSchema = z.object({ version: z.literal(1), stock: StockSchema });
+/** Placed bought pieces on one project floor, at most. */
+export const PLACED_PER_FLOOR_MAX = 60;
+/** The room item id of a bought piece starts with this (a template piece never does). */
+export const BOUGHT_PREFIX = "bought_";
+
+/** True for the id of a bought piece (`bought_<n>`). The server decides by what it stored; the client uses this to label the UI. */
+export function isBoughtId(itemId: string): boolean {
+  return /^bought_[0-9]{1,9}$/.test(itemId);
+}
+
+const PlacedDirSchema = z.union([z.literal(0), z.literal(2), z.literal(4), z.literal(6)]);
+
+/** A bought piece standing on a project floor. `id` is its room item id, `itemId` the catalogue item it came from. */
+export const PlacedPieceSchema = z.object({
+  id: z.string().regex(/^bought_[0-9]{1,9}$/),
+  itemId: CatalogueItemIdSchema,
+  x: z.number().int().min(-100).max(100),
+  y: z.number().int().min(-100).max(100),
+  dir: PlacedDirSchema,
+});
+export type PlacedPiece = z.infer<typeof PlacedPieceSchema>;
+
+/** Placed pieces of each project floor. */
+export const PlacedMapSchema = z.record(z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/), z.array(PlacedPieceSchema).min(1).max(PLACED_PER_FLOOR_MAX));
+export type PlacedMap = z.infer<typeof PlacedMapSchema>;
+
+/**
+ * `data/inventory.json`. `placed` and `seq` have defaults, so the file written before pieces could be placed stays valid.
+ * `seq` is the number of the last bought piece placed: ids are never reused.
+ */
+export const InventoryFileSchema = z.object({
+  version: z.literal(1),
+  stock: StockSchema,
+  placed: PlacedMapSchema.default({}),
+  seq: z.number().int().min(0).max(999_999_999).default(0),
+});
 export type InventoryFile = z.infer<typeof InventoryFileSchema>;
 
 export function stockCount(stock: Stock): number {
@@ -109,7 +149,7 @@ export function applyPurchase(wallet: Wallet, stock: Stock, item: CatalogueItem 
 
 // ---- what the server tells the client ----
 
-export const StockEntrySchema = z.object({ itemId: CatalogueItemIdSchema, count: z.number().int().min(1).max(INVENTORY_MAX) });
+export const StockEntrySchema = z.object({ itemId: CatalogueItemIdSchema, count: z.number().int().min(1).max(STOCK_COUNT_MAX) });
 export type StockEntry = z.infer<typeof StockEntrySchema>;
 
 /** The whole shop as the panel needs it. Sent when it opens, on `shop_state` and after a purchase. */

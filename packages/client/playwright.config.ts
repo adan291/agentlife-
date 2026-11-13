@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 /** Ports are not the dev defaults (5173, 8787), so a running dev session does not collide with the test. */
 const WORLD_PORT = 8795;
@@ -11,6 +12,20 @@ const LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-layouts.json");
 /** The shop tests earn and spend Ecto; the wallet and the inventory are scratch files too, never `data/`. */
 const WALLET_FILE = join(tmpdir(), "agentlife-e2e-wallet.json");
 const INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-inventory.json");
+
+/**
+ * The fake engine's jobs earn nothing, so the tests that buy furniture start from a scratch wallet with Ecto in it and an
+ * empty inventory. Written when the runner loads this file, before the web servers start (a worker that loads it again
+ * must not rewrite files under a running world-server).
+ */
+if (process.env["TEST_WORKER_INDEX"] === undefined) {
+  const seed = (file: string, value: unknown): void => {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(value)}\n`, "utf8");
+  };
+  seed(WALLET_FILE, { version: 1, since: 0, balance: 500, ledger: [], granted: [] });
+  seed(INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
+}
 
 /**
  * Layout smoke test (`pnpm --filter @agentlife/client e2e`). Not part of `pnpm check`: it needs a browser.

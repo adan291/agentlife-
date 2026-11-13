@@ -38,6 +38,7 @@ import type {
   JobState,
   MorningSummary,
   NightState,
+  Placement,
   Project,
   RegisterProjectBody,
   Report,
@@ -91,7 +92,10 @@ export interface GatewayOptions {
    * The user's Ecto (furni-shop). Without it the hotel has no economy: no `wallet` message is sent and nothing is
    * granted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
    */
-  economy?: Pick<Economy, "balance" | "grant" | "shop" | "buy">;
+  economy?: Pick<
+    Economy,
+    "balance" | "grant" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
+  >;
 }
 
 export interface Gateway {
@@ -318,6 +322,16 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
     const wanted = new Set(projects.map((p) => projectRoomId(p.id)));
     for (const p of projects) hotel.addProject({ id: p.id, name: p.name });
+    // Bought pieces of a removed project come back to the inventory, also those of a project that was removed while the
+    // world-server was off. A piece the floor could not take (the template changed) comes back too.
+    let stockChanged = false;
+    if (economy) {
+      stockChanged = economy.returnAbsentFloors(new Set(projects.map((p) => p.id)));
+      for (const p of projects) {
+        const visible = new Set(hotel.sim(projectRoomId(p.id))?.room.furni.map((f) => f.itemId));
+        if (economy.returnHiddenPieces(p.id, visible)) stockChanged = true;
+      }
+    }
     for (const info of hotel.floors()) {
       if (info.kind !== "project" || wanted.has(info.roomId)) continue;
       const moved = hotel.removeProject(projectIdOfRoom(info.roomId)!);
@@ -326,6 +340,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         for (const m of moved) if (m.userId === current.userId) sendWelcome(current.ws, LOBBY_ROOM, m.welcome);
       }
     }
+    if (stockChanged && economy && current) send(current.ws, { type: "shop", state: economy.shop() });
     pushFloors();
   };
 
@@ -1234,17 +1249,46 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   /**
    * Arrange mode: one change of the furniture of the user's project floor. The rules are the shared ones (`checkMove`);
    * a refusal names the rule and changes nothing. The new pieces and anchors go to the user after the walks already
-   * queued, so the avatars do not jump.
+   * queued, so the avatars do not jump. `stock` also sends the shop (the inventory tray shows the stock).
    */
-  const arrange = (ws: WebSocket, change: (roomId: string, save: (layout: Layout) => void) => ArrangeResult): void => {
+  const arrange = (ws: WebSocket, change: (roomId: string, projectId: string, save: (layout: Layout) => void) => ArrangeResult, stock = false): void => {
     const roomId = userRoom();
     const projectId = roomId === undefined ? undefined : projectIdOfRoom(roomId);
     if (roomId === undefined || projectId === undefined) return sendError(ws, "layout_error", "Only project floors can be arranged.");
-    const result = change(roomId, (layout) => options.layouts?.set(projectId, layout));
+    const result = change(roomId, projectId, (layout) => options.layouts?.set(projectId, layout));
     if (!result.ok) return sendError(ws, "layout_error", result.reason);
     const { furni, anchors } = result.room;
-    enqueue(() => toUser(roomId, { type: "room_layout", roomId, furni, anchors }));
+    enqueue(() => {
+      toUser(roomId, { type: "room_layout", roomId, furni, anchors });
+      if (stock && economy) toUser(roomId, { type: "shop", state: economy.shop() });
+    });
   };
+
+  const NO_SHOP_TO_PLACE: ArrangeResult = { ok: false, code: "no_stock", reason: "You have nothing to place: the shop is closed." };
+
+  /** A move of a piece. A bought piece is kept in the inventory file, a piece of the template in the layout file. */
+  const moveItem = (roomId: string, projectId: string, itemId: string, to: Placement, save: (layout: Layout) => void): ArrangeResult => {
+    if (!hotel.isExtra(roomId, itemId)) return hotel.moveFurniture(roomId, itemId, to, save);
+    const plan = economy?.planMove(projectId, itemId, to);
+    if (!plan?.ok) return { ok: false, code: "unknown_item", reason: plan?.reason ?? "That piece is not in this room." };
+    return hotel.moveFurniture(roomId, itemId, to, () => plan.commit());
+  };
+
+  /** Stands a bought item on the floor. The inventory file is written only after the hotel accepted the spot. */
+  const placeItem = (roomId: string, projectId: string, itemId: string, to: Placement): ArrangeResult => {
+    if (!economy) return NO_SHOP_TO_PLACE;
+    const plan = economy.planPlace(projectId, itemId, to);
+    if (!plan.ok) return { ok: false, code: "no_stock", reason: plan.reason };
+    return hotel.placeFurniture(roomId, plan.piece, () => plan.commit());
+  };
+
+  /** Takes a bought piece back into the inventory. Pieces of the template are refused by the hotel. */
+  const pickUpItem = (roomId: string, projectId: string, itemId: string): ArrangeResult =>
+    hotel.pickUpFurniture(roomId, itemId, () => {
+      const plan = economy?.planPickUp(projectId, itemId);
+      if (!plan?.ok) throw new Error(plan?.reason ?? "not one of yours");
+      plan.commit();
+    });
 
   const watchOverview = (on: boolean) => {
     if (!current) return;
@@ -1376,9 +1420,15 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void pipelineAct(ws, { reset: true });
       } else if (msg.type === "furni_move") {
         const { itemId, x, y, dir } = msg;
-        arrange(ws, (roomId, save) => hotel.moveFurniture(roomId, itemId, { x, y, dir }, save));
+        arrange(ws, (roomId, projectId, save) => moveItem(roomId, projectId, itemId, { x, y, dir }, save));
+      } else if (msg.type === "furni_place") {
+        const { itemId, x, y, dir } = msg;
+        arrange(ws, (roomId, projectId) => placeItem(roomId, projectId, itemId, { x, y, dir }), true);
+      } else if (msg.type === "furni_pickup") {
+        const { itemId } = msg;
+        arrange(ws, (roomId, projectId) => pickUpItem(roomId, projectId, itemId), true);
       } else if (msg.type === "furni_reset") {
-        arrange(ws, (roomId, save) => hotel.resetLayout(roomId, save));
+        arrange(ws, (roomId, _projectId, save) => hotel.resetLayout(roomId, save));
       } else if (msg.type === "shop_state") {
         sendShop(ws);
       } else if (msg.type === "shop_buy") {

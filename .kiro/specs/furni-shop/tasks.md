@@ -8,6 +8,6 @@
   - 24+ items with own art in the client renderer and `FURNI_CATALOG`; lobby `shop_counter` and Shop panel with pages and previews; buy message; inventory store; tests
   - _Requirements: 2.1, 2.2, 2.3, 4.2_
 
-- [ ] 3. Placing bought furniture
+- [x] 3. Placing bought furniture
   - Inventory tray in arrange mode, place and pick up through the furni-move checks, template furniture protected, removed project returns items; Playwright test
   - _Requirements: 3.1, 3.2, 3.3, 4.2, 4.3_

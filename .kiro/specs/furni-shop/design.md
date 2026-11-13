@@ -1,6 +1,6 @@
 # Design Document: furni-shop
 
-Pure rules live in `@agentlife/shared` (`economy.ts`). The world-server owns the files and decides what is granted (`economy-store.ts`, `grants.ts`, gateway). The client only shows the balance and the shop and sends two messages. The agent-engine does not change. Tasks 1 and 2 are described here; task 3 (placing) is sketched at the end so the files written now do not have to change.
+Pure rules live in `@agentlife/shared` (`economy.ts`). The world-server owns the files and decides what is granted (`economy-store.ts`, `grants.ts`, gateway). The client only shows the balance and the shop and sends two messages. The agent-engine does not change. Tasks 1 and 2 are described first; task 3 (placing) is at the end.
 
 ## Vocabulary
 - **Ecto**: the currency. One balance per user, whole numbers, never negative.
@@ -55,8 +55,8 @@ Amounts live in `config/economy.json` (`{ "version": 1, "grants": { "<reason>": 
 ```json
 { "version": 1, "stock": { "armchair": 2 } }
 ```
-- Stock counts items not placed. Task 3 adds a `placed` map (project id to placed pieces) with a schema default, so a file written now stays valid.
-- The cap is 200 items in stock (`INVENTORY_MAX`). A purchase that would make it 201 is refused.
+- Stock counts items not placed. Task 3 added `placed` (project id to placed pieces) and `seq` with schema defaults, so a file written by task 2 stays valid (see Task 3 below).
+- The cap is 200 items in stock (`INVENTORY_MAX`) for purchases: a purchase that would make it 201 is refused. Pieces that come back from a floor may take the stock above it.
 
 ## Purchase (`applyPurchase`, requirement 2.3)
 Checks in this order; the first that fails answers and changes nothing:
@@ -84,11 +84,48 @@ Then the balance goes down by the price, a ledger entry (`purchase`, negative) i
 - `ui/shop.ts`: pages as tabs, items as cards (preview, name, size, price, Buy), balance and stock count in the header, the refusal text in an alert. The buy button of an item the user cannot afford is disabled with the missing amount in its title. In the recorded demo the panel says the shop is off.
 - `PanelState` keeps `shop`, `shopError` and `balance`; `wallet` and `shop` update the balance.
 
-## Task 3 (not built now)
-Placing: the Inventory tray in arrange mode lists the stock; dragging one onto a floor sends a placement that the server checks with `checkMove`'s rules and records in `placed`; picking up returns it; removing a project returns its pieces; template pieces are never sold or picked up. The wire shape is decided in task 3's own session and recorded here.
+## Task 3: placing bought furniture
+Where each thing lives: a bought piece is a record in `data/inventory.json` (the world-server's file, decided in the server), the template and its layout (`data/layouts.json`) do not know it. The hotel builds a floor from three things: the template, the saved layout of template pieces, and the bought pieces (`HotelOptions.extrasOf`). `roomForProject` and `addExtras` put each bought piece on through `checkMove`, in the order they were placed; a piece that no longer fits (the template or the catalogue changed) is left out, and the gateway gives it back to the stock (`returnHiddenPieces`, after every look at the engine's projects).
+
+### Inventory file, widened
+```json
+{ "version": 1, "stock": { "fern": 1 }, "seq": 3,
+  "placed": { "haunted-todo": [ { "id": "bought_3", "itemId": "fern", "x": 2, "y": 1, "dir": 4 } ] } }
+```
+- `placed` (project id to pieces, at most 60 a floor, `PLACED_PER_FLOOR_MAX`) and `seq` have schema defaults, so the file written by task 2 stays valid.
+- `id` is the room item id, `bought_<n>`, with `n` from `seq`, which only goes up: an id is never reused, so a stale undo entry or a reload cannot point at another piece. `isBoughtId` is how the client labels a piece; the server decides by what it stored and by what the template has (`Hotel.isExtra`: on the floor and not in the template's own pieces).
+- Changed from task 2: the cap of 200 items (`INVENTORY_MAX`) limits **purchases** only. Pieces that come back (picked up, or from a removed project) always fit, so the per-item count of the file is bounded by `STOCK_COUNT_MAX` (100 000) and not by 200. Otherwise `buy 200, place 1, buy 1, pick up` would write a file that fails its own schema and is moved aside at the next start.
+- `inventory.ts` (shared, pure): `placeFromStock`, `pickUpToStock`, `movePlaced`, `returnFloors`, `returnHidden`, `furniOf` (record to `PlacedFurni`; undefined when the item left the catalogue). Each returns a new inventory.
+
+### Two-step changes (`Economy`)
+`planPlace`, `planPickUp` and `planMove` work out the new inventory and return `commit()`. The hotel runs its own checks first and calls `commit` as its `save` step, between the checks and the change of the room (the same slot the layout store uses). `commit` writes the file, then updates memory; if the write fails it throws, the hotel answers "The layout could not be saved." and nothing changed. So a floor and the inventory file never disagree.
+
+### Hotel
+- `placeFurniture(roomId, piece, save)`: the piece is added to a copy of the room and run through `checkMove` (floor, wall, overlap, standing spots, people, paths), so the refusals and their texts are the ones of a move. Refused for the lobby and HR office (`not_editable`), a piece that is already there (`duplicate`) and a definition with an interaction or the agent desk (`unknown_item`).
+- `pickUpFurniture(roomId, itemId, save)`: only a piece that is not in the template. A template piece answers `not_removable`: "That piece belongs to the room. You can move it, not pick it up." Nothing needs a path check, taking a piece away cannot cut a path.
+- `moveFurniture` is unchanged for the checks. A bought piece's move is saved to the inventory (`planMove`), a template piece's to the layout store.
+- `resetLayout` puts the template pieces back and leaves the bought ones. If a bought piece stands where a template piece goes back to, the reset is refused: "A piece you placed is in the way. Pick it up first." (a reset that returned the user's furniture would lose it silently, or overflow the stock).
+- `removeProject` is unchanged. Requirement 3.3 is done in the gateway: every look at the engine's project list (`syncProjects`) gives back the pieces of floors the engine no longer lists (`returnAbsentFloors`). That also covers a project removed while the world-server was off, which never had a floor to remove.
+
+### Messages
+- Client to server: `furni_place { itemId, x, y, dir }` (`itemId` is the catalogue id, the same pattern as `shop_buy`) and `furni_pickup { itemId }` (the room item id). `furni_move` also moves bought pieces.
+- Server to client: the same `room_layout` as for a move, then `shop` (the new stock, for the tray), both scoped to the user's floor. A refusal is `error` `layout_error` with the reason, as for a move: "You do not have that item.", "This floor is full (60 placed pieces).", "You have nothing to place: the shop is closed.", the rule texts of `checkMove`, "That piece is not in this room.".
+- `shop_state` works on every floor (task 2), and the client sends it when arrange mode starts.
+
+### Client
+- `ArrangeModel` carries the new behaviour. `onShop` gives it the stock, `tray()` lists the items. `carry(itemId)` takes one out of the tray; while carrying, `pointerMove` / `pointerDown` run `checkMove` on the room plus a stand-in piece and show the green or red preview and the reason; a release over the floor (`pointerUp`) sends `furni_place` when the check passes; the answer selects the new piece. `R` turns the carried item, `Esc` puts it back first (`escape()`) and leaves arrange mode second. `pointerLeave` forgets the tile, so a click on a bar button after the pointer left the floor places nothing. `pickUp()` sends `furni_pickup` for the selected piece when it is a bought one (`canPickUp`) and drops that piece's undo entries.
+- Drag and click both work. The tray button takes the item on `pointerdown`, so the same press can be dragged onto the floor and released there. A press and release on the button leaves the item in hand: the next click on the floor places it. A key press on a button (`click` without a pointer) takes it too.
+- `ui/arrange-tray.ts` (the tray, right side of the stage under the Arrange button, items with a picture from `scene/previews.ts` and a count; an empty tray says to buy furniture at the shop counter in the lobby). The bar got a Pick up button (`ui/arrange-bar.ts`).
+- Out of scope, as planned: the tray does not sell, and the recorded demo has no tray (arrange mode is off there).
+
+### Tests
+- shared (`inventory.test.ts`): the inventory rules, the file format and its defaults, the two messages, the hotel's place, pick up, move and reset with the refusal table and failing saves, every piece of the template refused for pick up, a floor built with extras, and a fast-check property (any sequence of places, moves, pick-ups and project removals keeps every floor valid, shows exactly the placed pieces, never touches the template and never makes or loses an item).
+- world-server: `Economy` plans and commits, write failure, restart, returned floors and hidden pieces, a file from task 2 (`economy-store.test.ts`); gateway (`placing.test.ts`): place, refusals, wall and path, lobby and no economy, pick up and the template protected, move kept in the right file, reset, write failure, restart keeps pieces and numbering, a removed project, a project removed while the server was off, a piece the template no longer lets stand.
+- client: carry, preview, place, refusal, turn, Esc, pointer left, last item, pick up, undo dropped, tray and bar render (`arrange-shop.test.ts`).
+- Playwright (`e2e/furni-place.spec.ts`): buy a fern at the lobby counter, drag it from the tray onto the floor, reload, it is still there, pick it up; click-then-click placing, a taken tile in red, the template's plant cannot be picked up, Esc. `playwright.config.ts` seeds a scratch wallet with 500 Ecto and an empty inventory before the web servers start (not in workers).
 
 ## Tests (tasks 1 and 2)
 - shared: grant rules and the purchase table, a fast-check property (any sequence of grants, replays and purchases keeps `0 <= balance <= BALANCE_MAX`, stock at most 200, and a replayed grant list changes nothing), catalogue checks (the shipped file passes; each refusal), schemas.
 - world-server: `GrantTracker` (each reason, a failed job, a review that asks for changes, unknown kind), `Economy` (grants, idempotence, `since`, purchases, files survive a restart, a broken file is moved aside, write failure), gateway (wallet after welcome, toast data, shop panel data before `open_panel`, buy, refusals, no economy).
 - client: balance and toast texts, panel state, shop panel render, previews, recipes (the existing test), balance chip.
-- Playwright (`e2e/furni-shop.spec.ts`): the balance chip at 1366 and 375 px, and the shop counter (six tabs, 25 cards with a picture and a price, Escape closes it). The open page's tab is disabled, as in the HR and Library panels, so the test clicks only the other tabs. The flow buy, place, reload is task 3. This machine has no Playwright Chromium: run with `E2E_CHANNEL=msedge`.
+- Playwright (`e2e/furni-shop.spec.ts`): the balance chip at 1366 and 375 px, and the shop counter (six tabs, 25 cards with a picture and a price, Escape closes it). The open page's tab is disabled, as in the HR and Library panels, so the test clicks only the other tabs. The flow buy, place, reload is task 3 (`e2e/furni-place.spec.ts`). This machine has no Playwright Chromium: run with `E2E_CHANNEL=msedge`.

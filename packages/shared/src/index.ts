@@ -11,6 +11,7 @@ export * from "./room.ts";
 export * from "./layout.ts";
 export * from "./economy.ts";
 export * from "./shop.ts";
+export * from "./inventory.ts";
 export * from "./roles.ts";
 export * from "./job-kinds.ts";
 export * from "./events.ts";

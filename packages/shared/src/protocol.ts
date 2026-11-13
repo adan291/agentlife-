@@ -232,6 +232,13 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("furni_move"), itemId: z.string().min(1).max(100), ...PlacementSchema.shape }),
   /** Arrange mode: every piece back where the template has it. Answered like `furni_move`. */
   z.object({ type: z.literal("furni_reset") }),
+  /**
+   * Arrange mode: stand one bought item of the inventory on the floor you stand on (furni-shop). The same checks as a move.
+   * Answered with `room_layout` and `shop` (the stock), or `error` `layout_error` with the reason (nothing changes).
+   */
+  z.object({ type: z.literal("furni_place"), itemId: CatalogueItemIdSchema, ...PlacementSchema.shape }),
+  /** Arrange mode: take a bought piece off the floor back into the inventory. Answered like `furni_place`. The pieces of the template cannot be picked up. */
+  z.object({ type: z.literal("furni_pickup"), itemId: z.string().min(1).max(100) }),
   /** Shop: ask for the catalogue, the balance and the stock. Answered with `shop` (on any floor: the inventory tray needs it too). */
   z.object({ type: z.literal("shop_state") }),
   /** Shop counter (lobby): buy one item. Answered with `wallet` and `shop`, or `error` `shop_error` with the reason (nothing changes). */
