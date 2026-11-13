@@ -11,6 +11,8 @@ export * from "./room.ts";
 export * from "./layout.ts";
 export * from "./economy.ts";
 export * from "./progress.ts";
+export * from "./badges.ts";
+export * from "./progress-rules.ts";
 export * from "./shop.ts";
 export * from "./inventory.ts";
 export * from "./roles.ts";

@@ -7,9 +7,9 @@ import { agentTooltip, guestTooltip } from "../src/ui/tooltip.ts";
 import { LEVEL_UP_MS, levelUpFrame, starPoints } from "../src/scene/levelup-fx.ts";
 import { fakeDoc, findAll, textOf } from "./fake-dom.ts";
 
-const view = (over: Partial<EntityView> = {}): EntityView => ({ xp: 120, level: 1, base: 50, next: 150, jobs: 0, passed: 0, steps: 0, ...over });
+const view = (over: Partial<EntityView> = {}): EntityView => ({ xp: 120, level: 1, base: 50, next: 150, jobs: 0, passed: 0, steps: 0, badges: [], ...over });
 const member = (projectId: string, memberId: string, over: Partial<EntityView> = {}): MemberView => ({ projectId, memberId, ...view(over) });
-const progress = (members: MemberView[] = [], user: EntityView = view()): ProgressView => ({ user, members });
+const progress = (members: MemberView[] = [], user: EntityView = view()): ProgressView => ({ user, members, badgeDefs: [], quests: { day: "", items: [] } });
 
 describe("texts", () => {
   it("says the level and the XP to the next one", () => {
@@ -69,14 +69,25 @@ describe("ProgressModel", () => {
 
   it("forgets the seats of the old floor on a new welcome, and ignores a team view for another floor", () => {
     const m = new ProgressModel();
-    m.apply({ type: "progress", state: progress() });
+    m.apply({ type: "progress", state: progress([member("alpha", "ada", { level: 2 })]) });
     m.apply(welcome("project:alpha"));
     m.apply(teamView("project:alpha"));
-    expect(m.ofSlot("developer")).toBeDefined();
+    expect(m.ofSlot("developer")).toMatchObject({ projectId: "alpha", memberId: "ada", level: 2 });
     m.apply(welcome("project:beta"));
-    expect(m.ofSlot("developer")).toBeUndefined();
+    // Until the new floor says who sits where, a desk belongs to the role's default member.
+    expect(m.ofSlot("developer")).toMatchObject({ projectId: "beta", memberId: "developer", level: 0 });
+    expect(m.ofSlot("guest1")).toBeUndefined();
     expect(m.apply(teamView("project:alpha"))).toBe(false);
-    expect(m.ofSlot("developer")).toBeUndefined();
+    expect(m.ofSlot("developer")).toMatchObject({ projectId: "beta", memberId: "developer" });
+  });
+
+  it("uses the role name for a desk when there is no team view (the scripted engine has no HR office)", () => {
+    const m = new ProgressModel();
+    m.apply(welcome("project:alpha"));
+    m.apply({ type: "progress", state: progress([member("alpha", "developer", { level: 1, xp: 60 })]) });
+    expect(m.ofSlot("developer")).toMatchObject({ memberId: "developer", xp: 60 });
+    expect(m.ofSlot("builder")).toBeUndefined();
+    expect(m.ofSlot("guest1")).toBeUndefined();
   });
 
   it("says nothing changed for messages it does not use", () => {

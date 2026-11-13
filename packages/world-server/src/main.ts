@@ -6,7 +6,7 @@ import { startGateway } from "./gateway.ts";
 import { HttpEngineLink } from "./http-engine.ts";
 import { LayoutStore, defaultLayoutsFile } from "./layout-store.ts";
 import { ROOMS_DIR, loadHotelRooms } from "./load-room.ts";
-import { ProgressStore, defaultProgressFile, loadProgressConfig } from "./progress-store.ts";
+import { ProgressStore, defaultProgressFile, loadBadges, loadProgressConfig, loadQuests } from "./progress-store.ts";
 import { parseAllowedOrigins } from "./origin.ts";
 
 /** Load and validate the room files; exit with the invalid field path(s) when one is bad. */
@@ -63,7 +63,7 @@ if (engineKind === "http" || process.env["AGENTLIFE_WALLET_FILE"]) {
 let progress: ProgressStore | undefined;
 if (engineKind === "http" || process.env["AGENTLIFE_PROGRESS_FILE"]) {
   try {
-    progress = new ProgressStore({ file: defaultProgressFile(), config: loadProgressConfig(), onLog: (m) => console.warn(m) });
+    progress = new ProgressStore({ file: defaultProgressFile(), config: loadProgressConfig(), badges: loadBadges(), quests: loadQuests(), onLog: (m) => console.warn(m) });
   } catch (e) {
     console.error(`Cannot start the progress store: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);

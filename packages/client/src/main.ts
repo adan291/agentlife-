@@ -155,6 +155,7 @@ const hud = createHud(
   () => toggleView(),
   () => openPalette(),
   () => toggleArrange(),
+  () => panels.open("profile"),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   progressLines: (slot) => {
@@ -443,6 +444,8 @@ transport.onMessage((msg) => {
   } else if (msg.type === "level_up") {
     hud.toast(levelUpText(msg.who, msg.name, msg.level), GRANT_TOAST_MS);
     if (msg.slot) world.levelUp(msg.slot);
+  } else if (msg.type === "badge_earned") {
+    hud.toast(msg.who === "user" ? `Badge earned: ${msg.badge}` : `${msg.owner} earned a badge: ${msg.badge}`, GRANT_TOAST_MS);
   } else if (msg.type === "activity") {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {

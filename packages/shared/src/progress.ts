@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GrantRefSchema, keepLast } from "./economy.ts";
+import { GRANT_AMOUNT_MAX, GrantRefSchema, keepLast } from "./economy.ts";
 import { StaffIdSchema } from "./room.ts";
 
 /**
@@ -135,6 +135,28 @@ export function newEntity(): Entity {
   return { xp: 0, counts: {}, stepMs: 0, streak: 0, badges: {} };
 }
 
+export const QUESTS_PER_DAY = 3;
+/** Payouts that wait to be paid (a quest is paid at once; more than this means the wallet cannot be written for days). */
+export const PAYOUTS_MAX = 30;
+export const QuestIdSchema = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
+
+/** Today's quests, their progress and which are done (team-progress task 2). */
+export const QuestStateSchema = z.object({
+  /** The local day the numbers belong to. Empty before the first fact. */
+  day: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/),
+  progress: z.record(QuestIdSchema, z.number().int().min(0).max(100_000)),
+  done: z.array(QuestIdSchema).max(QUESTS_PER_DAY),
+});
+export type QuestState = z.infer<typeof QuestStateSchema>;
+
+/** Ecto a completed quest has earned and that is not in the wallet yet. */
+export const PayoutSchema = z.object({ ref: z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/), reward: z.number().int().min(1).max(GRANT_AMOUNT_MAX) });
+export type Payout = z.infer<typeof PayoutSchema>;
+
+export function newQuestState(): QuestState {
+  return { day: "", progress: {}, done: [] };
+}
+
 export const ProgressSchema = z.object({
   version: z.literal(1),
   /** Epoch ms when the file was created: older events count for nothing. */
@@ -142,11 +164,14 @@ export const ProgressSchema = z.object({
   user: EntitySchema,
   members: z.record(MemberKeySchema, EntitySchema).refine((m) => Object.keys(m).length <= MEMBERS_MAX, "too many members"),
   counted: z.array(z.string().min(3).max(140)).max(PROGRESS_KEYS_MAX),
+  /** Daily quests and the payouts they wait for. A file written before task 2 has neither. */
+  quests: QuestStateSchema.default({ day: "", progress: {}, done: [] }),
+  payouts: z.array(PayoutSchema).max(PAYOUTS_MAX).default([]),
 });
 export type Progress = z.infer<typeof ProgressSchema>;
 
 export function newProgress(since: number): Progress {
-  return { version: 1, since, user: newEntity(), members: {}, counted: [] };
+  return { version: 1, since, user: newEntity(), members: {}, counted: [], quests: newQuestState(), payouts: [] };
 }
 
 export type FactSkip = "counted" | "before_start" | "bad_ref";
@@ -256,6 +281,8 @@ export const EntityViewSchema = LevelViewSchema.extend({
   steps: z.number().int().nonnegative(),
   passRate: z.number().min(0).max(1).optional(),
   avgStepMs: z.number().int().nonnegative().optional(),
+  /** Badges earned, oldest first, with the epoch ms they were earned (team-progress task 2). */
+  badges: z.array(z.object({ id: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), at: z.number().int().nonnegative() })).max(60).default([]),
 });
 export type EntityView = z.infer<typeof EntityViewSchema>;
 
@@ -265,24 +292,18 @@ export const MemberViewSchema = EntityViewSchema.extend({
 });
 export type MemberView = z.infer<typeof MemberViewSchema>;
 
-export const ProgressViewSchema = z.object({
-  user: EntityViewSchema,
-  members: z.array(MemberViewSchema).max(MEMBERS_MAX),
-});
-export type ProgressView = z.infer<typeof ProgressViewSchema>;
-
 export function entityView(e: Entity): EntityView {
-  return { ...levelView(e.xp), ...statsOf(e) };
+  const badges = Object.entries(e.badges)
+    .map(([id, at]) => ({ id, at }))
+    .sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+  return { ...levelView(e.xp), ...statsOf(e), badges };
 }
 
-export function progressView(p: Progress): ProgressView {
-  return {
-    user: entityView(p.user),
-    members: Object.entries(p.members).map(([key, e]) => {
-      const i = key.indexOf("/");
-      return { projectId: key.slice(0, i), memberId: key.slice(i + 1), ...entityView(e) };
-    }),
-  };
+export function memberViews(p: Progress): MemberView[] {
+  return Object.entries(p.members).map(([key, e]) => {
+    const i = key.indexOf("/");
+    return { projectId: key.slice(0, i), memberId: key.slice(i + 1), ...entityView(e) };
+  });
 }
 
 /** A level-up for the client: the effect over the ghost (`slot`, when it stands on the user's floor) and the toast. */

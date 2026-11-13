@@ -38,6 +38,7 @@ import type {
   PipelineStep,
   JobKind,
   JobState,
+  LedgerEntry,
   MorningSummary,
   NightState,
   Placement,
@@ -100,13 +101,13 @@ export interface GatewayOptions {
    */
   economy?: Pick<
     Economy,
-    "balance" | "grant" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
+    "balance" | "grant" | "hasGranted" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
   >;
   /**
    * XP, levels and stats (team-progress). Without it the hotel has no progress: no `progress` message is sent and nothing
    * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
    */
-  progress?: Pick<ProgressStore, "record" | "view">;
+  progress?: Pick<ProgressStore, "record" | "view" | "payouts" | "settle">;
 }
 
 export interface Gateway {
@@ -241,10 +242,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
    * Counts a grant once (the wallet remembers each `reason` and `ref`) and, when it paid, tells the user who is connected
    * so the top bar and the toast follow. A grant while nobody is connected is in the balance the next time.
    */
-  const grantEcto = (reason: GrantReason, ref: string, ts: number): void => {
-    if (!economy) return;
-    const entry = economy.grant(reason, ref, ts);
+  const grantEcto = (reason: GrantReason, ref: string, ts: number, amount?: number): LedgerEntry | undefined => {
+    if (!economy) return undefined;
+    const entry = economy.grant(reason, ref, ts, amount);
     if (entry && current) send(current.ws, { type: "wallet", balance: economy.balance, grant: { amount: entry.amount, reason } });
+    return entry;
   };
 
   const SHOP_CLOSED = "The shop is closed: it needs the real engine.";
@@ -410,7 +412,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const lobby = floorOf(LOBBY_ROOM);
     const news: Report[] = [];
     // A night in which at least one job finished pays once, whenever the summary is first seen.
-    for (const s of list) if (s.counts.done >= 1) grantEcto("night_summary", s.nightKey, s.writtenAt);
+    for (const s of list) {
+      if (s.counts.done < 1) continue;
+      grantEcto("night_summary", s.nightKey, s.writtenAt);
+      await recordFact({ fact: { source: "night_summary", ref: s.nightKey, ts: s.writtenAt }, roles: [] });
+    }
     for (const s of [...list].reverse()) {
       const id = morningReportId(s.nightKey);
       const report: Report = { reportId: id, taskId: id, title: morningTitle(s.nightKey), markdown: s.markdown, ts: s.writtenAt, kind: "night" };
@@ -875,7 +881,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         case "accept": {
           // The proposal's job pays once, however many of its proposals are accepted. Read it before the engine moves it.
           let source: string | undefined;
-          if (economy) {
+          if (economy || progress) {
             try {
               source = (await memory.state(projectId)).proposals.find((p) => p.id === act.proposalId)?.sourceTaskId;
             } catch {
@@ -883,7 +889,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             }
           }
           await memory.accept(projectId, act.proposalId, { ...(act.kind ? { kind: act.kind } : {}), ...(act.text === undefined ? {} : { text: act.text }) });
-          if (source) grantEcto("memory_accepted", source, Date.now());
+          if (source) {
+            grantEcto("memory_accepted", source, Date.now());
+            await recordFact({ fact: { source: "memory_accepted", ref: source, ts: Date.now() }, roles: [] });
+          }
           break;
         }
         case "dismiss":
@@ -933,6 +942,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   // ---- XP, levels and stats (team-progress) ----
 
   const progressTracker = new ProgressTracker();
+  /** Night jobs the user scheduled since the gateway started: part of the unique ref of each fact. */
+  let nightScheduled = 0;
 
   /** Who holds a role's desk in a project: the member's id (the role name when nobody was hired) and name. Never throws. */
   const seatOfRole = async (projectId: string, role: ProjectRole): Promise<{ id: string; name: string }> => {
@@ -955,7 +966,24 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     return undefined;
   };
 
-  /** Counts a fact once, then tells the user: the new numbers, and a level-up for each level that went up. */
+  /**
+   * Pays the quests that were completed and whose Ecto the wallet does not have yet. The grant is the same idempotent call
+   * as every other (`quest_done`, keyed by the day and the quest), so a payout that was paid before a crash is only taken
+   * off the list. A payout that cannot be written stays and is tried again at the next fact and at start. Without an
+   * economy a quest completes and pays nothing.
+   */
+  const payQuests = (): void => {
+    if (!progress) return;
+    for (const payout of progress.payouts()) {
+      if (economy) {
+        const entry = grantEcto("quest_done", payout.ref, Date.now(), payout.reward);
+        if (!entry && !economy.hasGranted("quest_done", payout.ref)) continue;
+      }
+      progress.settle(payout.ref);
+    }
+  };
+
+  /** Counts a fact once, then tells the user: the new numbers, a level-up for each level that went up, and the badges earned. */
   const recordFact = async (tracked: TrackedFact): Promise<void> => {
     if (!progress) return;
     const { projectId } = tracked;
@@ -963,9 +991,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const named = new Map<string, { projectId: string; memberId: string; name: string }>();
     if (projectId !== undefined) for (const s of seats) named.set(memberKey(projectId, s.id), { projectId, memberId: s.id, name: s.name });
     const result = progress.record(tracked.fact, [...named.keys()]);
+    payQuests();
     if (!result.changed || !current) return;
     send(current.ws, { type: "progress", state: progress.view() });
     for (const up of result.levelUps) announceLevelUp(up, named);
+    for (const earned of result.badges) {
+      const owner = earned.who === "user" ? "You" : named.get(earned.who.member)?.name;
+      if (owner) send(current.ws, { type: "badge_earned", who: earned.who === "user" ? "user" : "member", owner, badge: earned.badge.name });
+    }
   };
 
   const announceLevelUp = (up: LevelUp, named: ReadonlyMap<string, { projectId: string; memberId: string; name: string }>): void => {
@@ -1173,6 +1206,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     enqueue(syncSummaries);
   }
 
+  // Quests completed before a restart whose Ecto was never written: pay them now.
+  if (progress) enqueue(() => payQuests());
   // ---- client commands ----
 
   const startJob = async (ws: WebSocket, repoId: string, goal: string, options?: StartJobOptions) => {
@@ -1461,7 +1496,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void sendNight(ws);
       } else if (msg.type === "night_add") {
         const job = msg.job;
-        void nightCommand(ws, async (link) => void (await link.addNightJob?.(job)));
+        void nightCommand(ws, async (link) => {
+          if (!link.addNightJob) return;
+          await link.addNightJob(job);
+          // The user planned a night job: a quest and a badge count it. The ref is unique, there is nothing to replay.
+          const ts = Date.now();
+          await recordFact({ fact: { source: "night_scheduled", ref: `night-${ts}-${++nightScheduled}`, ts }, roles: [] });
+        });
       } else if (msg.type === "night_remove") {
         const id = msg.id;
         void nightCommand(ws, (link) => link.removeNightJob?.(id) ?? Promise.resolve());

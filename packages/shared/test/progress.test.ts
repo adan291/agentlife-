@@ -207,7 +207,20 @@ describe("the file and what the client gets", () => {
   it("round-trips through the schema, and a new file is empty", () => {
     const p = applyFact(newProgress(SINCE), fact("job_passed", "t1"), [DEV], config).progress;
     expect(ProgressSchema.parse(JSON.parse(JSON.stringify(p)))).toEqual(p);
-    expect(ProgressSchema.parse(newProgress(5))).toEqual({ version: 1, since: 5, user: { xp: 0, counts: {}, stepMs: 0, streak: 0, badges: {} }, members: {}, counted: [] });
+    expect(ProgressSchema.parse(newProgress(5))).toEqual({
+      version: 1,
+      since: 5,
+      user: { xp: 0, counts: {}, stepMs: 0, streak: 0, badges: {} },
+      members: {},
+      counted: [],
+      quests: { day: "", progress: {}, done: [] },
+      payouts: [],
+    });
+  });
+
+  it("reads a file written by task 1, without quests and payouts", () => {
+    const old = { version: 1, since: 5, user: { xp: 0, counts: {}, stepMs: 0, streak: 0 }, members: {}, counted: [] };
+    expect(ProgressSchema.parse(old)).toEqual(newProgress(5));
   });
 
   it("gives levels and stats for the user and each member", () => {
@@ -218,7 +231,7 @@ describe("the file and what the client gets", () => {
     const view = progressView(p);
     expect(view.user).toMatchObject({ level: 0, xp: 15, jobs: 2, passed: 1, passRate: 0.5 });
     expect(view.members).toEqual([
-      { projectId: "alpha", memberId: "developer", xp: 35, level: 0, base: 0, next: 50, jobs: 2, passed: 1, steps: 1, passRate: 0.5, avgStepMs: 30_000 },
+      { projectId: "alpha", memberId: "developer", xp: 35, level: 0, base: 0, next: 50, jobs: 2, passed: 1, steps: 1, passRate: 0.5, avgStepMs: 30_000, badges: [] },
     ]);
     expect(ServerMsgSchema.safeParse({ type: "progress", state: view }).success).toBe(true);
   });

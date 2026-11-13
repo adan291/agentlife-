@@ -13,6 +13,7 @@ import { BUILD_EVENT_REFRESH_MS, BUILD_REFRESH_MS, isBuilderMessage, renderBuild
 import { createNightPanel } from "./night-board.ts";
 import { createPipelineEditor } from "./pipeline-editor.ts";
 import { createShopPanel } from "./shop.ts";
+import { createProfilePanel } from "./profile.ts";
 import { createHrPanel } from "./hr.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
@@ -132,6 +133,23 @@ const CSS = `
 .al-shop-preview { display: flex; align-items: center; justify-content: center; height: 112px; background: ${UI_COLOURS.inputBg}; border-radius: var(--al-radius); overflow: hidden; }
 .al-shop-preview img { max-width: 100%; max-height: 100%; image-rendering: pixelated; transform: scale(1.5); }
 .al-shop-price { font-weight: bold; color: ${UI_COLOURS.accentText}; }
+.al-hr-level { margin: var(--al-s1) 0; color: ${UI_COLOURS.accentText}; }
+.al-hr-badges { display: flex; flex-wrap: wrap; gap: var(--al-s1); margin: var(--al-s1) 0; }
+.al-hr-badges .al-badge-pic { width: 22px; height: 22px; }
+.al-profile-head { margin: 0 0 var(--al-s2); }
+.al-profile-head p { margin: var(--al-s1) 0 0; }
+.al-badge-list, .al-quest-list { list-style: none; margin: var(--al-s2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--al-s2); }
+.al-quest-list { grid-template-columns: 1fr; }
+.al-badge-card { display: flex; align-items: flex-start; gap: var(--al-s3); padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); }
+.al-badge-card[data-earned="true"] { border-color: var(--al-accent); }
+.al-badge-card[data-earned="false"] { opacity: 0.6; }
+.al-badge-card[data-earned="false"] .al-badge-icon { filter: grayscale(1); }
+.al-badge-pic { flex: none; display: inline-flex; width: 32px; height: 32px; }
+.al-badge-text { min-width: 0; overflow-wrap: anywhere; }
+.al-badge-when { color: ${UI_COLOURS.accentText}; }
+.al-quest { padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); }
+.al-quest[data-done="true"] { border-color: ${UI_COLOURS.add}; }
+.al-quest .al-row { margin-top: 0; align-items: center; }
 `;
 
 const TITLES: Record<PanelName, string> = {
@@ -149,6 +167,7 @@ const TITLES: Record<PanelName, string> = {
   night: "Night shift",
   hr: "HR desk",
   shop: "Shop",
+  profile: "Profile",
 };
 
 /** The shop needs the real hotel: the recorded demo shows this instead of the catalogue. */
@@ -295,6 +314,8 @@ export function createPanels(
     hooks.shopPreview ? { preview: hooks.shopPreview } : {},
   );
 
+  const profilePanel = createProfilePanel(document);
+
   const hrAct = (act: HrAction): void => {
     state.hrError = null;
     send({ type: "hr_do", act });
@@ -318,7 +339,7 @@ export function createPanels(
       state.suggestion = null;
       hrAct({ action: "apply", projectId, picks });
     },
-  }, hooks.memberProgress);
+  }, hooks.memberProgress, () => state.progress?.badgeDefs ?? []);
 
   const root = document.createElement("div");
   root.className = "al-panel";
@@ -497,6 +518,8 @@ export function createPanels(
                       ? hrPanel({ hr: state.hr, error: state.hrError, suggestion: state.suggestion, busy: state.hrBusy, ...(locked ? { locked: HR_LOCKED } : {}) }, render)
                       : state.open === "shop"
                         ? shopPanel({ shop: state.shop, error: state.shopError, ...(locked ? { locked: SHOP_LOCKED } : {}) }, render)
+                        : state.open === "profile"
+                          ? profilePanel({ progress: state.progress }, render)
                     : state.open === "door"
                   ? { body: doorNote(document) }
                   : { body: boardBody() };

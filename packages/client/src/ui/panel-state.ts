@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, ProgressView, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -51,6 +51,8 @@ export class PanelState {
   /** The shop (catalogue, balance, stock) and why the last purchase was refused. The error is cleared when the panel opens. */
   shop: ShopState | null = null;
   shopError: string | null = null;
+  /** XP, levels, badges and quests (Profile panel, HR cards). Null when the hotel has no progress. */
+  progress: ProgressView | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -109,8 +111,9 @@ export class PanelState {
         this.shopError = null;
         return this.open === "shop";
       case "progress":
-        // The HR cards show levels; they are read through a hook, so the panel only needs to draw again.
-        return this.open === "hr";
+        // The HR cards and the Profile panel show it; the HR cards read their level through a hook.
+        this.progress = msg.state;
+        return this.open === "hr" || this.open === "profile";
       case "wallet":
         // A grant or a purchase changes the balance; the shop's header and its Buy buttons follow it.
         if (!this.shop || this.shop.balance === msg.balance) return false;

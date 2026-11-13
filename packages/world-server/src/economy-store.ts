@@ -13,6 +13,7 @@ import {
   emptyInventory,
   floorsWithPieces,
   furniOf,
+  grantKey,
   movePlaced,
   newWallet,
   pickUpToStock,
@@ -147,12 +148,16 @@ export class Economy {
   }
 
   /**
-   * Grants the amount `config/economy.json` sets for the reason, once per `reason` and `ref`. Returns the ledger entry
+   * Grants the amount `config/economy.json` sets for the reason, once per `reason` and `ref`. A daily quest has no fixed
+   * amount: `quest_done` takes the quest's reward as `amount`. Returns the ledger entry
    * when the balance went up, and undefined when nothing was counted (already counted, older than the wallet, or the
    * file could not be written: then nothing is counted and a later replay tries again).
    */
-  grant(reason: GrantReason, ref: string, ts: number): LedgerEntry | undefined {
-    const result = applyGrant(this.wallet, { reason, ref, amount: this.config.grants[reason], ts });
+  grant(reason: GrantReason, ref: string, ts: number, amount?: number): LedgerEntry | undefined {
+    const fixed = reason === "quest_done" ? undefined : this.config.grants[reason];
+    const paid = amount ?? fixed;
+    if (paid === undefined) return undefined;
+    const result = applyGrant(this.wallet, { reason, ref, amount: paid, ts });
     if (result.wallet === this.wallet) return undefined;
     const before = this.wallet;
     this.wallet = result.wallet;
@@ -161,6 +166,11 @@ export class Economy {
       return undefined;
     }
     return result.entry;
+  }
+
+  /** True when this grant is already in the wallet (counted before), whatever its amount was. A payout that was paid before a crash is settled by it. */
+  hasGranted(reason: GrantReason, ref: string): boolean {
+    return this.wallet.granted.includes(grantKey(reason, ref));
   }
 
   /**

@@ -55,7 +55,7 @@ Kept per entity from the same facts: counters per source, `stepMs` (sum of the t
 
 ## Messages (`shared/src/protocol.ts`)
 - Server to client: `progress { state }` with `user` (level view, counters, `stepMs`), `members` (one per member that has a record: project id, member id, level view, counters, `stepMs`; at most 300) and, from task 2, `badges` and `quests`. Sent after every `welcome` and after every fact that changed something. Never sent when the hotel has no progress (fake engine without `AGENTLIFE_PROGRESS_FILE`): then the client shows no level anywhere, and the recorded demo shows none either.
-- `level_up { who, name, level, slot? }`: `who` is `user` or `member`. `slot` (a `StaffId`) is present only for a member who stands on the floor the user is on, so the client can play the effect over that ghost. The toast is shown in every case: "Developer reached level 3".
+- `level_up { who, name, level, slot? }`: `who` is `user` or `member`. `slot` (a `StaffId`) is present only for a member who stands on the floor the user is on, so the client can play the effect over that ghost. The toast is shown in every case: "Developer reached Lv 3".
 - `team_view` members and guests get an optional `memberId` (the member key's second half), so the client can look the seat up.
 - No client message changes progress.
 
@@ -67,7 +67,7 @@ Kept per entity from the same facts: counters per source, `stepMs` (sum of the t
 ## Client
 - `ui/progress.ts` (pure): `ProgressModel` keeps the latest `progress`, the room, the seats of `team_view` and answers `seatOf(slot)`; `levelText`, `xpText`, `statLines`. All user-facing text is English: "Lv 3", "35 / 100 XP", "4 jobs, 75% passed", "avg step 42s".
 - Team bar: under the name of each role row, one line "Lv 3 · 35 / 100 XP". Tooltip of a ghost (desk or floor): level, XP to the next level and the stats. HR card: a line with the level, the XP and the stats.
-- The user's level sits in a Profile button on the stage, to the right of the Ecto chip (both in one corner container; the chip moved inside it without changing its class or its text). Task 2 opens the Profile panel from it.
+- The user's level sits in a chip on the stage, to the right of the Ecto chip (both in one corner container; the balance chip moved inside it without changing its class or its text). Task 2 makes it the Profile button.
 - Level-up effect (`scene/levelup-fx.ts`): a ring of eight small stars rises over the ghost for 1.6 s and fades, drawn with `Graphics`; with reduced motion it is a still ring that fades. `levelUpFrame(progress, reduced)` is pure and tested. Toast: `hud.toast`.
 
 ## Tests (task 1)
@@ -94,11 +94,18 @@ Kept per entity from the same facts: counters per source, `stepMs` (sum of the t
 - A fact counts for quests only when it happened today, so a replayed old job does not complete today's quest.
 
 ### Profile panel
-- `PanelName` gets `profile`, opened by the Profile button (client side, no furniture). Tabs: Badges (the user's badges, earned first, each with icon, name, description and date; locked ones greyed with the rule) and Quests (today's three: title, progress bar, reward, "Done"). The header shows level, XP to the next level and the user's stats.
-- In the recorded demo the panel says that progress is off.
+- `PanelName` gets `profile`, opened by the Profile button (client side, no furniture): the level chip next to the Ecto chip is that button ("Lv 3", `aria-label` "Open your profile. ..."). Tabs: Badges (the user's badges, earned first and newest first, each with icon, name, description and date; locked ones greyed with what the rule asks for) and Quests (today's three: title, progress bar, reward, "Done"). The header shows level, XP to the next level and the user's stats.
+- The button exists only when the hotel sends `progress`. In the recorded demo and with the scripted engine without a progress file there is no button, so no panel and no empty page.
+- A member's HR card shows the badges that member earned as small pictures (title: name and description).
 
 ### Tests (task 2)
-- shared: badge file checks (shipped file passes, each refusal), `evaluateBadges` once, `pickQuests` deterministic for a date and always three distinct (fast-check), the quest day rolls over.
-- world-server: each badge rule, each shipped quest completes and pays once (also after a restart and after a failed payout), files survive a restart.
-- client: badge icons render for every shape, Profile panel render (tabs, locked, done), panel state.
-- Playwright (`e2e/team-progress.spec.ts`): a scripted job on the fake engine with `AGENTLIFE_PROGRESS_FILE` set raises the Developer's XP in the team bar and completes a quest, and the Profile panel lists it.
+- shared (`badges.test.ts`): badge file checks (each refusal), `evaluateBadges` once, `pickQuests` deterministic for a date and always three distinct (fast-check), a quest completes once with one payout, only for the facts of today, the day rolls over, replaying changes nothing with badges and quests on (fast-check).
+- world-server (`progress-quests.test.ts`): every shipped badge is earned exactly at its rule and only by its scope; every shipped quest completes after its target and pays once, also after a restart; payouts survive a restart and a failed write; through the gateway: the three quests pay into the wallet once, a replay after a restart pays nothing more, an unpaid payout is paid at start, a payout already in the wallet is only taken off the list, no economy means no payment, and a note kept, a morning report and a scheduled night job each count. No client message can complete a quest or earn a badge.
+- client (`profile.test.ts`): badge icons for every shape, rule texts, Profile panel (badges, quests, empty states, text from the server never becomes markup), badges on the HR card, panel state.
+- Playwright (`e2e/team-progress.spec.ts`): a scripted job on the fake engine raises the Developer's and QA's XP in the team bar, earns the Plan approver badge, completes today's three quests and pays their Ecto; after a reload the quests are still done. The date picks the quests, so the spec runs against a pool of its own in which one job completes any three (`AGENTLIFE_QUESTS_FILE`). It also gets a world-server and a Vite server of its own (ports 8796 and 5198) with scratch progress, wallet and inventory files, because XP, level-up toasts and Ecto would otherwise leak into the other specs; the config deletes its progress file before the run (the fake engine reuses task ids).
+
+### Changes from the first plan (recorded while building)
+- `applyFact` stays the pure core of task 1. Badges and quests are in `applyFactWithRules` (`progress-rules.ts`), so `progress.ts` does not import `badges.ts` (that would be a cycle). `ProgressView` therefore lives in `progress-rules.ts`; `EntityView` (in `progress.ts`) carries the earned badges.
+- New server message `badge_earned { who, owner, badge }` for the toast ("Badge earned: First delivery", "Ada earned a badge: Night owl").
+- `ProgressModel.ofSlot` uses the role name as the member id for a desk when no `team_view` has arrived (the scripted engine has no HR office; the server counts those under the role name too).
+- `AGENTLIFE_QUESTS_FILE` replaces `config/quests.json` (tests and Playwright only).

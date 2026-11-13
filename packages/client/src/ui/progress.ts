@@ -72,14 +72,21 @@ export class ProgressModel {
   /** A member with no record yet has done no work: level 0. Undefined when the hotel has no progress. */
   memberOrNew(projectId: string, memberId: string): MemberView | undefined {
     if (!this.state) return undefined;
-    return this.member(projectId, memberId) ?? { projectId, memberId, xp: 0, level: 0, base: 0, next: xpForLevel(1), jobs: 0, passed: 0, steps: 0 };
+    return this.member(projectId, memberId) ?? { projectId, memberId, xp: 0, level: 0, base: 0, next: xpForLevel(1), jobs: 0, passed: 0, steps: 0, badges: [] };
   }
 
-  /** The member who stands at a spot of the user's floor. */
+  /**
+   * The member who stands at a spot of the user's floor. Without a `team_view` (the scripted engine has no HR office) the
+   * desks belong to the role's default member, whose id is the role name, as the server counts them.
+   */
   ofSlot(slot: StaffId): MemberView | undefined {
     const projectId = this.roomId === undefined ? undefined : projectIdOfRoom(this.roomId);
-    const memberId = this.seats.get(slot);
+    const memberId = this.seats.get(slot) ?? (isDesk(slot) ? slot : undefined);
     if (projectId === undefined || memberId === undefined) return undefined;
     return this.memberOrNew(projectId, memberId);
   }
+}
+
+function isDesk(slot: StaffId): slot is "architect" | "developer" | "qa" {
+  return slot === "architect" || slot === "developer" || slot === "qa";
 }

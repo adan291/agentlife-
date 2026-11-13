@@ -54,3 +54,11 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Look at the 25 previews in the Shop panel and the placed pieces on a floor, to judge the art (own recipes, drawn in code). The e2e only checks that each preview is a non-empty PNG.
 - [ ] With the real wallet (not the Playwright scratch wallet), confirm the first run starts at 0 Ecto and old jobs pay nothing (`since` rule). Covered by `wallet-gateway.test.ts` "does not pay for events older than the wallet", but not run against real history.
 - [ ] Note, not a failure: `docs/reviews/feat-furni-shop.md` (an earlier, untracked review) already exists; this report is a separate file.
+
+## team-progress (on feat/team-progress, not merged)
+- [ ] Real engine: run a job to the end and look at the team bar (a "Lv 0 · N XP to Lv 1" line under each name), the tooltip of each ghost (level and stats), the "Lv N" chip next to the Ecto chip at your usual window size (it must not cover the Arrange button or the floor label), and an HR card (level line and stats).
+- [ ] Look at the level-up effect over a ghost (a ring of small stars rising for 1.6 s) and the toast; with the system setting "reduce motion" the ring only fades. No browser test looks at the effect, only its numbers.
+- [ ] Open the Profile panel from the level chip: badge pictures (12 shapes drawn in code) look right and the locked ones are clearly greyed; the Quests tab shows today's three quests and a finished one reads "Done". Come back the next day: three quests, probably other ones, and yesterday's are gone.
+- [ ] A real quest, for example "Deliver a branch": deliver one and see "+30 Ecto: daily quest done" in the toast and in the balance. Restart the world-server and check the balance does not change (the quest pays once).
+- [ ] With the real history: the first run starts at level 0 and old jobs give no XP (`since`). Covered by `progress-gateway.test.ts` "counts nothing for events older than the file", not run against real history.
+- [ ] Night owl (a job that passes between 00:00 and 05:00 local time) and Librarian (a note accepted in the Library) were tested with fake clocks and a scripted Library, not live.

@@ -45,7 +45,7 @@ describe("ProgressStore", () => {
     expect(first.changed).toBe(true);
     expect(s.view().user.xp).toBe(config.xp.job_passed.user);
     expect(s.view().members[0]).toMatchObject({ projectId: "alpha", memberId: "developer", xp: config.xp.job_passed.member });
-    expect(s.record(fact("job_passed", "t1"), [DEV])).toEqual({ changed: false, levelUps: [] });
+    expect(s.record(fact("job_passed", "t1"), [DEV])).toEqual({ changed: false, levelUps: [], badges: [], questsDone: [] });
     expect(s.view().user.xp).toBe(config.xp.job_passed.user);
   });
 
@@ -99,7 +99,7 @@ describe("ProgressStore", () => {
     // A file where a folder should be makes every write fail.
     writeFileSync(join(dir, "blocker"), "");
     const broken = new ProgressStore({ file: join(dir, "blocker", "progress.json"), config, now: () => SINCE, onLog: (m) => logs.push(m) });
-    expect(broken.record(fact("job_passed", "t1"), [DEV])).toEqual({ changed: false, levelUps: [] });
+    expect(broken.record(fact("job_passed", "t1"), [DEV])).toEqual({ changed: false, levelUps: [], badges: [], questsDone: [] });
     expect(broken.view().user.xp).toBe(0);
     expect(logs.some((m) => m.includes("cannot write"))).toBe(true);
   });

@@ -1,5 +1,6 @@
 import { MemberNameSchema, SEATED_ROLES } from "@agentlife/shared";
-import type { CatalogueEntry, EntityView, HrState, HrTeam, ImportView, TeamMember, TeamPick, TeamRole, TeamSuggestion } from "@agentlife/shared";
+import type { BadgeDef, CatalogueEntry, EntityView, HrState, HrTeam, ImportView, TeamMember, TeamPick, TeamRole, TeamSuggestion } from "@agentlife/shared";
+import { badgeIcon } from "./badge-icons.ts";
 import type { PanelContent } from "./computer.ts";
 import { levelLine, progressLines, statsLine } from "./progress.ts";
 
@@ -126,7 +127,12 @@ interface HireForm {
  * the imports waiting for the user's approval. The panel only sends what the user chose; the engine applies its rules
  * and answers with the new state. Form values and the open tab survive re-renders.
  */
-export function createHrPanel(doc: Document, actions: HrActions, progressOf?: (projectId: string, memberId: string) => EntityView | undefined) {
+export function createHrPanel(
+  doc: Document,
+  actions: HrActions,
+  progressOf?: (projectId: string, memberId: string) => EntityView | undefined,
+  badgeDefs?: () => readonly BadgeDef[],
+) {
   let tab: HrTab = "teams";
   const forms = new Map<string, HireForm>();
   const renames = new Map<string, string>();
@@ -156,6 +162,21 @@ export function createHrPanel(doc: Document, actions: HrActions, progressOf?: (p
       const line = el(doc, "p", "al-hr-level", `${levelLine(lv)} · ${statsLine(lv)}`);
       line.title = progressLines(lv).join("\n");
       row.appendChild(line);
+      // The badges this member earned, as small pictures with their name for a tooltip and for screen readers.
+      const defs = new Map((badgeDefs?.() ?? []).map((d) => [d.id, d]));
+      const earned = lv.badges.flatMap((b) => defs.get(b.id) ?? []);
+      if (earned.length > 0) {
+        const strip = el(doc, "p", "al-hr-badges");
+        strip.setAttribute("aria-label", `Badges: ${earned.map((d) => d.name).join(", ")}`);
+        for (const d of earned) {
+          const pic = el(doc, "span", "al-badge-pic");
+          pic.dataset["badge"] = d.id;
+          pic.title = `${d.name}: ${d.description}`;
+          pic.appendChild(badgeIcon(doc, d.icon.shape, d.icon.colour, 22));
+          strip.appendChild(pic);
+        }
+        row.appendChild(strip);
+      }
     }
 
     const key = `${team.projectId}/${m.id}`;

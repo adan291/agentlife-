@@ -114,6 +114,10 @@ export class FakeDocument {
   createElement(tag: string): FakeElement {
     return new FakeElement(tag.toLowerCase());
   }
+  /** Elements of another namespace (SVG) behave like any other fake element here. */
+  createElementNS(_namespace: string, tag: string): FakeElement {
+    return new FakeElement(tag);
+  }
   createTextNode(data: string): FakeText {
     return new FakeText(data);
   }

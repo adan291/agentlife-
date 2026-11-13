@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "quests": [
+    { "id": "deliver_branch", "title": "Deliver a branch", "counter": "branch_delivered", "target": 1, "reward": 30 },
+    { "id": "review_branch", "title": "Run a branch review", "counter": "review_finished", "target": 1, "reward": 20 },
+    { "id": "accept_note", "title": "Accept a memory note", "counter": "memory_accepted", "target": 1, "reward": 15 },
+    { "id": "schedule_night", "title": "Schedule a night job", "counter": "night_scheduled", "target": 1, "reward": 15 },
+    { "id": "pass_job", "title": "Get a job to pass", "counter": "job_passed", "target": 1, "reward": 20 },
+    { "id": "pass_two", "title": "Get two jobs to pass", "counter": "job_passed", "target": 2, "reward": 35 },
+    { "id": "approve_plan", "title": "Approve a plan", "counter": "plan_approved", "target": 1, "reward": 10 },
+    { "id": "keep_busy", "title": "Finish three steps", "counter": "step_done", "target": 3, "reward": 15 }
+  ]
+}
