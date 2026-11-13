@@ -68,3 +68,11 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Navegador: la línea "Lv N · X XP to Lv N+1" de cada fila de la team bar cabe en la barra lateral. Pasar el ratón por ella debe mostrar las stats (jobs, % pasados, tiempo medio de paso) (1.3). Si el usuario quiere las stats visibles sin hover, hay que añadirlas al texto de la fila.
 - [ ] Navegador: el chip "Lv N" junto al chip de Ecto, el panel Profile (pestañas Badges y Quests, iconos, barras de progreso) y las tiras de badges en la tarjeta HR (2.2, 3.2). El e2e solo comprueba existencia, `data-*` y texto.
 - [ ] Ya anotado en `docs/STATUS.md`: ejecutar con el engine real (`data/progress.json` real) para confirmar que Developer y QA suben de nivel con un job de verdad, y que no se muestran niveles con el motor de guion ni en la demo grabada.
+
+## waiting-fun (merged 2026-11-13)
+- [ ] Wisp in a browser: the orb, its blink in the last second and the catch ring (1.1). Check it can be clicked on a real, moving wisp (the e2e clicks with `force: true`).
+- [ ] The figure art for sit, wave, dance and cheer, and the glum and cheer poses of the ghosts (2.1, 2.2). Look at them on a project floor, not only in the lobby, including the sitter's depth against a sofa and a chair.
+- [ ] The mood face on the name tag and the tooltip line of each desk ghost (3.1).
+- [ ] Buy the coffee machine (Tables, 40 Ecto), place it, and serve a tired agent in a live run. The test used small limits and a faked clock; a real 60 minutes of work was not run (3.2).
+- [ ] A hotel with the plain scripted engine and no wallet file has no wisps. If the user expects wisps there, 1.1 needs a decision (design.md condition 1 of Spawn).
+- [ ] Both specs state "first to cut if late": merge decision is the user's.
