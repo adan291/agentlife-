@@ -39,6 +39,7 @@ import { elevatorLabel, floorTag, loadFloor, restoreTarget, saveFloor } from "./
 import { reportVerdict } from "./ui/report-viewer.ts";
 import { GRANT_TOAST_MS, grantToastText } from "./ui/wallet.ts";
 import { ProgressModel, levelUpText, progressLines } from "./ui/progress.ts";
+import { createWispButton } from "./ui/wisp.ts";
 
 /**
  * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
@@ -174,6 +175,8 @@ hud.setZoomLabel(world.zoom);
 
 const transition = createTransition(stageEl, prefersReducedMotion);
 const nightLook = createNightLook(stageEl, shell.topLeft);
+/** The button over the wisp that the server made appear (waiting-fun); it follows the wisp every frame. */
+const wispButton = createWispButton(document, stageEl, (wispId) => transport.send({ type: "wisp_catch", wispId }));
 
 /** The user picked a floor in the elevator panel. */
 function goTo(roomId: string): void {
@@ -462,4 +465,7 @@ transport.onMessage((msg) => {
   }
 });
 
-app.ticker.add(() => world.tick(Date.now()));
+app.ticker.add(() => {
+  world.tick(Date.now());
+  wispButton.sync(world.wispPoint());
+});

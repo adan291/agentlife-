@@ -1,8 +1,9 @@
 import { FURNI_CATALOG } from "../furni.ts";
 import { dirFromDelta, oppositeDir } from "../geometry/dir.ts";
 import type { Dir } from "../geometry/dir.ts";
-import { findPath } from "../geometry/pathfind.ts";
+import { findPath, isWalkable } from "../geometry/pathfind.ts";
 import type { PathGrid, Tile } from "../geometry/pathfind.ts";
+import type { Heightmap } from "../geometry/heightmap.ts";
 import { buildPathGrid, resolveAnchor, roomAgents, roomGuests, splitAgentId, useTile } from "../room.ts";
 import type { AgentId, RoomDef, SemanticAnchor, StaffId } from "../room.ts";
 import type { AgentEvent, AgentState } from "../events.ts";
@@ -56,7 +57,7 @@ export interface WorldSimOptions {
 export class WorldSim {
   private current: RoomDef;
   private readonly clock: () => number;
-  private grid: PathGrid;
+  private grid: PathGrid & Heightmap;
   private readonly msPerTile: number;
   /** Agents that live in this room (a project room has no Builder, the lobby only the Builder). */
   private readonly agentIds: readonly AgentId[];
@@ -115,6 +116,22 @@ export class WorldSim {
       if (a.walk) tiles.push(...a.walk.path.slice(this.completedSteps(a, now)));
     }
     return tiles;
+  }
+
+  /**
+   * Floor tiles that no furniture blocks, where nobody stands or is walking to, and that are not the door: where a wisp
+   * may be drawn. Row by row, so the same room always gives the same list.
+   */
+  freeTiles(): Tile[] {
+    const used = new Set(this.tilesInUse().map((t) => `${t.x},${t.y}`));
+    used.add(`${this.room.door.x},${this.room.door.y}`);
+    const out: Tile[] = [];
+    for (let y = 0; y < this.grid.l; y++) {
+      for (let x = 0; x < this.grid.w; x++) {
+        if (isWalkable(this.grid, x, y) && !used.has(`${x},${y}`)) out.push({ x, y });
+      }
+    }
+    return out;
   }
 
   /** Single user in the MVP: joining again replaces the previous user avatar. */

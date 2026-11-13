@@ -4,6 +4,7 @@ import { BranchesResponseSchema, JobDetailsSchema, VerdictSchema } from "./engin
 import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
 import { BALANCE_MAX, GRANT_AMOUNT_MAX, GrantReasonSchema } from "./economy.ts";
 import { FloorStatusSchema } from "./floors.ts";
+import { WispIdSchema } from "./fun.ts";
 import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { PlacementSchema } from "./layout.ts";
@@ -245,6 +246,11 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("shop_state") }),
   /** Shop counter (lobby): buy one item. Answered with `wallet` and `shop`, or `error` `shop_error` with the reason (nothing changes). */
   z.object({ type: z.literal("shop_buy"), itemId: CatalogueItemIdSchema }),
+  /**
+   * Catch the wisp that is on the screen (waiting-fun). A click on a wisp that is not there, was too late or belongs to
+   * another floor pays nothing and is answered with `wisp_gone` (`caught: false`). A catch pays through `wallet`.
+   */
+  z.object({ type: z.literal("wisp_catch"), wispId: WispIdSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -363,6 +369,13 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     owner: z.string().min(1).max(60),
     badge: z.string().min(1).max(30),
   }),
+  /**
+   * A wisp appeared on the user's floor at the floor tile (x, y) and stays `ttlMs`. The server decides when one exists;
+   * the position is only where to draw it. At most one at a time.
+   */
+  z.object({ type: z.literal("wisp"), wispId: WispIdSchema, x: z.number().int(), y: z.number().int(), ttlMs: z.number().int().min(1).max(60_000) }),
+  /** The wisp is over: `caught` when the user caught it, else it faded, the floor changed or the click was refused. */
+  z.object({ type: z.literal("wisp_gone"), wispId: WispIdSchema, caught: z.boolean() }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

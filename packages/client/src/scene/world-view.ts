@@ -4,6 +4,7 @@ import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, isGuestId, isPinned, screen
 import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, RoomDef, ServerMsg, StaffId, Tile, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
 import { FloorPeople } from "./floor-people.ts";
 import { LevelUpFx } from "./levelup-fx.ts";
+import { CatchFx, WispFx } from "./wisp-fx.ts";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 import { AvatarView } from "./avatar-view.ts";
@@ -116,6 +117,9 @@ export class WorldView {
   private levelUps: { fx: LevelUpFx; slot: StaffId }[] = [];
   /** Slow wisps drifting through the room. */
   private motes: MoteLayer | null = null;
+  /** The catchable wisp (waiting-fun) and the catch effects that are playing. At most one wisp at a time. */
+  private wisp: WispFx | null = null;
+  private catches: CatchFx[] = [];
 
   constructor(
     private readonly app: Application,
@@ -206,6 +210,45 @@ export class WorldView {
     return true;
   }
 
+  // ---- the wisp (waiting-fun) ----
+
+  /** A wisp appeared over the floor tile (x, y). The one that was there, if any, is replaced. */
+  private showWisp(id: string, x: number, y: number, ttlMs: number, now: number): void {
+    if (!this.room) return;
+    this.dropWisp();
+    const p = tileToScreen({ x, y, z: this.room.heightmap.height(x, y) ?? 0 });
+    const fx = new WispFx(id, now, ttlMs, p.sx, p.sy);
+    fx.container.zIndex = 1e6;
+    fx.update(now, this.reducedMotion);
+    this.overlays.addChild(fx.container);
+    this.wisp = fx;
+  }
+
+  /** The wisp is over. When it was caught, the catch effect plays where it was. */
+  private endWisp(id: string, caught: boolean, now: number): void {
+    const fx = this.wisp;
+    if (!fx || fx.id !== id) return;
+    if (caught) {
+      const effect = new CatchFx(now, fx.x, fx.y);
+      effect.container.zIndex = 1e6;
+      this.overlays.addChild(effect.container);
+      this.catches.push(effect);
+    }
+    this.dropWisp();
+  }
+
+  private dropWisp(): void {
+    this.wisp?.destroy();
+    this.wisp = null;
+  }
+
+  /** The wisp on the screen and where it is, in canvas pixels, for the button that catches it. Null when there is none. */
+  wispPoint(): { id: string; x: number; y: number } | null {
+    if (!this.wisp) return null;
+    const p = this.root.toGlobal({ x: this.wisp.x, y: this.wisp.y });
+    return { id: this.wisp.id, x: p.x, y: p.y };
+  }
+
   /** The HR agent thinks while it works out a proposal (the HR desk asked it). */
   setHrThinking(thinking: boolean): void {
     if (thinking) this.hrGhost?.overlay.setState("thinking", "Working out a team");
@@ -267,6 +310,12 @@ export class WorldView {
       case "room_layout":
         this.applyRoomLayout(msg);
         break;
+      case "wisp":
+        this.showWisp(msg.wispId, msg.x, msg.y, msg.ttlMs, now);
+        break;
+      case "wisp_gone":
+        this.endWisp(msg.wispId, msg.caught, now);
+        break;
       case "error":
         if (msg.code === "hr_error" || msg.code === "engine_unavailable") this.setHrThinking(false);
         this.hooks.onError?.(msg.code, msg.message);
@@ -299,6 +348,13 @@ export class WorldView {
       const view = this.avatars.get(slot)?.view;
       const alive = view ? fx.update(now, view.feetX, view.feetY, this.reducedMotion) : false;
       if (!alive) fx.destroy();
+      return alive;
+    });
+    // The client's own clock ends a wisp that the server's `wisp_gone` has not reached yet.
+    if (this.wisp && !this.wisp.update(now, this.reducedMotion)) this.dropWisp();
+    this.catches = this.catches.filter((c) => {
+      const alive = c.update(now, this.reducedMotion);
+      if (!alive) c.destroy();
       return alive;
     });
     for (const [id, entry] of this.avatars) {
@@ -486,6 +542,9 @@ export class WorldView {
     this.hoveredItem = null;
     for (const l of this.levelUps) l.fx.destroy();
     this.levelUps = [];
+    this.dropWisp();
+    for (const c of this.catches) c.destroy();
+    this.catches = [];
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
     this.hrGhost?.overlay.destroy();

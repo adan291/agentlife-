@@ -12,6 +12,7 @@ import {
   PROTOCOL_VERSION,
   SEATED_ROLES,
   ServerMsgSchema,
+  WISP_REWARD,
   memberKey,
   morningReportId,
   morningTitle,
@@ -63,6 +64,8 @@ import { GrantTracker } from "./grants.ts";
 import { ProgressTracker } from "./progress-tracker.ts";
 import type { TrackedFact } from "./progress-tracker.ts";
 import type { ProgressStore } from "./progress-store.ts";
+import { Wisps } from "./wisps.ts";
+import type { Wisp, WispOptions } from "./wisps.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -101,8 +104,10 @@ export interface GatewayOptions {
    */
   economy?: Pick<
     Economy,
-    "balance" | "grant" | "hasGranted" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
+    "balance" | "ledger" | "grant" | "hasGranted" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
   >;
+  /** Test knobs of the wisps (waiting-fun): how often they appear, how long they live and the random source. Defaults: 20 to 60 s and 8 s. */
+  wisps?: WispOptions;
   /**
    * XP, levels and stats (team-progress). Without it the hotel has no progress: no `progress` message is sent and nothing
    * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
@@ -268,6 +273,76 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (!result.ok) return sendError(ws, "shop_error", result.reason);
     send(ws, { type: "wallet", balance: economy.balance });
     send(ws, { type: "shop", state: economy.shop() });
+  };
+
+  // ---- wisps: something to catch while a job runs (waiting-fun) ----
+
+  /** Only a hotel with an economy has wisps: a wisp that pays nothing would be pointless. */
+  const wisps = economy ? new Wisps(economy, options.wisps) : undefined;
+  let wispTimer: NodeJS.Timeout | undefined;
+  /** Drops the wisp when its life and grace are over. Only one wisp exists, so one timer. */
+  let wispExpiry: NodeJS.Timeout | undefined;
+
+  /** Where the user is: their floor and the job that runs on it (none when it is not running). */
+  const wispSpot = (): { roomId: string | undefined; taskId: string | undefined } => {
+    const roomId = userRoom();
+    const f = roomId ? floors.get(roomId) : undefined;
+    return { roomId, taskId: f?.jobActive ? (f.currentTaskId ?? undefined) : undefined };
+  };
+
+  /** The wisp is over. The user is told, except when a `welcome` told them already (`quiet`). */
+  const endWisp = (wisp: Wisp | undefined, caught: boolean, quiet = false): void => {
+    if (!wisp) return;
+    clearTimeout(wispExpiry);
+    wispExpiry = undefined;
+    if (current && !quiet) send(current.ws, { type: "wisp_gone", wispId: wisp.id, caught });
+  };
+
+  /** Makes a wisp on the user's floor when the rules allow one. Never throws. */
+  const trySpawnWisp = (): void => {
+    if (!wisps || !current) return;
+    const spot = wispSpot();
+    if (spot.roomId === undefined || projectIdOfRoom(spot.roomId) === undefined) return;
+    const sim = hotel.sim(spot.roomId);
+    if (!sim) return;
+    // A wisp past its life and grace that the timer has not dropped yet is reported gone before the next one appears.
+    endWisp(wisps.sweep(), false);
+    const wisp = wisps.spawn(spot, sim.freeTiles());
+    if (!wisp) return;
+    send(current.ws, { type: "wisp", wispId: wisp.id, x: wisp.x, y: wisp.y, ttlMs: wisps.life });
+    clearTimeout(wispExpiry);
+    wispExpiry = setTimeout(() => endWisp(wisps.clear(), false), wisps.holdMs);
+    wispExpiry.unref();
+  };
+
+  const scheduleWisp = (): void => {
+    if (!wisps) return;
+    wispTimer = setTimeout(() => {
+      trySpawnWisp();
+      scheduleWisp();
+    }, wisps.nextDelay());
+    wispTimer.unref();
+  };
+  scheduleWisp();
+
+  /** A click on a wisp. A wisp that is not there, is too late or is on another floor pays nothing; the answer is `wisp_gone` either way. */
+  const catchWisp = (ws: WebSocket, wispId: string): void => {
+    const gone = (caught: boolean): void => send(ws, { type: "wisp_gone", wispId, caught });
+    if (!wisps) return gone(false);
+    const result = wisps.take(wispId, wispSpot());
+    if (!result.ok) return gone(false);
+    clearTimeout(wispExpiry);
+    wispExpiry = undefined;
+    // The grant sends `wallet` with the toast data; a write that fails pays nothing and is not counted.
+    gone(grantEcto("wisp_caught", result.ref, Date.now(), WISP_REWARD) !== undefined);
+  };
+
+  /** The wisp belongs to a floor and a job: when either is gone, so is the wisp. */
+  const dropStaleWisp = (): void => {
+    const wisp = wisps?.current;
+    if (!wisp) return;
+    const spot = wispSpot();
+    if (spot.roomId !== wisp.roomId || spot.taskId !== wisp.taskId) endWisp(wisps?.clear(), false);
   };
 
   const sendJobUpdate = async (roomId: string) => {
@@ -555,6 +630,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   /** Welcome for a room, with that floor's work, activity, pending approvals and job, then the floor list. */
   const sendWelcome = (ws: WebSocket, roomId: string, welcome: WelcomeMsg) => {
+    // A welcome is a new room or a new connection: the client forgets its wisp, so the server does too.
+    endWisp(wisps?.clear(), false, true);
     const f = floors.get(roomId);
     const agents = welcome.agents.map((a) => {
       const work = f?.works.get(a.agentId);
@@ -1195,6 +1272,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       // Approvals, reports and job states change what the overview shows; activity lines do not.
       if (ev.type !== "agent.activity" && ev.type !== "agent.work") scheduleOverview();
     });
+    // After the event was handled: a job that ended takes its wisp with it.
+    enqueue(dropStaleWisp);
   };
 
   if (engine) {
@@ -1542,6 +1621,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         sendShop(ws);
       } else if (msg.type === "shop_buy") {
         buyItem(ws, msg.itemId);
+      } else if (msg.type === "wisp_catch") {
+        catchWisp(ws, msg.wispId);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;
@@ -1553,6 +1634,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       if (current?.ws === ws) {
         hotel.leave(current.userId);
         current = null;
+        endWisp(wisps?.clear(), false, true);
       }
     });
     ws.on("error", () => ws.terminate());
@@ -1570,6 +1652,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             clearInterval(tick);
             clearInterval(nightPoll);
             clearTimeout(overviewTimer);
+            clearTimeout(wispTimer);
+            clearTimeout(wispExpiry);
             for (const t of swapTimers) clearTimeout(t);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();

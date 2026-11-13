@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Wisp catching
+- [x] 1. Wisp catching
   - Server-side wisp spawn during a job, catch message, limits per job and day, Ecto grant; client wisp with effect and reduced motion; tests
   - _Requirements: 1.1, 1.2, 1.3, 4.1, 4.3_
 

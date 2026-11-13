@@ -70,6 +70,18 @@ if (engineKind === "http" || process.env["AGENTLIFE_PROGRESS_FILE"]) {
   }
 }
 
+// Wisps come every 20 to 60 s. `AGENTLIFE_WISP_MS=min,max` (milliseconds) is for tests and Playwright only.
+let wispOptions: { minMs: number; maxMs: number } | undefined;
+const wispEnv = process.env["AGENTLIFE_WISP_MS"];
+if (wispEnv) {
+  const [minMs, maxMs] = wispEnv.split(",").map((s) => Number(s.trim()));
+  if (!Number.isInteger(minMs) || !Number.isInteger(maxMs) || minMs! < 10 || maxMs! < minMs!) {
+    console.error("AGENTLIFE_WISP_MS must be 'min,max' in milliseconds, for example 300,500");
+    process.exit(1);
+  }
+  wispOptions = { minMs: minMs!, maxMs: maxMs! };
+}
+
 // The floors are built from the template, the saved layout and the bought pieces the user placed.
 const hotel = new Hotel({
   ...hotelRooms,
@@ -78,5 +90,15 @@ const hotel = new Hotel({
   extrasOf: (projectId) => economy?.placedFurni(projectId) ?? [],
 });
 
-const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins, layouts, ...(economy ? { economy } : {}), ...(progress ? { progress } : {}) });
+const gateway = await startGateway({
+  hotel,
+  host,
+  port,
+  engine,
+  allowedOrigins,
+  layouts,
+  ...(economy ? { economy } : {}),
+  ...(progress ? { progress } : {}),
+  ...(wispOptions ? { wisps: wispOptions } : {}),
+});
 console.log(`world-server listening on ws://${host}:${gateway.port} (allowed origins: ${allowedOrigins.join(", ")})`);
