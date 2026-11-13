@@ -23,6 +23,15 @@ const PROGRESS_FILE = join(tmpdir(), "agentlife-e2e-progress.json");
 const PROGRESS_WALLET_FILE = join(tmpdir(), "agentlife-e2e-progress-wallet.json");
 const PROGRESS_INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-progress-inventory.json");
 const PROGRESS_LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-progress-layouts.json");
+/**
+ * The waiting-fun tests need wisps to appear within a second of a job starting (`AGENTLIFE_WISP_MS`), and they catch them,
+ * which changes the balance. They get a world-server of their own too, so wisps never show up in the other specs.
+ */
+const FUN_WORLD_PORT = 8797;
+const FUN_WEB_PORT = 5197;
+const FUN_WALLET_FILE = join(tmpdir(), "agentlife-e2e-fun-wallet.json");
+const FUN_INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-fun-inventory.json");
+const FUN_LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-fun-layouts.json");
 /** A quest pool that one scripted job finishes whichever three the date picks: plan, steps and a pass. */
 const QUESTS_FILE = join(tmpdir(), "agentlife-e2e-quests.json");
 const QUEST_POOL = [
@@ -49,6 +58,8 @@ if (process.env["TEST_WORKER_INDEX"] === undefined) {
   // The progress server starts from nothing: the fake engine reuses task ids, and a file from an earlier run would have counted them.
   seed(PROGRESS_WALLET_FILE, { version: 1, since: 0, balance: 0, ledger: [], granted: [] });
   seed(PROGRESS_INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
+  seed(FUN_WALLET_FILE, { version: 1, since: 0, balance: 0, ledger: [], granted: [] });
+  seed(FUN_INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
   seed(QUESTS_FILE, { version: 1, quests: QUEST_POOL });
   rmSync(PROGRESS_FILE, { force: true });
 }
@@ -112,6 +123,27 @@ export default defineConfig({
       command: `pnpm exec vite --host 127.0.0.1 --port ${PROGRESS_WEB_PORT} --strictPort`,
       port: PROGRESS_WEB_PORT,
       env: { VITE_WORLD_URL: `ws://127.0.0.1:${PROGRESS_WORLD_PORT}` },
+      reuseExistingServer: !process.env["CI"],
+    },
+    {
+      command: "pnpm --filter @agentlife/world-server start",
+      cwd: "../..",
+      port: FUN_WORLD_PORT,
+      env: {
+        PORT: String(FUN_WORLD_PORT),
+        ENGINE: "fake",
+        AGENTLIFE_LAYOUTS_FILE: FUN_LAYOUTS_FILE,
+        AGENTLIFE_WALLET_FILE: FUN_WALLET_FILE,
+        AGENTLIFE_INVENTORY_FILE: FUN_INVENTORY_FILE,
+        AGENTLIFE_WISP_MS: "300,500",
+        WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${FUN_WEB_PORT},http://localhost:${FUN_WEB_PORT}`,
+      },
+      reuseExistingServer: !process.env["CI"],
+    },
+    {
+      command: `pnpm exec vite --host 127.0.0.1 --port ${FUN_WEB_PORT} --strictPort`,
+      port: FUN_WEB_PORT,
+      env: { VITE_WORLD_URL: `ws://127.0.0.1:${FUN_WORLD_PORT}` },
       reuseExistingServer: !process.env["CI"],
     },
   ],

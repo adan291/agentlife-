@@ -4,6 +4,7 @@ import { BranchesResponseSchema, JobDetailsSchema, VerdictSchema } from "./engin
 import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
 import { BALANCE_MAX, GRANT_AMOUNT_MAX, GrantReasonSchema } from "./economy.ts";
 import { FloorStatusSchema } from "./floors.ts";
+import { EmoteSchema, MoodSchema, UserEmoteSchema, WispIdSchema } from "./fun.ts";
 import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
 import { PlacementSchema } from "./layout.ts";
@@ -31,7 +32,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop", "profile"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop", "profile", "coffee"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent and guest ids are strings, so they never collide. */
@@ -145,6 +146,7 @@ export const ErrorCodeSchema = z.enum([
   "pipeline_error",
   "layout_error",
   "shop_error",
+  "seat_taken",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -245,6 +247,18 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("shop_state") }),
   /** Shop counter (lobby): buy one item. Answered with `wallet` and `shop`, or `error` `shop_error` with the reason (nothing changes). */
   z.object({ type: z.literal("shop_buy"), itemId: CatalogueItemIdSchema }),
+  /**
+   * Catch the wisp that is on the screen (waiting-fun). A click on a wisp that is not there, was too late or belongs to
+   * another floor pays nothing and is answered with `wisp_gone` (`caught: false`). A catch pays through `wallet`.
+   */
+  z.object({ type: z.literal("wisp_catch"), wispId: WispIdSchema }),
+  /** Play an emote with your avatar (waiting-fun). Answered with `emote` to the room. */
+  z.object({ type: z.literal("emote"), emote: UserEmoteSchema }),
+  /**
+   * Sit down on the nearest free seat of the floor, or stand up when sitting (key 4 and the Sit button). Clicking a seat
+   * sits there (`use`). Answered with a walk and `sit`, or `error` `seat_taken`.
+   */
+  z.object({ type: z.literal("sit_toggle") }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -362,6 +376,26 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     who: z.enum(["user", "member"]),
     owner: z.string().min(1).max(60),
     badge: z.string().min(1).max(30),
+  }),
+  /**
+   * A wisp appeared on the user's floor at the floor tile (x, y) and stays `ttlMs`. The server decides when one exists;
+   * the position is only where to draw it. At most one at a time.
+   */
+  z.object({ type: z.literal("wisp"), wispId: WispIdSchema, x: z.number().int(), y: z.number().int(), ttlMs: z.number().int().min(1).max(60_000) }),
+  /** The wisp is over: `caught` when the user caught it, else it faded, the floor changed or the click was refused. */
+  z.object({ type: z.literal("wisp_gone"), wispId: WispIdSchema, caught: z.boolean() }),
+  /**
+   * An avatar sits down or gets up (waiting-fun). Sent when the walk to the seat ends (`sitting: true`, with the way it
+   * faces) and when it gets up (`sitting: false`, before the walk away).
+   */
+  z.object({ type: z.literal("sit"), id: AvatarIdSchema, sitting: z.boolean(), dir: DirSchema.optional(), itemId: z.string().min(1).max(100).optional() }),
+  /** An avatar plays a short animation: the user's emotes, and `glum` or `cheer` for the agents of a floor. */
+  z.object({ type: z.literal("emote"), id: AvatarIdSchema, emote: EmoteSchema }),
+  /** The mood of the three desk agents of a project floor (visual only). Sent after `welcome` and whenever one changes. */
+  z.object({
+    type: z.literal("mood"),
+    roomId: z.string().min(1).max(100),
+    moods: z.partialRecord(AgentIdSchema, MoodSchema),
   }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);

@@ -128,3 +128,10 @@
 - **Por qué:** la plantilla original dejaba todo en una pared. Con la comprobación en el servidor, una disposición nunca puede dejar sin alcanzar una mesa, el buzón o el ascensor, y un cliente modificado no puede saltarse las reglas.
 - **Compromiso:** se levanta la exclusión "editor de salas" del MVP solo para plantas de proyecto. Las anclas de trabajo (`desk`, `computer`, `mailbox`, `board`) siguen a su mueble (`Anchor.follows`); los puestos de pie (`home_*`) se quedan en su casilla y ningún mueble sólido puede taparlos (el requisito 3.3 decía que también seguían al mueble; se reformuló). Una disposición guardada que ya no cabe (la plantilla cambió) vuelve a la posición de la plantilla pieza a pieza, sin error.
 - **Descartadas:** mover también el ascensor o la puerta (todos entran por esa casilla), y dejar la validación solo en el cliente.
+
+### D15. Una pieza de la tienda con interacción: la cafetera (spec waiting-fun)
+
+- **Decisión (de Kiro, por encargo del usuario, 2026-11-13):** la tienda de furni-shop vendía solo piezas decorativas, sin interacción. La cafetera (`coffee_machine`, página Mesas, 40 Ecto) es la única pieza a la venta con interacción (`coffee`). `SHOP_INTERACTIONS` (shared, `shop.ts`) lista las interacciones permitidas a una pieza comprada; `checkCatalogue` y `Hotel.placeFurniture` rechazan cualquier otra.
+- **Por qué:** la regla original quería decir "nada de lo que se vende empieza trabajo". La cafetera solo cambia el ánimo de un fantasma, que es solo visual y nunca llega a un trabajo, un modelo ni un permiso. Servir el café ocurre en el world-server: al llegar, el `open_panel` de `coffee` no sale hacia el cliente.
+- **Compromiso:** la regla ya no es "ninguna pieza vendida tiene interacción", sino "solo las de `SHOP_INTERACTIONS`". El ánimo se guarda solo en memoria. Las sillas y los sofás pasan a ser asientos: un clic en ellos sienta al usuario en vez de solo caminar hasta ellos.
+- **Descartadas:** una cafetera sin interacción con un botón aparte (obligaría a un mensaje y un panel nuevos) y un fichero para guardar el ánimo (es un adorno).

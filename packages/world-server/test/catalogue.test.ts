@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FURNI_CATALOG, SHOP_PAGES, footprintTiles, layoutProblem, useTile } from "@agentlife/shared";
+import { FURNI_CATALOG, SHOP_INTERACTIONS, SHOP_PAGES, footprintTiles, layoutProblem, useTile } from "@agentlife/shared";
 import { loadCatalogue } from "../src/economy-store.ts";
 import { loadHotelRooms } from "../src/load-room.ts";
 
@@ -17,14 +17,16 @@ afterEach(() => {
 describe("config/catalogue-furni.json", () => {
   const items = loadCatalogue();
 
-  it("sells at least 24 items, each mapped to a decorative definition with its own drawing", () => {
+  it("sells at least 24 items, each mapped to a definition with its own drawing and nothing that starts work", () => {
     expect(items.length).toBeGreaterThanOrEqual(24);
     for (const item of items) {
       const def = FURNI_CATALOG[item.defId];
       expect(def, item.id).toBeDefined();
-      expect(def?.interaction, item.id).toBeUndefined();
+      // Decorative, except the coffee machine, which only changes the mood of a ghost (waiting-fun).
+      if (def?.interaction !== undefined) expect(SHOP_INTERACTIONS, item.id).toContain(def.interaction);
       expect(def?.draw).toBe(item.defId);
     }
+    expect(items.filter((i) => FURNI_CATALOG[i.defId]?.interaction !== undefined).map((i) => i.id)).toEqual(["coffee_machine"]);
   });
 
   it("fills every page, with unique ids and a price a first job can almost pay", () => {

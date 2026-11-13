@@ -66,7 +66,7 @@ async function tilePoint(page: Page, x: number, y: number): Promise<{ x: number;
 }
 
 test.describe("the shop counter", () => {
-  test("opens the Shop panel with 25 pictures of furniture on six pages, and nothing can be bought without Ecto", async ({ page }) => {
+  test("opens the Shop panel with 26 pictures of furniture on six pages, and nothing can be bought without Ecto", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await open(page);

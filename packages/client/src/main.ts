@@ -39,6 +39,8 @@ import { elevatorLabel, floorTag, loadFloor, restoreTarget, saveFloor } from "./
 import { reportVerdict } from "./ui/report-viewer.ts";
 import { GRANT_TOAST_MS, grantToastText } from "./ui/wallet.ts";
 import { ProgressModel, levelUpText, progressLines } from "./ui/progress.ts";
+import { createWispButton } from "./ui/wisp.ts";
+import { createEmoteBar, emoteKey } from "./ui/emotes.ts";
 
 /**
  * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
@@ -174,6 +176,8 @@ hud.setZoomLabel(world.zoom);
 
 const transition = createTransition(stageEl, prefersReducedMotion);
 const nightLook = createNightLook(stageEl, shell.topLeft);
+/** The button over the wisp that the server made appear (waiting-fun); it follows the wisp every frame. */
+const wispButton = createWispButton(document, stageEl, (wispId) => transport.send({ type: "wisp_catch", wispId }));
 
 /** The user picked a floor in the elevator panel. */
 function goTo(roomId: string): void {
@@ -277,6 +281,7 @@ function setView(next: ViewMode): void {
   saveView(viewStorage, next);
   hud.setView(next);
   listView.setVisible(next === "list");
+  refreshEmotes();
   if (next === "list") {
     panels.close();
     arrange.leave();
@@ -290,6 +295,25 @@ function openPalette(): void {
     buildCommands({ floors: overviewFloors, hotelFloors: floorList, live: live !== undefined, actions: listActions, toggleView }),
   );
 }
+
+// ---- emotes and sitting (waiting-fun): four buttons and the keys 1 to 4 ----
+
+const emotes = createEmoteBar(document, stageEl, {
+  emote: (emote) => transport.send({ type: "emote", emote }),
+  sit: () => transport.send({ type: "sit_toggle" }),
+});
+/** The id of the user's own avatar (from `welcome`), to tell the `sit` messages of the user from the others. */
+let myAvatar: number | undefined;
+/** The bar belongs to the hotel view and is out of the way while the user arranges the furniture. */
+function refreshEmotes(): void {
+  emotes.setVisible(view === "hotel" && !arranging);
+}
+window.addEventListener("keydown", (e) => {
+  // A panel that is open owns the keyboard, and so does arrange mode.
+  const action = emoteKey(e, arranging || panels.state.open !== null || view === "list");
+  if (!action) return;
+  transport.send(action.kind === "emote" ? { type: "emote", emote: action.emote } : { type: "sit_toggle" });
+});
 
 // ---- arrange mode (furni-move): move and turn the furniture of a project floor ----
 
@@ -315,6 +339,7 @@ function syncArrange(): void {
   hud.setArrange(live !== undefined && arrange.available, state.active);
   if (state.active === arranging) return;
   arranging = state.active;
+  refreshEmotes();
   panels.lock(arranging);
   world.setArrangeInput(
     arranging
@@ -428,6 +453,10 @@ transport.onMessage((msg) => {
     terminal.seed(msg.activity ?? []);
     stepper.update(null);
     enteredRoom(msg);
+    myAvatar = msg.you;
+    emotes.setSitting(false);
+  } else if (msg.type === "sit") {
+    if (msg.id === myAvatar) emotes.setSitting(msg.sitting);
   } else if (msg.type === "floors") {
     floorsChanged(msg.floors);
   } else if (msg.type === "overview") {
@@ -462,4 +491,7 @@ transport.onMessage((msg) => {
   }
 });
 
-app.ticker.add(() => world.tick(Date.now()));
+app.ticker.add(() => {
+  world.tick(Date.now());
+  wispButton.sync(world.wispPoint());
+});

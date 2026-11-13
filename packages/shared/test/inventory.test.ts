@@ -5,6 +5,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   CatalogueFileSchema,
+  SHOP_INTERACTIONS,
   ClientMsgSchema,
   FURNI_CATALOG,
   Hotel,
@@ -292,7 +293,8 @@ describe("the hotel places and picks up bought pieces", () => {
   it("every item of the shipped catalogue can be shown on a floor, and none is a piece that starts work", () => {
     for (const item of items) {
       const def = FURNI_CATALOG[item.defId]!;
-      expect(def.interaction, item.id).toBeUndefined();
+      // The coffee machine is the one piece for sale that can be used: it only changes the mood of a ghost.
+      if (def.interaction !== undefined) expect(SHOP_INTERACTIONS, item.id).toContain(def.interaction);
       expect(furniOf({ id: "bought_1", itemId: item.id, x: 1, y: 1, dir: 4 }, items)?.defId, item.id).toBe(item.defId);
     }
   });

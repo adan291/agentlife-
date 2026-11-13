@@ -4,7 +4,7 @@ import { FURNI_CATALOG, footprintSize } from "@agentlife/shared";
 import type { AgentState } from "@agentlife/shared";
 import type { RoleKey } from "../palette.ts";
 import { AVATAR_FRAME, BADGE_FRAME, drawAvatar, drawBadge } from "./figure.ts";
-import type { DrawnView } from "./figure.ts";
+import type { AvatarPose, DrawnView } from "./figure.ts";
 import { RECIPES } from "./recipes.ts";
 
 export interface SpriteFrame {
@@ -22,7 +22,7 @@ export interface SpriteFrame {
  */
 export interface SpriteProvider {
   furni(defId: string, dir: 0 | 2 | 4 | 6): SpriteFrame | undefined;
-  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1): SpriteFrame;
+  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): SpriteFrame;
   badge(state: AgentState): SpriteFrame;
 }
 
@@ -46,10 +46,10 @@ export class ProceduralSprites implements SpriteProvider {
     });
   }
 
-  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1): SpriteFrame {
-    return this.cached(`a:${role}:${view}:${frame}`, () => {
+  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): SpriteFrame {
+    return this.cached(`a:${role}:${view}:${frame}${pose ? `:${pose}` : ""}`, () => {
       const g = new Graphics();
-      drawAvatar(g, role, view, frame);
+      drawAvatar(g, role, view, frame, pose);
       return this.bakeFixed(g, AVATAR_FRAME);
     });
   }

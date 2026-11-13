@@ -154,7 +154,7 @@ export class Economy {
    * file could not be written: then nothing is counted and a later replay tries again).
    */
   grant(reason: GrantReason, ref: string, ts: number, amount?: number): LedgerEntry | undefined {
-    const fixed = reason === "quest_done" ? undefined : this.config.grants[reason];
+    const fixed = reason === "quest_done" || reason === "wisp_caught" ? undefined : this.config.grants[reason];
     const paid = amount ?? fixed;
     if (paid === undefined) return undefined;
     const result = applyGrant(this.wallet, { reason, ref, amount: paid, ts });

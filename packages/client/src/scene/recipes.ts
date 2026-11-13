@@ -470,6 +470,20 @@ const throne: Recipe = (g, c) => {
   g.circle(sx + 2.6, sy - 7, 1.6).fill(C.ink);
 };
 
+const coffeeMachine: Recipe = (g, c) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.28), 0, 2.2, C.metal),
+    piece(around(0, 0, 0.3), 2.2, 2.6, C.stoneDark),
+  ]);
+  // A cup under the spout, on the side that faces the room.
+  const m = centreOf(frontRect(c, 0.2, 0.05));
+  drawBoxes(g, [piece(around(m.x, m.y, 0.09), 0.5, 0.95, C.glass)]);
+  // A red light and a brass knob on top.
+  const [lx, ly] = P(0, 0, 2.6);
+  g.circle(lx - 4, ly - 2, 1.8).fill(C.lava);
+  g.circle(lx + 4, ly - 2, 1.8).fill(C.brass);
+};
+
 const sideTable: Recipe = (g, c) => {
   drawBoxes(g, [piece(around(0, 0, 0.07), 0, 1.4, C.woodDark), piece(full(c, 0.14), 1.4, 1.6, C.wood)]);
 };
@@ -775,6 +789,7 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   coffee_table: coffeeTable,
   round_table: roundTable,
   potion_bar: potionBar,
+  coffee_machine: coffeeMachine,
   candelabra,
   floor_torch: floorTorch,
   lava_lamp: lavaLamp,

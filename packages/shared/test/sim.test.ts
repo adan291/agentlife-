@@ -5,10 +5,13 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_IDS,
+  FURNI_CATALOG,
   WorldSim,
   buildPathGrid,
+  isSeatDef,
   isWalkable,
   resolveAnchor,
+  seatTile,
   validateRoom,
 } from "../src/index.ts";
 import type { AgentEvent, ClientMsg, ServerMsg } from "../src/index.ts";
@@ -161,9 +164,12 @@ describe("WorldSim", () => {
       fc.property(fc.array(step, { maxLength: 40 }), (steps) => {
         const { sim, advance } = makeSim();
         const { you } = sim.join();
+        // The seat of a sofa is solid: a sitting avatar stands on it, and a walk to a seat ends on it.
+        const seats = new Set(room.furni.flatMap((p) => (isSeatDef(FURNI_CATALOG[p.defId]) ? [seatTile(p, FURNI_CATALOG[p.defId]!)] : [])).map((t) => `${t.x},${t.y}`));
+        const standable = (x: number, y: number): boolean => isWalkable(grid, x, y) || seats.has(`${x},${y}`);
         const check = () => {
           for (const a of sim.snapshot().avatars) {
-            expect(isWalkable(grid, a.x, a.y), `${String(a.id)} at ${a.x},${a.y}`).toBe(true);
+            expect(standable(a.x, a.y), `${String(a.id)} at ${a.x},${a.y}`).toBe(true);
           }
         };
         for (const s of steps) {
@@ -177,7 +183,7 @@ describe("WorldSim", () => {
             out = sim.handleAgentEvent({ ...base(), type: "agent.state_changed", agentId: s.agent, state: "working" });
           } else advance(s.ms);
           for (const m of out) {
-            if (m.type === "walk") for (const t of m.path) expect(isWalkable(grid, t.x, t.y)).toBe(true);
+            if (m.type === "walk") for (const t of m.path) expect(standable(t.x, t.y)).toBe(true);
           }
           sim.dueMessages();
           check();
