@@ -62,3 +62,9 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] A real quest, for example "Deliver a branch": deliver one and see "+30 Ecto: daily quest done" in the toast and in the balance. Restart the world-server and check the balance does not change (the quest pays once).
 - [ ] With the real history: the first run starts at level 0 and old jobs give no XP (`since`). Covered by `progress-gateway.test.ts` "counts nothing for events older than the file", not run against real history.
 - [ ] Night owl (a job that passes between 00:00 and 05:00 local time) and Librarian (a note accepted in the Library) were tested with fake clocks and a scripted Library, not live.
+
+## team-progress (merged 2026-11-13)
+- [ ] Navegador: el efecto de level-up (anillo de ocho estrellas sobre el fantasma, 1.6 s, y con movimiento reducido) se ve bien y es legible (1.4). Solo hay tests de la función pura `levelUpFrame` y de la forma de la estrella.
+- [ ] Navegador: la línea "Lv N · X XP to Lv N+1" de cada fila de la team bar cabe en la barra lateral. Pasar el ratón por ella debe mostrar las stats (jobs, % pasados, tiempo medio de paso) (1.3). Si el usuario quiere las stats visibles sin hover, hay que añadirlas al texto de la fila.
+- [ ] Navegador: el chip "Lv N" junto al chip de Ecto, el panel Profile (pestañas Badges y Quests, iconos, barras de progreso) y las tiras de badges en la tarjeta HR (2.2, 3.2). El e2e solo comprueba existencia, `data-*` y texto.
+- [ ] Ya anotado en `docs/STATUS.md`: ejecutar con el engine real (`data/progress.json` real) para confirmar que Developer y QA suben de nivel con un job de verdad, y que no se muestran niveles con el motor de guion ni en la demo grabada.
