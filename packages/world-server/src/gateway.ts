@@ -69,6 +69,7 @@ import type { ProgressStore } from "./progress-store.ts";
 import { Wisps } from "./wisps.ts";
 import type { Wisp, WispOptions } from "./wisps.ts";
 import { MoodKeeper } from "./mood.ts";
+import { BuilderWatch } from "./builder-watch.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -113,6 +114,8 @@ export interface GatewayOptions {
   wisps?: WispOptions;
   /** Test knobs of the mood of the desk agents: the work that makes them busy and tired, and how often a crossing is looked for. Defaults: 20 min, 60 min and 15 s. */
   mood?: { busyMs?: number; tiredMs?: number; pollMs?: number };
+  /** Test knobs of the Builder's stale state: how long it may stay silent while busy, and how often that is looked at. Defaults: 10 min and 30 s. */
+  builder?: { staleMs?: number; pollMs?: number };
   /**
    * XP, levels and stats (team-progress). Without it the hotel has no progress: no `progress` message is sent and nothing
    * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
@@ -373,6 +376,22 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (projectId !== undefined) pushMoods(projectId);
   }, options.mood?.pollMs ?? 15_000);
   moodPoll.unref();
+
+  // ---- the Builder that stopped reporting (ui-tidy): back to idle after the stale time ----
+
+  const builderWatch = new BuilderWatch(options.builder?.staleMs);
+  /** Sends the Builder to idle when it has been busy and silent for too long. The lobby sim keeps the state, so a reload shows it. */
+  const sweepBuilder = (): void => {
+    const now = Date.now();
+    if (!builderWatch.expired(now)) return;
+    enqueue(async () => {
+      const sim = hotel.sim(LOBBY_ROOM);
+      if (!sim) return;
+      await sendSim(LOBBY_ROOM, sim.handleAgentEvent({ type: "agent.state_changed", seq: 0, ts: now, taskId: "builder-idle", agentId: "builder", state: "idle" }));
+    });
+  };
+  const builderPoll = setInterval(sweepBuilder, options.builder?.pollMs ?? 30_000);
+  builderPoll.unref();
 
   /** Every ghost that is on a floor now: the desk roles and the team members at the spots, not those who left by the elevator. */
   const ghostsOn = (roomId: string): (SeatedRole | GuestId)[] => {
@@ -1190,6 +1209,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   const onEngineEvent = (ev: AgentEvent) => {
+    builderWatch.observe(ev);
     enqueue(async () => {
       // Before any room lookup: a job on a floor that has no room yet still earns and still counts.
       const candidates = grantTracker.observe(ev);
@@ -1505,15 +1525,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   /**
-   * Arrange mode: one change of the furniture of the user's project floor. The rules are the shared ones (`checkMove`);
-   * a refusal names the rule and changes nothing. The new pieces and anchors go to the user after the walks already
-   * queued, so the avatars do not jump. `stock` also sends the shop (the inventory tray shows the stock).
+   * Edit mode: one change of the furniture of the room the user is in (every room can be arranged). The rules are the
+   * shared ones (`checkMove`); a refusal names the rule and changes nothing. The new pieces and anchors go to the user
+   * after the walks already queued, so the avatars do not jump. `stock` also sends the shop (the inventory tray shows the
+   * stock). `projectId` is undefined outside project floors; only bought pieces need it, and they stay on project floors.
    */
-  const arrange = (ws: WebSocket, change: (roomId: string, projectId: string, save: (layout: Layout) => void) => ArrangeResult, stock = false): void => {
+  const arrange = (
+    ws: WebSocket,
+    change: (roomId: string, projectId: string | undefined, save: (layout: Layout) => void) => ArrangeResult,
+    stock = false,
+  ): void => {
     const roomId = userRoom();
-    const projectId = roomId === undefined ? undefined : projectIdOfRoom(roomId);
-    if (roomId === undefined || projectId === undefined) return sendError(ws, "layout_error", "Only project floors can be arranged.");
-    const result = change(roomId, projectId, (layout) => options.layouts?.set(projectId, layout));
+    if (roomId === undefined) return sendError(ws, "layout_error", "That room cannot be arranged.");
+    const result = change(roomId, projectIdOfRoom(roomId), (layout) => options.layouts?.set(roomId, layout));
     if (!result.ok) return sendError(ws, "layout_error", result.reason);
     const { furni, anchors } = result.room;
     enqueue(() => {
@@ -1523,17 +1547,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   const NO_SHOP_TO_PLACE: ArrangeResult = { ok: false, code: "no_stock", reason: "You have nothing to place: the shop is closed." };
+  const PROJECT_FLOORS_ONLY: ArrangeResult = { ok: false, code: "not_editable", reason: "Bought furniture can only stand on project floors." };
 
   /** A move of a piece. A bought piece is kept in the inventory file, a piece of the template in the layout file. */
-  const moveItem = (roomId: string, projectId: string, itemId: string, to: Placement, save: (layout: Layout) => void): ArrangeResult => {
-    if (!hotel.isExtra(roomId, itemId)) return hotel.moveFurniture(roomId, itemId, to, save);
+  const moveItem = (roomId: string, projectId: string | undefined, itemId: string, to: Placement, save: (layout: Layout) => void): ArrangeResult => {
+    if (projectId === undefined || !hotel.isExtra(roomId, itemId)) return hotel.moveFurniture(roomId, itemId, to, save);
     const plan = economy?.planMove(projectId, itemId, to);
     if (!plan?.ok) return { ok: false, code: "unknown_item", reason: plan?.reason ?? "That piece is not in this room." };
     return hotel.moveFurniture(roomId, itemId, to, () => plan.commit());
   };
 
   /** Stands a bought item on the floor. The inventory file is written only after the hotel accepted the spot. */
-  const placeItem = (roomId: string, projectId: string, itemId: string, to: Placement): ArrangeResult => {
+  const placeItem = (roomId: string, projectId: string | undefined, itemId: string, to: Placement): ArrangeResult => {
+    if (projectId === undefined) return PROJECT_FLOORS_ONLY;
     if (!economy) return NO_SHOP_TO_PLACE;
     const plan = economy.planPlace(projectId, itemId, to);
     if (!plan.ok) return { ok: false, code: "no_stock", reason: plan.reason };
@@ -1541,12 +1567,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   /** Takes a bought piece back into the inventory. Pieces of the template are refused by the hotel. */
-  const pickUpItem = (roomId: string, projectId: string, itemId: string): ArrangeResult =>
-    hotel.pickUpFurniture(roomId, itemId, () => {
+  const pickUpItem = (roomId: string, projectId: string | undefined, itemId: string): ArrangeResult => {
+    if (projectId === undefined) return PROJECT_FLOORS_ONLY;
+    return hotel.pickUpFurniture(roomId, itemId, () => {
       const plan = economy?.planPickUp(projectId, itemId);
       if (!plan?.ok) throw new Error(plan?.reason ?? "not one of yours");
       plan.commit();
     });
+  };
 
   const watchOverview = (on: boolean) => {
     if (!current) return;
@@ -1591,6 +1619,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const { you, welcome } = hotel.join();
     current = { ws, userId: you, activityAll: false, overviewWatch: false };
     sendWelcome(ws, hotel.roomOf(you) ?? LOBBY_ROOM, welcome);
+    sweepBuilder();
     // A project registered since the last connection gets its floor now.
     if (engine) {
       enqueue(syncProjects);
@@ -1731,6 +1760,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             clearTimeout(wispTimer);
             clearTimeout(wispExpiry);
             clearInterval(moodPoll);
+            clearInterval(builderPoll);
             for (const t of swapTimers) clearTimeout(t);
             engine?.close?.();
             for (const c of wss.clients) c.terminate();

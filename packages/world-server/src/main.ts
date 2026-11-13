@@ -86,7 +86,7 @@ if (wispEnv) {
 const hotel = new Hotel({
   ...hotelRooms,
   clock: Date.now,
-  layoutOf: (projectId) => layouts.get(projectId),
+  layoutOf: (roomId) => layouts.get(roomId),
   extrasOf: (projectId) => economy?.placedFurni(projectId) ?? [],
 });
 

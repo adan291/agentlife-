@@ -185,7 +185,7 @@ describe("the hotel places and picks up bought pieces", () => {
   });
 
   it.each([
-    [fern("bought_1", 9, 8), "That tile is taken."],
+    [fern("bought_1", 9, 8), "That tile is taken by the potted plant."],
     [fern("bought_1", 30, 30), "That is outside the room."],
     [fern("bought_1", 5, 3), "A standing spot of the team is on that tile."],
   ])("refuses a spot that a move would refuse (%#)", (piece, reason) => {
@@ -198,10 +198,17 @@ describe("the hotel places and picks up bought pieces", () => {
     expect(h.sim(roomId)!.room.furni).toHaveLength(before);
   });
 
-  it("refuses a wall piece in the middle of the floor and a floor piece the user does not own the use of", () => {
+  it("a wall piece may stand free on the floor; against a wall it faces the room", () => {
     const h = hotelWith();
-    expect(h.placeFurniture(roomId, { itemId: "bought_1", defId: "wall_clock", x: 6, y: 5, dir: 4 })).toMatchObject({ ok: false, reason: "This piece goes on a wall." });
-    expect(h.placeFurniture(roomId, { itemId: "bought_1", defId: "wall_clock", x: 2, y: 0, dir: 4 }).ok).toBe(true);
+    const clock = (x: number, y: number, dir: 0 | 2 | 4 | 6) => ({ itemId: "bought_1", defId: "wall_clock", x, y, dir });
+    expect(h.placeFurniture(roomId, clock(6, 5, 4)).ok).toBe(true);
+    expect(h.moveFurniture(roomId, "bought_1", { x: 6, y: 5, dir: 6 }).ok).toBe(true);
+    expect(h.moveFurniture(roomId, "bought_1", { x: 2, y: 0, dir: 6 })).toMatchObject({ ok: false, code: "wall" });
+    expect(h.moveFurniture(roomId, "bought_1", { x: 2, y: 0, dir: 4 }).ok).toBe(true);
+  });
+
+  it("refuses a floor piece the user does not own the use of", () => {
+    const h = hotelWith();
     // Furniture that starts work or belongs to the template cannot be placed from the inventory.
     expect(h.placeFurniture(roomId, { itemId: "bought_2", defId: "mailbox", x: 2, y: 3, dir: 4 })).toMatchObject({ ok: false, code: "unknown_item" });
     expect(h.placeFurniture(roomId, { itemId: "bought_3", defId: "agent_desk", x: 2, y: 3, dir: 4 })).toMatchObject({ ok: false, code: "unknown_item" });
@@ -213,6 +220,7 @@ describe("the hotel places and picks up bought pieces", () => {
     expect(h.placeFurniture(roomId, fern("bought_1", 2, 1)).ok).toBe(true);
     expect(h.placeFurniture(roomId, fern("bought_1", 3, 1))).toMatchObject({ ok: false, code: "duplicate" });
     expect(h.placeFurniture("lobby", fern("bought_2", 2, 1))).toMatchObject({ ok: false, code: "not_editable" });
+    expect(h.placeFurniture("hr", fern("bought_2", 2, 1))).toMatchObject({ ok: false, code: "not_editable" });
     expect(h.placeFurniture("project:nobody", fern("bought_2", 2, 1))).toMatchObject({ ok: false, code: "not_editable" });
   });
 
@@ -257,7 +265,7 @@ describe("the hotel places and picks up bought pieces", () => {
     expect(h.moveFurniture(roomId, "bought_1", { x: 3, y: 1, dir: 6 }, (l) => layouts.push(l)).ok).toBe(true);
     expect(layouts).toEqual([{}]);
     expect(h.sim(roomId)!.room.furni.find((p) => p.itemId === "bought_1")).toMatchObject({ x: 3, y: 1, dir: 6 });
-    expect(h.moveFurniture(roomId, "bought_1", { x: 9, y: 8, dir: 4 })).toMatchObject({ ok: false, reason: "That tile is taken." });
+    expect(h.moveFurniture(roomId, "bought_1", { x: 9, y: 8, dir: 4 })).toMatchObject({ ok: false, reason: "That tile is taken by the potted plant." });
   });
 
   it("a floor is built with the bought pieces, and one that no longer fits is left out", () => {

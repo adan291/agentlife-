@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { zoomOf } from "./helpers.ts";
 
 /** The one project of the scripted engine; its floor is built from `rooms/project-template.json` (12 x 10 tiles). */
 const FLOOR = "project:haunted-todo";
@@ -35,8 +36,7 @@ async function open(page: Page, floor: string | null = null): Promise<string[]> 
 async function tileCentre(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
   const canvas = await page.locator(".al-stage > canvas").boundingBox();
   if (!canvas) throw new Error("no canvas");
-  const zoomText = await page.locator(".al-top-right .al-btn", { hasText: /^[12]×$/ }).textContent();
-  const zoom = Number.parseInt(zoomText ?? "1", 10);
+  const zoom = await zoomOf(page);
   const rootX = Math.round(Math.floor(canvas.width) / 2 - CENTRE.x * zoom);
   const rootY = Math.round(Math.floor(canvas.height) / 2 - CENTRE.y * zoom);
   return {
@@ -45,7 +45,7 @@ async function tileCentre(page: Page, x: number, y: number): Promise<{ x: number
   };
 }
 
-const arrangeButton = (page: Page) => page.locator(".al-arrange-open");
+const arrangeButton = (page: Page) => page.locator(".al-edit");
 const bar = (page: Page) => page.locator(".al-arrange");
 const piece = (page: Page) => page.locator(".al-arrange-piece");
 const status = (page: Page) => page.locator(".al-arrange-status");
@@ -130,7 +130,7 @@ test.describe("place bought furniture on a floor", () => {
     await expect(status(page)).toHaveText("Back in your inventory.");
     await expectOwned(page, "fern", "Fern", owned);
     await expect(piece(page)).toHaveText("Nothing selected");
-    await bt(page, "Done").click();
+    await arrangeButton(page).click();
     await expect(bar(page)).toBeHidden();
     expect(errors).toEqual([]);
   });
@@ -161,7 +161,7 @@ test.describe("place bought furniture on a floor", () => {
     // A taken tile is red with the reason, and nothing is sent.
     await trayItem(page, "fern").click();
     await page.mouse.move(plant.x, plant.y, { steps: 6 });
-    await expect(status(page)).toHaveText("That tile is taken.");
+    await expect(status(page)).toHaveText("That tile is taken by the potted plant.");
     await expect(status(page)).toHaveAttribute("data-tone", "bad");
 
     // Then a free tile: click to place.
@@ -178,13 +178,18 @@ test.describe("place bought furniture on a floor", () => {
     await expect(status(page)).toHaveText("Saved.");
     await bt(page, "Pick up").click();
     await expect(status(page)).toHaveText("Back in your inventory.");
-    await bt(page, "Done").click();
+    await arrangeButton(page).click();
     expect(errors).toEqual([]);
   });
 
-  test("the lobby cannot be arranged, so nothing can be placed there", async ({ page }) => {
+  test("the lobby takes no bought furniture: Edit room works, but there is no Inventory button and no tray", async ({ page }) => {
     await open(page);
-    await expect(arrangeButton(page)).toBeHidden();
+    await expect(arrangeButton(page)).toBeEnabled();
+    await arrangeButton(page).click();
+    await expect(bar(page)).toBeVisible();
+    await expect(bt(page, "Inventory")).toBeHidden();
     await expect(tray(page)).toBeHidden();
+    await arrangeButton(page).click();
+    await expect(bar(page)).toBeHidden();
   });
 });

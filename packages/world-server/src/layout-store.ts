@@ -18,8 +18,10 @@ export interface LayoutStoreOptions {
 }
 
 /**
- * How the user arranged each project floor (`{ [projectId]: { [itemId]: { x, y, dir } } }`), only the pieces that are not
- * where the template has them. Rewritten after every change through a temporary file and a rename. A file that cannot
+ * How the user arranged each room (`{ [roomId]: { [itemId]: { x, y, dir } } }`, room ids `lobby`, `hr` and `project:<id>`),
+ * only the pieces that are not where the template has them. A file from before every room could be arranged has bare
+ * project ids as keys; they are read as `project:<id>` and written in the new form on the next save. Rewritten after
+ * every change through a temporary file and a rename. A file that cannot
  * be read is moved aside as `layouts.json.bad-<time>` and the store starts empty, so a user's arrangement is never
  * overwritten by accident (the same rule as the engine's team store).
  */
@@ -58,20 +60,20 @@ export class LayoutStore {
     renameSync(tmp, this.file);
   }
 
-  /** The saved layout of a project, or undefined while its floor is as the template made it. */
-  get(projectId: string): Layout | undefined {
-    return Object.hasOwn(this.layouts, projectId) ? this.layouts[projectId] : undefined;
+  /** The saved layout of a room (`lobby`, `hr`, `project:<id>`), or undefined while it is as the template made it. */
+  get(roomId: string): Layout | undefined {
+    return Object.hasOwn(this.layouts, roomId) ? this.layouts[roomId] : undefined;
   }
 
-  /** Saves the layout of a project. An empty layout removes the entry. Throws when the file cannot be written (the old state stays). */
-  set(projectId: string, layout: Layout): void {
+  /** Saves the layout of a room. An empty layout removes the entry. Throws when the file cannot be written (the old state stays). */
+  set(roomId: string, layout: Layout): void {
     const before = this.layouts;
     if (Object.keys(layout).length === 0) {
-      if (!Object.hasOwn(this.layouts, projectId)) return;
-      const { [projectId]: _gone, ...rest } = this.layouts;
+      if (!Object.hasOwn(this.layouts, roomId)) return;
+      const { [roomId]: _gone, ...rest } = this.layouts;
       this.layouts = rest;
     } else {
-      this.layouts = { ...this.layouts, [projectId]: { ...layout } };
+      this.layouts = { ...this.layouts, [roomId]: { ...layout } };
     }
     try {
       this.save();

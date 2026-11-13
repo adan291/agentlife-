@@ -2,14 +2,16 @@ import type { ArrangeView } from "./arrange.ts";
 import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
-.al-arrange { position: absolute; z-index: 12; left: var(--al-s2); bottom: var(--al-s2); width: min(440px, calc(100% - var(--al-s4))); display: flex; flex-direction: column; gap: var(--al-s2); padding: var(--al-s2) var(--al-s3); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); box-shadow: var(--al-shadow); font: var(--al-font, 14px)/1.4 monospace; }
+.al-arrange { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-s1) var(--al-s3); padding: var(--al-s2) var(--al-s3); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border-bottom: 2px solid var(--al-accent); font: var(--al-font, 14px)/1.4 monospace; }
 .al-arrange[hidden] { display: none; }
-.al-arrange-piece { margin: 0; font-weight: bold; color: ${UI_COLOURS.accentText}; overflow-wrap: anywhere; }
+.al-arrange-help { margin: 0; flex: 1 1 100%; min-width: 0; font-weight: bold; color: ${UI_COLOURS.accentText}; overflow-wrap: anywhere; }
+.al-arrange-info { flex: 1 1 280px; min-width: 0; display: flex; flex-wrap: wrap; gap: 0 var(--al-s3); }
+.al-arrange-piece { margin: 0; font-weight: bold; overflow-wrap: anywhere; }
 .al-arrange-status { margin: 0; overflow-wrap: anywhere; }
 .al-arrange-status[data-tone="ok"] { color: ${UI_COLOURS.add}; }
 .al-arrange-status[data-tone="bad"] { color: ${UI_COLOURS.error}; font-weight: bold; }
 .al-arrange-buttons, .al-arrange-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-s2); }
-.al-arrange-confirm[hidden] { display: none; }
+.al-arrange-buttons[hidden], .al-arrange-confirm[hidden] { display: none; }
 .al-arrange-confirm p { margin: 0; flex: 1 1 100%; }
 `;
 
@@ -20,17 +22,23 @@ export interface ArrangeBarActions {
   pickUp(): void;
   /** Called after the user confirmed. */
   reset(): void;
-  done(): void;
+  /** The Inventory button was pressed: the tray shows or hides (read `ArrangeBar.inventoryOpen`). */
+  inventory(): void;
 }
 
 export interface ArrangeBar {
   readonly element: HTMLElement;
   update(view: ArrangeView): void;
+  /** The name of the room in the first line ("Editing Lobby: ..."). */
+  setFloor(name: string): void;
+  /** Whether the Inventory button is pressed (the tray is open). It is pressed again every time editing starts. */
+  readonly inventoryOpen: boolean;
 }
 
 /**
- * The tool bar of arrange mode, at the bottom of the stage: what is selected and where, the latest answer (green, or red
- * with the reason), and the Rotate, Undo, Reset layout and Done buttons. Reset layout asks first.
+ * The tool bar of edit mode, in the row under the top bar: what to do, what is selected and where, the latest answer
+ * (green, or red with the reason), and the Rotate, Undo, Pick up, Reset layout and Inventory buttons. Reset layout asks first.
+ * Leaving is the top bar's Done button and the Esc key, not a button here.
  */
 export function createArrangeBar(doc: Document, host: HTMLElement, actions: ArrangeBarActions): ArrangeBar {
   const style = doc.createElement("style");
@@ -49,14 +57,22 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
 
   const root = doc.createElement("section");
   root.className = "al-arrange";
-  root.setAttribute("aria-label", "Arrange the room");
+  root.setAttribute("aria-label", "Edit room");
   root.hidden = true;
+  const help = doc.createElement("p");
+  help.className = "al-arrange-help";
+  let floorName = "";
+  const helpText = (): string => `Editing ${floorName === "" ? "this room" : floorName}: drag furniture, arrows to move, R to turn, Esc when done`;
+  help.textContent = helpText();
+  const info = doc.createElement("div");
+  info.className = "al-arrange-info";
   const piece = doc.createElement("p");
   piece.className = "al-arrange-piece";
   const status = doc.createElement("p");
   status.className = "al-arrange-status";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
+  info.append(piece, status);
 
   const rotate = button("Rotate (R)", "Turn the selected piece a quarter turn (R)");
   rotate.addEventListener("click", () => actions.rotate());
@@ -65,11 +81,17 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
   const pickUp = button("Pick up", "Take the selected piece back into your inventory (only pieces you bought)");
   pickUp.addEventListener("click", () => actions.pickUp());
   const reset = button("Reset layout", "Put every piece back where the template has it");
-  const done = button("Done", "Leave arrange mode (Esc)");
-  done.addEventListener("click", () => actions.done());
+  let inventoryOpen = true;
+  const inventory = button("Inventory", "Show or hide the furniture you bought and have not placed");
+  inventory.setAttribute("aria-pressed", "true");
+  inventory.addEventListener("click", () => {
+    inventoryOpen = !inventoryOpen;
+    inventory.setAttribute("aria-pressed", String(inventoryOpen));
+    actions.inventory();
+  });
   const buttons = doc.createElement("div");
   buttons.className = "al-arrange-buttons";
-  buttons.append(rotate, undo, pickUp, reset, done);
+  buttons.append(rotate, undo, pickUp, reset, inventory);
 
   const confirm = doc.createElement("div");
   confirm.className = "al-arrange-confirm";
@@ -95,16 +117,25 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
     actions.reset();
   });
 
-  root.append(piece, status, buttons, confirm);
+  root.append(help, info, buttons, confirm);
   host.appendChild(root);
 
   return {
     element: root,
+    get inventoryOpen() {
+      return inventoryOpen;
+    },
+    setFloor(name) {
+      floorName = name;
+      help.textContent = helpText();
+    },
     update(view) {
       root.hidden = !view.active;
       if (!view.active) {
         confirm.hidden = true;
         buttons.hidden = false;
+        inventoryOpen = true;
+        inventory.setAttribute("aria-pressed", "true");
         return;
       }
       piece.textContent = view.piece && view.where ? `${view.piece}: ${view.where}` : "Nothing selected";
@@ -113,8 +144,9 @@ export function createArrangeBar(doc: Document, host: HTMLElement, actions: Arra
       rotate.disabled = !view.canRotate;
       undo.disabled = !view.canUndo;
       pickUp.disabled = !view.canPickUp;
+      pickUp.hidden = !view.inventory;
+      inventory.hidden = !view.inventory;
       reset.disabled = view.busy;
-      done.disabled = false;
       root.dataset["busy"] = String(view.busy);
     },
   };

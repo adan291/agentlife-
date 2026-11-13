@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { zoomOf } from "./helpers.ts";
 
 /** The one project of the scripted engine; its floor is built from `rooms/project-template.json` (12 x 10 tiles). */
 const FLOOR = "project:haunted-todo";
@@ -26,7 +27,7 @@ async function open(page: Page): Promise<string[]> {
   return errors;
 }
 
-const arrangeButton = (page: Page) => page.locator(".al-arrange-open");
+const arrangeButton = (page: Page) => page.locator(".al-edit");
 const bar = (page: Page) => page.locator(".al-arrange");
 const piece = (page: Page) => page.locator(".al-arrange-piece");
 const status = (page: Page) => page.locator(".al-arrange-status");
@@ -36,8 +37,7 @@ const bt = (page: Page, name: string) => bar(page).getByRole("button", { name, e
 async function tilePoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
   const canvas = await page.locator(".al-stage > canvas").boundingBox();
   if (!canvas) throw new Error("no canvas");
-  const zoomText = await page.locator(".al-top-right .al-btn", { hasText: /^[12]×$/ }).textContent();
-  const zoom = Number.parseInt(zoomText ?? "1", 10);
+  const zoom = await zoomOf(page);
   const rootX = Math.round(Math.floor(canvas.width) / 2 - CENTRE.x * zoom);
   const rootY = Math.round(Math.floor(canvas.height) / 2 - CENTRE.y * zoom);
   return {
@@ -63,7 +63,7 @@ async function resetFloor(page: Page): Promise<void> {
   await bt(page, "Reset layout").click();
   await bt(page, "Yes, reset").click();
   await expect(status(page)).toHaveText("Layout reset.");
-  await bt(page, "Done").click();
+  await arrangeButton(page).click();
   await expect(bar(page)).toBeHidden();
 }
 
@@ -122,7 +122,7 @@ test.describe("arrange the furniture of a project floor", () => {
     await expect(status(page)).toHaveText("The elevator stays where it is.");
     await expect(status(page)).toHaveAttribute("data-tone", "bad");
 
-    await bt(page, "Done").click();
+    await arrangeButton(page).click();
     expect(errors).toEqual([]);
   });
 
@@ -147,7 +147,7 @@ test.describe("arrange the furniture of a project floor", () => {
     await expect(status(page)).toHaveText("Undone.");
     await expect(bt(page, "Undo")).toBeDisabled();
 
-    await bt(page, "Done").click();
+    await arrangeButton(page).click();
     expect(errors).toEqual([]);
   });
 
@@ -175,14 +175,76 @@ test.describe("arrange the furniture of a project floor", () => {
     expect(errors).toEqual([]);
   });
 
-  test("the Arrange button is only on a project floor", async ({ page }) => {
+  test("a moved piece can be grabbed, moved and turned again where it was dropped, by mouse and by keys, without a reload", async ({ page }) => {
+    const errors = await open(page);
+    await startArranging(page);
+    await resetFloor(page);
+    await startArranging(page);
+
+    /** Drag with the mouse from the middle of one tile to the middle of another. */
+    const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      const a = await tilePoint(page, from.x, from.y);
+      const b = await tilePoint(page, to.x, to.y);
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      await page.mouse.move(b.x, b.y, { steps: 8 });
+      await page.mouse.up();
+    };
+    const plantAt = (x: number, y: number, facing = "south") => `Potted plant: tile ${x}, ${y}, facing ${facing}`;
+
+    // Three moves by mouse, each one grabbing the plant on the tile where the last one dropped it. The third drop puts
+    // it on (6, 8), right behind the sofa: the middle of that tile is under the sofa's own box.
+    await clickTile(page, 9, 8);
+    await expect(piece(page)).toHaveText(plantAt(9, 8));
+    await drag({ x: 9, y: 8 }, { x: 8, y: 8 });
+    await expect(piece(page)).toHaveText(plantAt(8, 8));
+    await expect(status(page)).toHaveText("Saved.");
+    await drag({ x: 8, y: 8 }, { x: 7, y: 8 });
+    await expect(piece(page)).toHaveText(plantAt(7, 8));
+    await drag({ x: 7, y: 8 }, { x: 6, y: 8 });
+    await expect(piece(page)).toHaveText(plantAt(6, 8));
+    await expect(status(page)).toHaveText("Saved.");
+
+    // A fourth move by mouse from the same spot: the plant, not the sofa in front of it, is what moves.
+    await drag({ x: 6, y: 8 }, { x: 5, y: 8 });
+    await expect(piece(page)).toHaveText(plantAt(5, 8));
+    await expect(status(page)).toHaveText("Saved.");
+
+    // Two turns in place by key, then a move by key, then a turn again.
+    await page.keyboard.press("r");
+    await expect(piece(page)).toHaveText(plantAt(5, 8, "west"));
+    await page.keyboard.press("r");
+    await expect(piece(page)).toHaveText(plantAt(5, 8, "north"));
+    await page.keyboard.press("ArrowLeft");
+    await expect(piece(page)).toHaveText(plantAt(4, 8, "north"));
+    await page.keyboard.press("r");
+    await expect(piece(page)).toHaveText(plantAt(4, 8, "east"));
+    await expect(status(page)).toHaveText("Saved.");
+
+    // Let go of it, then pick it up again by its drawing (above the tile): a moved piece is selectable like any other.
+    await clickTile(page, 2, 1);
+    await expect(piece(page)).toHaveText("Nothing selected");
+    const body = await tilePoint(page, 4, 8);
+    await page.mouse.click(body.x, body.y - 32);
+    await expect(piece(page)).toHaveText(plantAt(4, 8, "east"));
+
+    await resetFloor(page);
+    expect(errors).toEqual([]);
+  });
+
+  test("Edit room works on a project floor and in the lobby", async ({ page }) => {
     await open(page);
-    await expect(arrangeButton(page)).toBeVisible();
+    await expect(arrangeButton(page)).toBeEnabled();
+    await expect(arrangeButton(page)).toHaveText("Edit room");
     await page.getByRole("button", { name: /Take the elevator/ }).click();
     const panel = page.getByRole("dialog", { name: "Elevator" });
     await expect(panel).toBeVisible();
     await panel.getByRole("button", { name: /^Go to Lobby$/i }).click();
     await expect(page.locator(".al-floor-label")).toHaveText(/lobby/i);
-    await expect(arrangeButton(page)).toBeHidden();
+    await expect(arrangeButton(page)).toBeEnabled();
+    await arrangeButton(page).click();
+    await expect(bar(page)).toBeVisible();
+    await arrangeButton(page).click();
+    await expect(bar(page)).toBeHidden();
   });
 });

@@ -144,7 +144,7 @@ describe("furni_place and furni_pickup through the gateway", () => {
     const c = connect(gateway.port);
     await c.ready();
     const refused: [ClientMsg, string][] = [
-      [place("fern", 9, 8), "That tile is taken."],
+      [place("fern", 9, 8), "That tile is taken by the potted plant."],
       [place("fern", 30, 30), "That is outside the room."],
       [place("fern", 5, 3), "A standing spot of the team is on that tile."],
       [place("wall_clock", 6, 5), "You do not have that item."],
@@ -161,15 +161,19 @@ describe("furni_place and furni_pickup through the gateway", () => {
     expect(inventoryOnDisk().placed).toEqual({});
   });
 
-  it("a wall piece goes on a wall only, and a piece that blocks the way is refused", async () => {
+  it("a wall piece may stand free but faces the room against a wall, and a piece that blocks the way is refused", async () => {
     const { gateway } = await boot({ eco: economy(8, ["wall_clock", "fern"]) });
     const c = connect(gateway.port);
     await c.ready();
-    expect(await c.ask(place("wall_clock", 6, 5))).toBe("error");
-    expect(c.layoutErrors().at(-1)).toBe("This piece goes on a wall.");
+    // Free in the middle of the floor: fine.
+    expect(await c.ask(place("wall_clock", 6, 5))).toBe("layout");
+    // Against the west wall facing south: refused with the reason; facing east it fits.
+    expect(await c.ask({ type: "furni_move", itemId: "bought_1", x: 0, y: 1, dir: 4 })).toBe("error");
+    expect(c.layoutErrors().at(-1)).toBe("Against a wall this piece faces the room. Move it away from the wall to turn it.");
+    expect(await c.ask({ type: "furni_move", itemId: "bought_1", x: 0, y: 1, dir: 2 })).toBe("layout");
     expect(await c.ask(place("fern", 4, 7))).toBe("error");
     expect(c.layoutErrors().at(-1)).toMatch(/^(Blocks the path|Nobody could reach)/);
-    expect(inventoryOnDisk().stock).toEqual({ fern: 1, wall_clock: 1 });
+    expect(inventoryOnDisk().stock).toEqual({ fern: 1 });
   });
 
   it("is refused in the lobby and when the hotel has no economy", async () => {
@@ -178,7 +182,7 @@ describe("furni_place and furni_pickup through the gateway", () => {
     await a.ready();
     a.send(place("fern", 2, 1));
     await a.waitFor(() => a.layoutErrors().length === 1);
-    expect(a.layoutErrors()).toEqual(["Only project floors can be arranged."]);
+    expect(a.layoutErrors()).toEqual(["Bought furniture can only stand on project floors."]);
 
     const none = await boot({ eco: undefined });
     const b = connect(none.gateway.port);
@@ -222,12 +226,12 @@ describe("furni_place and furni_pickup through the gateway", () => {
     expect(inventoryOnDisk().placed["alpha"]).toEqual([{ id: "bought_1", itemId: "fern", x: 3, y: 1, dir: 6 }]);
     expect(existsSync(layoutsFile())).toBe(false);
     expect(await c.ask({ type: "furni_move", itemId: "plant_2", x: 8, y: 8, dir: 4 })).toBe("layout");
-    expect(JSON.parse(readFileSync(layoutsFile(), "utf8"))).toEqual({ alpha: { plant_2: { x: 8, y: 8, dir: 4 } } });
+    expect(JSON.parse(readFileSync(layoutsFile(), "utf8"))).toEqual({ "project:alpha": { plant_2: { x: 8, y: 8, dir: 4 } } });
     expect(inventoryOnDisk().placed["alpha"]).toEqual([{ id: "bought_1", itemId: "fern", x: 3, y: 1, dir: 6 }]);
 
     // A refused move of a bought piece changes neither file.
     expect(await c.ask({ type: "furni_move", itemId: "bought_1", x: 8, y: 8, dir: 4 })).toBe("error");
-    expect(c.layoutErrors().at(-1)).toBe("That tile is taken.");
+    expect(c.layoutErrors().at(-1)).toBe("That tile is taken by the potted plant.");
     expect(inventoryOnDisk().placed["alpha"]).toEqual([{ id: "bought_1", itemId: "fern", x: 3, y: 1, dir: 6 }]);
   });
 

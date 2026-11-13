@@ -16,7 +16,7 @@
   ],
   "door": { "name": "door", "x": 1, "y": 8, "dir": 6 },
   "anchors": [
-    { "name": "desk", "x": 10, "y": 6, "dir": 2, "agent": "builder" },
+    { "name": "desk", "x": 10, "y": 6, "dir": 2, "agent": "builder", "follows": "desk_builder" },
     { "name": "home_builder", "x": 8, "y": 8, "dir": 4 }
   ],
   "furni": [

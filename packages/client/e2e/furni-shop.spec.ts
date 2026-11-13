@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { zoomOf } from "./helpers.ts";
 
 async function open(page: Page, width = 1366, height = 768): Promise<void> {
   await page.addInitScript(() => {
@@ -16,36 +17,27 @@ async function open(page: Page, width = 1366, height = 768): Promise<void> {
 const balance = (page: Page) => page.locator(".al-balance");
 
 test.describe("Ecto balance", () => {
-  for (const [width, height] of [
-    [1366, 768],
-    [375, 667],
-  ] as const) {
-    test(`is visible on the stage at ${width}x${height}, away from the job stepper`, async ({ page }) => {
-      await open(page, width, height);
-      await expect(balance(page)).toBeVisible();
-      await expect(balance(page)).toHaveText(/^\d+ Ecto$/);
-      await expect(balance(page)).toHaveAttribute("aria-label", /^\d+ Ecto$/);
-      const chip = await balance(page).boundingBox();
-      const stage = await page.locator(".al-stage").boundingBox();
-      expect(chip).not.toBeNull();
-      expect(stage).not.toBeNull();
-      // Inside the stage, in its top left corner.
-      expect(chip!.x).toBeGreaterThanOrEqual(stage!.x);
-      expect(chip!.y).toBeGreaterThanOrEqual(stage!.y);
-      expect(chip!.x + chip!.width).toBeLessThanOrEqual(stage!.x + stage!.width);
-      // It takes no room from the top bar: the stepper keeps its labels at 1366 px.
-      if (width >= 1200) {
-        const top = await page.locator(".al-top").boundingBox();
-        expect(chip!.y).toBeGreaterThanOrEqual(top!.y + top!.height);
-      }
-    });
-  }
-
-  test("does not overflow the top bar at 1366 px (the job-insight tests check the stepper's labels with the chip on)", async ({ page }) => {
-    await open(page);
+  test("is in the top bar at 1366x768, next to the level, and does not overflow it", async ({ page }) => {
+    await open(page, 1366, 768);
     await expect(balance(page)).toBeVisible();
+    await expect(balance(page)).toHaveText(/^\d+ Ecto$/);
+    await expect(balance(page)).toHaveAttribute("aria-label", /^\d+ Ecto$/);
+    const chip = await balance(page).boundingBox();
+    const top = await page.locator(".al-top").boundingBox();
+    expect(chip).not.toBeNull();
+    expect(top).not.toBeNull();
+    expect(chip!.y).toBeGreaterThanOrEqual(top!.y);
+    expect(chip!.y + chip!.height).toBeLessThanOrEqual(top!.y + top!.height);
+    expect(chip!.x + chip!.width).toBeLessThanOrEqual(top!.x + top!.width);
     const overflow = await page.locator(".al-top").evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("collapses into the Menu below 900 px: the profile item shows the balance", async ({ page }) => {
+    await open(page, 375, 667);
+    await expect(balance(page)).toBeHidden();
+    await page.getByRole("button", { name: "Menu" }).click();
+    await expect(page.getByRole("menuitem", { name: /^Profile: .*\d+ Ecto/ })).toBeVisible();
   });
 });
 
@@ -58,8 +50,7 @@ const CENTRE = { x: 32, y: 112 };
 async function tilePoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
   const canvas = await page.locator(".al-stage > canvas").boundingBox();
   if (!canvas) throw new Error("no canvas");
-  const zoomText = await page.locator(".al-top-right .al-btn", { hasText: /^[12]×$/ }).textContent();
-  const zoom = Number.parseInt(zoomText ?? "1", 10);
+  const zoom = await zoomOf(page);
   const rootX = Math.round(Math.floor(canvas.width) / 2 - CENTRE.x * zoom);
   const rootY = Math.round(Math.floor(canvas.height) / 2 - CENTRE.y * zoom);
   return { x: canvas.x + rootX + ((x - y) * TILE_W * zoom) / 2, y: canvas.y + rootY + ((x + y) * TILE_H * zoom) / 2 };

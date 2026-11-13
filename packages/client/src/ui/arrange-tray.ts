@@ -2,7 +2,7 @@ import type { ArrangeView } from "./arrange.ts";
 import { UI_COLOURS } from "./theme.ts";
 
 const CSS = `
-.al-tray { position: absolute; z-index: 12; top: calc(var(--al-s2) + 44px); right: var(--al-s2); bottom: var(--al-s2); width: 200px; max-width: calc(50% - var(--al-s3)); display: flex; flex-direction: column; gap: var(--al-s2); padding: var(--al-s2); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-shadow: var(--al-shadow); font: var(--al-font, 14px)/1.4 monospace; pointer-events: auto; }
+.al-tray { position: absolute; z-index: 12; top: var(--al-s2); right: var(--al-s2); bottom: var(--al-s2); width: 200px; max-width: calc(50% - var(--al-s3)); display: flex; flex-direction: column; gap: var(--al-s2); padding: var(--al-s2); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-shadow: var(--al-shadow); font: var(--al-font, 14px)/1.4 monospace; pointer-events: auto; }
 .al-tray[hidden] { display: none; }
 .al-tray-head { margin: 0; font-weight: bold; color: ${UI_COLOURS.accentText}; }
 .al-tray-empty { margin: 0; }
@@ -26,7 +26,8 @@ export interface ArrangeTrayDeps {
 
 export interface ArrangeTray {
   readonly element: HTMLElement;
-  update(view: ArrangeView): void;
+  /** `open`: the Inventory button of the tool bar is pressed. The tray shows only while editing a room that takes bought furniture. */
+  update(view: ArrangeView, open?: boolean): void;
 }
 
 /**
@@ -60,9 +61,9 @@ export function createArrangeTray(doc: Document, host: HTMLElement, actions: Arr
 
   return {
     element: root,
-    update(view) {
-      root.hidden = !view.active;
-      if (!view.active) return;
+    update(view, open = true) {
+      root.hidden = !view.active || !view.inventory || !open;
+      if (root.hidden) return;
       const next = JSON.stringify(view.tray);
       empty.hidden = view.tray.length > 0;
       if (next === key) {

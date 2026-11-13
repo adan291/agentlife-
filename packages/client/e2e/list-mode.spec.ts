@@ -15,7 +15,7 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator(".al-stage > canvas")).toBeVisible();
 }
 
-const viewButton = (page: Page) => page.locator(".al-top-right .al-btn", { hasText: /^(List|Hotel)$/ });
+const viewButton = (page: Page) => page.locator(".al-top-right .al-view-toggle");
 const row = (page: Page) => page.locator(`.al-list-row[data-room="${ROOM}"]`);
 
 async function runCommand(page: Page, query: string): Promise<void> {
@@ -38,7 +38,7 @@ test.describe("list view and command palette", () => {
     await expect(page.locator(".al-list")).toBeVisible();
     await expect(row(page)).toBeVisible();
     await expect(page.locator(".al-shell")).toHaveAttribute("data-view", "list");
-    await expect(viewButton(page)).toHaveText("Hotel");
+    await expect(viewButton(page)).toHaveAttribute("data-view", "list");
 
     await page.keyboard.press("l");
     await expect(page.locator(".al-list")).toBeHidden();

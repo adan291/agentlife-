@@ -112,7 +112,7 @@ export function saveShellPrefs(storage: FlagStorage | undefined, prefs: ShellPre
 }
 
 const CSS = `
-.al-shell { display: grid; position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden; grid-template-columns: var(--side-w, ${SIDE_EXPANDED_PX}px) minmax(0, 1fr); grid-template-rows: ${TOP_BAR_PX}px minmax(0, 1fr) var(--dock-h, ${DOCK_HEADER_PX}px); grid-template-areas: "top top" "side stage" "dock dock"; }
+.al-shell { display: grid; position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden; grid-template-columns: var(--side-w, ${SIDE_EXPANDED_PX}px) minmax(0, 1fr); grid-template-rows: ${TOP_BAR_PX}px auto minmax(0, 1fr) var(--dock-h, ${DOCK_HEADER_PX}px); grid-template-areas: "top top" "edit edit" "side stage" "dock dock"; }
 @supports (height: 100dvh) { .al-shell { height: 100dvh; } }
 .al-top { grid-area: top; min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--al-s3); padding: 0 var(--al-s3); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-bottom: 1px solid var(--al-border); color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
 .al-top-left { display: flex; align-items: center; gap: var(--al-s3); min-width: 0; }
@@ -120,6 +120,7 @@ const CSS = `
 .al-top-right { display: flex; align-items: center; gap: var(--al-s2); }
 .al-title { margin: 0; font: inherit; font-weight: bold; letter-spacing: 0.08em; color: ${UI_COLOURS.accentText}; white-space: nowrap; }
 .al-shell[data-compact="true"]:has(.al-status:not([hidden])) .al-title { display: none; }
+.al-editbar { grid-area: edit; min-width: 0; min-height: 0; overflow: hidden; }
 .al-side { grid-area: side; min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-right: 1px solid var(--al-border); }
 .al-stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 .al-stage > canvas { position: absolute; top: 0; left: 0; display: block; }
@@ -135,6 +136,8 @@ export interface Shell {
   readonly topLeft: HTMLElement;
   readonly topCentre: HTMLElement;
   readonly topRight: HTMLElement;
+  /** Row under the top bar for the edit-room tool bar. It takes no height while its content is hidden. */
+  readonly editBar: HTMLElement;
   readonly side: HTMLElement;
   readonly stage: HTMLElement;
   /** Column at the top of the stage for the your-turn toast and notices: directly under the top bar. */
@@ -188,6 +191,8 @@ export function createShell(options: ShellOptions = {}): Shell {
   const topRight = document.createElement("div");
   topRight.className = "al-top-right";
   topBar.append(topLeft, topCentre, topRight);
+  const editBar = document.createElement("div");
+  editBar.className = "al-editbar";
   const side = document.createElement("aside");
   side.className = "al-side";
   side.setAttribute("aria-label", "Team");
@@ -198,7 +203,7 @@ export function createShell(options: ShellOptions = {}): Shell {
   stage.appendChild(banners);
   const dock = document.createElement("section");
   dock.className = "al-dock";
-  root.append(topBar, side, stage, dock);
+  root.append(topBar, editBar, side, stage, dock);
   (options.parent ?? document.body).appendChild(root);
 
   let prefs = loadShellPrefs(storage);
@@ -239,6 +244,7 @@ export function createShell(options: ShellOptions = {}): Shell {
     topLeft,
     topCentre,
     topRight,
+    editBar,
     side,
     stage,
     banners,

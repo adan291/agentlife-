@@ -88,8 +88,8 @@ export interface HotelOptions {
   /** Room where a user starts. Default: the lobby. Falls back to the lobby when the room no longer exists. */
   startRoom?: RoomId;
   sim?: WorldSimOptions;
-  /** The saved layout of a project, read when its floor is built. */
-  layoutOf?: (projectId: string) => Layout | undefined;
+  /** The saved layout of a room (`lobby`, `hr` or `project:<id>`), read when its floor is built. */
+  layoutOf?: (roomId: string) => Layout | undefined;
   /** The bought pieces standing on a project floor, read when its floor is built (furni-shop). */
   extrasOf?: (projectId: string) => readonly PlacedFurni[];
 }
@@ -106,7 +106,18 @@ export type ArrangeResult =
   | { ok: true; room: RoomDef; layout: Layout }
   | { ok: false; code: ArrangeCode; reason: string };
 
-const NOT_EDITABLE: ArrangeResult = { ok: false, code: "not_editable", reason: "Only project floors can be arranged." };
+const NOT_EDITABLE: ArrangeResult = { ok: false, code: "not_editable", reason: "That room cannot be arranged." };
+const PROJECT_ONLY: ArrangeResult = { ok: false, code: "not_editable", reason: "Bought furniture can only stand on project floors." };
+
+/** A room with its saved layout applied; a layout that makes the room invalid leaves the base as it is. */
+function arrangedRoom(base: RoomDef, layout: Layout | undefined): RoomDef {
+  if (!layout) return base;
+  try {
+    return validateRoom(applyLayout(base, layout).room);
+  } catch {
+    return base;
+  }
+}
 
 /**
  * The rooms of the hotel: one `WorldSim` each. A user is in exactly one room; moving leaves the old room and joins the
@@ -115,13 +126,13 @@ const NOT_EDITABLE: ArrangeResult = { ok: false, code: "not_editable", reason: "
 export class Hotel {
   private readonly sims = new Map<RoomId, WorldSim>();
   private readonly userRooms = new Map<number, RoomId>();
-  /** The floor of each project as the template makes it, to compare a layout with and to go back to. */
+  /** The floor of each room as its template makes it, to compare a layout with and to go back to. */
   private readonly bases = new Map<RoomId, RoomDef>();
   private readonly template: RoomDef;
   private readonly clock: () => number;
   private readonly simOptions: WorldSimOptions;
   private readonly startRoom: RoomId;
-  private readonly savedLayout: ((projectId: string) => Layout | undefined) | undefined;
+  private readonly savedLayout: ((roomId: string) => Layout | undefined) | undefined;
   private readonly savedExtras: ((projectId: string) => readonly PlacedFurni[]) | undefined;
 
   constructor(opts: HotelOptions) {
@@ -131,8 +142,13 @@ export class Hotel {
     this.startRoom = opts.startRoom ?? LOBBY_ROOM;
     this.savedLayout = opts.layoutOf;
     this.savedExtras = opts.extrasOf;
-    this.sims.set(LOBBY_ROOM, new WorldSim({ ...opts.lobby, id: LOBBY_ROOM, kind: "lobby" }, opts.clock, this.simOptions));
-    this.sims.set(HR_ROOM, new WorldSim({ ...opts.hr, id: HR_ROOM, kind: "hr" }, opts.clock, this.simOptions));
+    // The lobby and the HR office can be arranged like a project floor: each keeps its room as the base to compare a layout with.
+    const lobby: RoomDef = { ...opts.lobby, id: LOBBY_ROOM, kind: "lobby" };
+    const hr: RoomDef = { ...opts.hr, id: HR_ROOM, kind: "hr" };
+    this.bases.set(LOBBY_ROOM, lobby);
+    this.bases.set(HR_ROOM, hr);
+    this.sims.set(LOBBY_ROOM, new WorldSim(arrangedRoom(lobby, this.savedLayout?.(LOBBY_ROOM)), opts.clock, this.simOptions));
+    this.sims.set(HR_ROOM, new WorldSim(arrangedRoom(hr, this.savedLayout?.(HR_ROOM)), opts.clock, this.simOptions));
   }
 
   has(roomId: string): roomId is RoomId {
@@ -162,15 +178,15 @@ export class Hotel {
     if (!this.sims.has(roomId)) {
       const base = baseRoomForProject(this.template, project);
       this.bases.set(roomId, base);
-      const room = roomForProject(this.template, project, this.savedLayout?.(project.id), this.savedExtras?.(project.id));
+      const room = roomForProject(this.template, project, this.savedLayout?.(roomId), this.savedExtras?.(project.id));
       this.sims.set(roomId, new WorldSim(room, this.clock, this.simOptions));
     }
     return roomId;
   }
 
   /**
-   * Moves one piece of the user's project floor. `save` gets the floor's whole new layout after the checks and before
-   * the change; if it throws nothing changes. Only project floors can be arranged.
+   * Moves one piece of the user's room. `save` gets the room's whole new layout after the checks and before
+   * the change; if it throws nothing changes. Every room can be arranged (the lobby and the HR office too).
    */
   moveFurniture(roomId: string, itemId: string, to: Placement, save?: (layout: Layout) => void): ArrangeResult {
     const sim = this.sims.get(roomId as RoomId);
@@ -223,6 +239,7 @@ export class Hotel {
     const sim = this.sims.get(roomId as RoomId);
     const base = this.bases.get(roomId as RoomId);
     if (!sim || !base) return NOT_EDITABLE;
+    if (projectIdOfRoom(roomId) === undefined) return PROJECT_ONLY;
     const def = FURNI_CATALOG[piece.defId];
     if (!def || isTemplatePiece(def)) return { ok: false, code: "unknown_item", reason: "That piece cannot be placed." };
     if (sim.room.furni.some((p) => p.itemId === piece.itemId)) return { ok: false, code: "duplicate", reason: "That piece is already on the floor." };
@@ -236,6 +253,7 @@ export class Hotel {
     const sim = this.sims.get(roomId as RoomId);
     const base = this.bases.get(roomId as RoomId);
     if (!sim || !base) return NOT_EDITABLE;
+    if (projectIdOfRoom(roomId) === undefined) return PROJECT_ONLY;
     if (base.furni.some((p) => p.itemId === itemId)) return { ok: false, code: "not_removable", reason: "That piece belongs to the room. You can move it, not pick it up." };
     if (!sim.room.furni.some((p) => p.itemId === itemId)) return { ok: false, code: "unknown_item", reason: "That piece is not in this room." };
     return this.commit(sim, base, { ...sim.room, furni: sim.room.furni.filter((p) => p.itemId !== itemId) }, save);

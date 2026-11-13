@@ -122,7 +122,7 @@ describe("placing a carried item", () => {
     const h = harness();
     h.model.enter();
     h.model.carry("fern");
-    h.model.pointerDown(null, { x: 2, y: 1 });
+    h.model.pointerDown([], { x: 2, y: 1 });
     h.model.pointerUp();
     expect(h.sent).toHaveLength(1);
     h.answer();
@@ -135,7 +135,7 @@ describe("placing a carried item", () => {
     h.model.carry("fern");
     h.model.pointerMove({ x: 9, y: 8 }); // the plant
     expect(h.model.overlay()?.preview?.ok).toBe(false);
-    expect(h.model.view()).toMatchObject({ status: "That tile is taken.", tone: "bad" });
+    expect(h.model.view()).toMatchObject({ status: "That tile is taken by the potted plant.", tone: "bad" });
     h.model.pointerUp();
     expect(h.sent).toEqual([]);
     h.model.pointerMove({ x: 20, y: 20 });
@@ -143,13 +143,21 @@ describe("placing a carried item", () => {
     expect(h.model.view().carrying).toBe("fern");
   });
 
-  it("a wall piece goes on a wall and is refused in the middle of the floor", () => {
+  it("a wall piece may stand free in the middle of the floor, and against a wall it must face the room", () => {
     const h = harness();
     h.model.enter();
     h.model.carry("wall_clock");
     h.model.pointerMove({ x: 6, y: 5 });
-    expect(h.model.view().status).toBe("This piece goes on a wall.");
+    expect(h.model.overlay()?.preview?.ok).toBe(true);
+    // Against the north wall it faces south (the default direction), and turned east it is refused there.
     h.model.pointerMove({ x: 2, y: 0 });
+    expect(h.model.overlay()?.preview?.ok).toBe(true);
+    h.model.rotate();
+    expect(h.model.overlay()?.preview?.ok).toBe(false);
+    expect(h.model.view().status).toBe("Against a wall this piece faces the room. Move it away from the wall to turn it.");
+    h.model.rotate();
+    h.model.rotate();
+    h.model.rotate();
     expect(h.model.overlay()?.preview?.ok).toBe(true);
     h.model.pointerUp();
     h.answer();
@@ -374,7 +382,7 @@ describe("the tray and the bar", () => {
       undo: () => undefined,
       pickUp: () => calls.push("pickUp"),
       reset: () => undefined,
-      done: () => undefined,
+      inventory: () => undefined,
     });
     const el = bar.element as unknown as FakeElement;
     const pick = findAll(el, (e) => e.tagName === "button" && e.textContent === "Pick up")[0]!;

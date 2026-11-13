@@ -19,7 +19,7 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator(".al-stage > canvas")).toBeVisible();
 }
 
-const viewButton = (page: Page) => page.locator(".al-top-right .al-btn", { hasText: /^(List|Hotel)$/ });
+const viewButton = (page: Page) => page.locator(".al-top-right .al-view-toggle");
 const row = (page: Page) => page.locator(`.al-list-row[data-room="${ROOM}"]`);
 const balance = async (page: Page): Promise<number> => Number.parseInt((await page.locator(".al-balance").innerText()).replace(/\D/g, ""), 10);
 
@@ -96,31 +96,51 @@ test.describe("wisps with reduced motion", () => {
 });
 
 test.describe("emotes and sitting", () => {
-  test("the bar sits the avatar on the sofa of the lobby and gets it up again, and the keys work except in a text field", async ({ page }) => {
+  test("the Actions menu sits the avatar on the sofa of the lobby and gets it up again, and the keys work except in a text field", async ({ page }) => {
     test.setTimeout(60_000);
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await open(page);
     await expect(page.locator(".al-floor-label")).toHaveText("Lobby");
-    const bar = page.getByRole("toolbar", { name: "Emotes" });
-    await expect(bar.getByRole("button")).toHaveCount(4);
+    const actions = page.getByRole("button", { name: /^Actions/ });
+    const list = page.getByRole("menu", { name: "Actions" });
+    const items = list.getByRole("menuitem");
+    // Closed by default: nothing of it on the stage but the button.
+    await expect(actions).toBeVisible();
+    await expect(list).toBeHidden();
+    await expect(page.getByRole("toolbar", { name: "Emotes" })).toHaveCount(0);
+    await actions.click();
+    await expect(items).toHaveText([/^Wave\s*1$/, /^Dance\s*2$/, /^Cheer\s*3$/, /^Sit down\s*4$/]);
+    await page.keyboard.press("Escape");
+    await expect(list).toBeHidden();
 
-    // Key 4 sits on the nearest free seat; the walk takes a few seconds, then the button says Stand.
-    const sit = bar.locator('[data-emote="sit"]');
-    await expect(sit).toHaveAttribute("aria-pressed", "false");
+    // Key 4 sits on the nearest free seat; the walk takes a few seconds, then the menu says Stand up.
     await page.keyboard.press("4");
-    await expect(sit).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
-    await expect(sit).toContainText("Stand");
+    await expect(async () => {
+      await actions.click();
+      await expect(items.nth(3)).toContainText("Stand up", { timeout: 500 });
+    }).toPass({ timeout: 30_000 });
+    // A seated avatar does not dance; Wave and Cheer work.
+    await expect(items.nth(1)).toBeDisabled();
+    await page.keyboard.press("Escape");
 
-    // Emotes while seated: no error, and the button stays pressed.
+    // Emotes while seated: no error, and the avatar stays seated.
     await page.keyboard.press("1");
     await page.keyboard.press("2");
-    await bar.locator('[data-emote="cheer"]').click();
-    await expect(sit).toHaveAttribute("aria-pressed", "true");
+    await actions.click();
+    await items.nth(2).click();
+    await expect(list).toBeHidden();
+    await actions.click();
+    await expect(items.nth(3)).toContainText("Stand up");
+    await page.keyboard.press("Escape");
 
     // The same key gets up.
     await page.keyboard.press("4");
-    await expect(sit).toHaveAttribute("aria-pressed", "false", { timeout: 10_000 });
+    await expect(async () => {
+      await actions.click();
+      await expect(items.nth(3)).toContainText("Sit down", { timeout: 500 });
+    }).toPass({ timeout: 10_000 });
+    await page.keyboard.press("Escape");
 
     // A number typed in a text field is a number: the palette's search box takes it and nothing is sent.
     await page.keyboard.press("Control+k");
@@ -130,7 +150,9 @@ test.describe("emotes and sitting", () => {
     await expect(input).toHaveValue("4");
     await page.keyboard.press("Escape");
     await expect(page.locator(".al-palette-wrap")).toBeHidden();
-    await expect(sit).toHaveAttribute("aria-pressed", "false");
+    await actions.click();
+    await expect(items.nth(3)).toContainText("Sit down");
+    await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
   });
 });
