@@ -15,7 +15,7 @@ ui-tidy groups the controls so each has one obvious place. No new features; ever
 
 ### Requirement 2: Edit room
 #### Acceptance Criteria
-1. **Edit room** SHALL be in the top bar on every floor. On a project floor it enters arrange mode (furni-move); in the lobby and the HR office it is shown disabled with the tooltip "Only project floors can be arranged".
+1. **Edit room** SHALL be in the top bar on every floor and enter arrange mode there (requirement 6.4: every room is editable); it is disabled only in the recorded demo.
 2. While editing, the button reads **Done** and is highlighted, a banner under the top bar says "Editing <floor>: drag furniture, arrows to move, R to turn, Esc when done", and the arrange tool bar (Undo, Reset, Inventory) sits in that banner instead of a stage corner. The stage-corner Arrange button is removed.
 3. Entering edit mode SHALL be possible with the E key outside text fields.
 
@@ -32,3 +32,11 @@ ui-tidy groups the controls so each has one obvious place. No new features; ever
 #### Acceptance Criteria
 1. Unit tests for the menu model (items, shortcuts, collapse rule) and the stale Builder timeout.
 2. Playwright: open the Menu with the keyboard and run Zoom; Edit room on a project floor enters and leaves arrange mode, disabled in the lobby; Actions menu runs Wave; no overflow at 360, 800, 1366 px. Existing e2e tests updated to the new places.
+
+### Requirement 6: Arranging that works the way the user expects (user feedback 2026-11-13, after trying furni-move)
+#### Acceptance Criteria
+1. **Bug:** after moving a piece, the user could not select or move it again. The same piece SHALL be selectable, movable and turnable any number of times in a row, by mouse and by keys (Playwright: move the plant three times, turn it twice, with no reload).
+2. Every piece SHALL turn with R, in place: a piece whose footprint is 1×1 (mailbox, board, library shelf, lamp, plant) always turns on its own tile. A wall piece (`mount: "wall"`) SHALL be allowed to stand free on the floor as well, so it can turn to any direction; on a wall it still faces the room. A turn is refused only for a real reason (a larger footprint no longer fits, or it blocks a path), and the reason is shown.
+3. Places where a piece "cannot go" SHALL be fewer and explained: the standing spots of the team stay free, but a refusal always says which rule and, for a blocked path, which piece becomes unreachable. Pieces may stand next to each other and against any wall.
+4. **Every room** SHALL be editable: the lobby and the HR office too, with the same rules (the elevator, the doors, the Reception, the shop counter and the HR desk stay reachable; the elevator and the doors do not move). Layouts are saved per room id (`data/layouts.json`), and the demo stays not editable.
+5. Requirement 3.1 (Actions menu) is confirmed by the user: the emote buttons take space on the stage and must be a closed menu by default.

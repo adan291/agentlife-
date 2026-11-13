@@ -279,14 +279,14 @@
       "spec": "ui-tidy",
       "model": "claude-sonnet-5.5",
       "effort": "high",
-      "prompt": "Implement task 1 of the ui-tidy spec (.kiro/specs/ui-tidy). Write its design.md first (top bar layout, menu model, where each control goes). Follow workflow.md."
+      "prompt": "Implement tasks 1 and 2 of the ui-tidy spec (.kiro/specs/ui-tidy). Write its design.md first (top bar layout, menu model, where each control goes, how the lobby and HR office become editable). For task 2 write the failing Playwright test of the re-select bug before fixing it. Follow workflow.md."
     },
     {
       "id": "S34",
       "spec": "ui-tidy",
       "model": "claude-sonnet-5.5",
       "effort": "medium",
-      "prompt": "Implement task 2 of the ui-tidy spec (.kiro/specs/ui-tidy), following its design.md. Follow workflow.md."
+      "prompt": "Implement task 3 of the ui-tidy spec (.kiro/specs/ui-tidy), following its design.md. Follow workflow.md."
     }
   ]
 }
