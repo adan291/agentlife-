@@ -47,3 +47,10 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Place a wall piece (clock, poster, mirror, banner) on the north and the west wall, turn it with R, and check that it is refused in the middle of the floor.
 - [ ] Pick a piece up, restart the world-server, and check that placed pieces and the stock are still there; remove a project in the Reception and check that its pieces are back in the tray of another floor.
 - [ ] Touch screen: tap an item in the tray, then tap the floor (dragging from the tray is for a mouse).
+
+## furni-shop (merged 2026-11-13)
+- [ ] Open the app against the real engine, look at the balance chip in the top left of the stage and confirm it does not cover the Arrange button, the floor label or the tray at your usual window size. The e2e tests prove it is visible and does not push the top bar, not that it looks right.
+- [ ] Earn a grant for real (for example deliver a branch) and confirm the "+N Ecto: ..." toast shows for about 4 s. No browser test asserts the toast; the wiring is `client/src/main.ts:429`.
+- [ ] Look at the 25 previews in the Shop panel and the placed pieces on a floor, to judge the art (own recipes, drawn in code). The e2e only checks that each preview is a non-empty PNG.
+- [ ] With the real wallet (not the Playwright scratch wallet), confirm the first run starts at 0 Ecto and old jobs pay nothing (`since` rule). Covered by `wallet-gateway.test.ts` "does not pay for events older than the wallet", but not run against real history.
+- [ ] Note, not a failure: `docs/reviews/feat-furni-shop.md` (an earlier, untracked review) already exists; this report is a separate file.
