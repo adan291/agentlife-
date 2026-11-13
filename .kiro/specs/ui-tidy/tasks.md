@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Top bar groups, Menu and Edit room
+- [x] 1. Top bar groups, Menu and Edit room
   - Top bar fixed group, Hotel/List toggle, Ecto/level chip, Menu dropdown with shortcuts and collapse below 900 px; Edit room button and E key, editing banner with the arrange tool bar, stage-corner Arrange removed; unit and Playwright tests, existing e2e updated
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 5.1, 5.2_
 

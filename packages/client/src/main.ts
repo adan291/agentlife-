@@ -41,6 +41,7 @@ import { GRANT_TOAST_MS, grantToastText } from "./ui/wallet.ts";
 import { ProgressModel, levelUpText, progressLines } from "./ui/progress.ts";
 import { createWispButton } from "./ui/wisp.ts";
 import { createEmoteBar, emoteKey } from "./ui/emotes.ts";
+import { editButtonState } from "./ui/menu-model.ts";
 
 /**
  * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
@@ -143,21 +144,25 @@ const RESTORE_GIVE_UP_MS = 3000;
 
 const hud = createHud(
   { left: shell.topLeft, right: shell.topRight, banners: shell.banners, stage: stageEl },
-  () => {
-    hud.setZoomLabel(world.toggleZoom());
+  {
+    zoom: () => hud.setZoomLabel(world.toggleZoom()),
+    help: () => guide.open(),
+    useHere: () => live?.reconnect(),
+    elevator: () => {
+      // The elevator can be used only from its door: walk there, the panel opens on arrival.
+      if (elevatorItemId) transport.send({ type: "use", itemId: elevatorItemId });
+      else hud.toast("There is no elevator on this floor.");
+    },
+    view: () => toggleView(),
+    palette: () => openPalette(),
+    edit: (fromKey) => {
+      // The E key only starts editing, and not while a panel owns the keyboard; Done and Esc leave.
+      if (fromKey && (arrange.isActive || panels.state.open !== null)) return;
+      toggleArrange();
+    },
+    profile: () => panels.open("profile"),
   },
-  () => guide.open(),
   theme,
-  () => live?.reconnect(),
-  () => {
-    // The elevator can be used only from its door: walk there, the panel opens on arrival.
-    if (elevatorItemId) transport.send({ type: "use", itemId: elevatorItemId });
-    else hud.toast("There is no elevator on this floor.");
-  },
-  () => toggleView(),
-  () => openPalette(),
-  () => toggleArrange(),
-  () => panels.open("profile"),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
   progressLines: (slot) => {
@@ -318,12 +323,12 @@ window.addEventListener("keydown", (e) => {
 // ---- arrange mode (furni-move): move and turn the furniture of a project floor ----
 
 const arrange = new ArrangeModel((msg) => transport.send(msg));
-const arrangeBar = createArrangeBar(document, stageEl, {
+const arrangeBar = createArrangeBar(document, shell.editBar, {
   rotate: () => arrange.rotate(),
   undo: () => arrange.undo(),
   pickUp: () => arrange.pickUp(),
   reset: () => arrange.resetLayout(),
-  done: () => arrange.leave(),
+  inventory: () => syncArrange(),
 });
 const arrangeTray = createArrangeTray(document, stageEl, { carry: (itemId) => arrange.carry(itemId) }, { preview: furniPreview });
 /** Whether the scene and the panels were last told that the user is arranging. */
@@ -333,10 +338,10 @@ let arranging = false;
 function syncArrange(): void {
   const state = arrange.view();
   arrangeBar.update(state);
-  arrangeTray.update(state);
+  arrangeTray.update(state, arrangeBar.inventoryOpen);
   world.showArrange(arrange.overlay());
   // Only the live hotel can arrange; the recorded demo has no world-server to save a layout.
-  hud.setArrange(live !== undefined && arrange.available, state.active);
+  hud.setEdit(editButtonState(live !== undefined, arrange.available, state.active));
   if (state.active === arranging) return;
   arranging = state.active;
   refreshEmotes();
@@ -386,6 +391,7 @@ function enteredRoom(msg: Extract<ServerMsg, { type: "welcome" }>): void {
   arrange.setRoom(msg.room);
   elevatorItemId = msg.room.furni.find((p) => FURNI_CATALOG[p.defId]?.interaction === "elevator")?.itemId;
   hud.setFloor(currentRoomName);
+  arrangeBar.setFloor(currentRoomName);
   refreshElevator();
   terminal.setRoom(currentRoom);
   // The doors show the floor's indicator and open; a floor change the user did not start (a door, a removed floor) closes them first.

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { zoomOf } from "./helpers.ts";
 
 /** The one project of the scripted engine; its floor is built from `rooms/project-template.json` (12 x 10 tiles). */
 const FLOOR = "project:haunted-todo";
@@ -26,7 +27,7 @@ async function open(page: Page): Promise<string[]> {
   return errors;
 }
 
-const arrangeButton = (page: Page) => page.locator(".al-arrange-open");
+const arrangeButton = (page: Page) => page.locator(".al-edit");
 const bar = (page: Page) => page.locator(".al-arrange");
 const piece = (page: Page) => page.locator(".al-arrange-piece");
 const status = (page: Page) => page.locator(".al-arrange-status");
@@ -36,8 +37,7 @@ const bt = (page: Page, name: string) => bar(page).getByRole("button", { name, e
 async function tilePoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
   const canvas = await page.locator(".al-stage > canvas").boundingBox();
   if (!canvas) throw new Error("no canvas");
-  const zoomText = await page.locator(".al-top-right .al-btn", { hasText: /^[12]×$/ }).textContent();
-  const zoom = Number.parseInt(zoomText ?? "1", 10);
+  const zoom = await zoomOf(page);
   const rootX = Math.round(Math.floor(canvas.width) / 2 - CENTRE.x * zoom);
   const rootY = Math.round(Math.floor(canvas.height) / 2 - CENTRE.y * zoom);
   return {
@@ -63,7 +63,7 @@ async function resetFloor(page: Page): Promise<void> {
   await bt(page, "Reset layout").click();
   await bt(page, "Yes, reset").click();
   await expect(status(page)).toHaveText("Layout reset.");
-  await bt(page, "Done").click();
+  await arrangeButton(page).click();
   await expect(bar(page)).toBeHidden();
 }
 
@@ -122,7 +122,7 @@ test.describe("arrange the furniture of a project floor", () => {
     await expect(status(page)).toHaveText("The elevator stays where it is.");
     await expect(status(page)).toHaveAttribute("data-tone", "bad");
 
-    await bt(page, "Done").click();
+    await arrangeButton(page).click();
     expect(errors).toEqual([]);
   });
 
@@ -147,7 +147,7 @@ test.describe("arrange the furniture of a project floor", () => {
     await expect(status(page)).toHaveText("Undone.");
     await expect(bt(page, "Undo")).toBeDisabled();
 
-    await bt(page, "Done").click();
+    await arrangeButton(page).click();
     expect(errors).toEqual([]);
   });
 
@@ -175,14 +175,15 @@ test.describe("arrange the furniture of a project floor", () => {
     expect(errors).toEqual([]);
   });
 
-  test("the Arrange button is only on a project floor", async ({ page }) => {
+  test("Edit room works on a project floor and is disabled in the lobby", async ({ page }) => {
     await open(page);
-    await expect(arrangeButton(page)).toBeVisible();
+    await expect(arrangeButton(page)).toBeEnabled();
+    await expect(arrangeButton(page)).toHaveText("Edit room");
     await page.getByRole("button", { name: /Take the elevator/ }).click();
     const panel = page.getByRole("dialog", { name: "Elevator" });
     await expect(panel).toBeVisible();
     await panel.getByRole("button", { name: /^Go to Lobby$/i }).click();
     await expect(page.locator(".al-floor-label")).toHaveText(/lobby/i);
-    await expect(arrangeButton(page)).toBeHidden();
+    await expect(arrangeButton(page)).toBeDisabled();
   });
 });

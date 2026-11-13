@@ -374,7 +374,7 @@ describe("the tray and the bar", () => {
       undo: () => undefined,
       pickUp: () => calls.push("pickUp"),
       reset: () => undefined,
-      done: () => undefined,
+      inventory: () => undefined,
     });
     const el = bar.element as unknown as FakeElement;
     const pick = findAll(el, (e) => e.tagName === "button" && e.textContent === "Pick up")[0]!;

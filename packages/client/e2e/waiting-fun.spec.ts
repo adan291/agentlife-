@@ -19,7 +19,7 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator(".al-stage > canvas")).toBeVisible();
 }
 
-const viewButton = (page: Page) => page.locator(".al-top-right .al-btn", { hasText: /^(List|Hotel)$/ });
+const viewButton = (page: Page) => page.locator(".al-top-right .al-view-toggle");
 const row = (page: Page) => page.locator(`.al-list-row[data-room="${ROOM}"]`);
 const balance = async (page: Page): Promise<number> => Number.parseInt((await page.locator(".al-balance").innerText()).replace(/\D/g, ""), 10);
 

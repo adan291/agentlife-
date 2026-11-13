@@ -1,6 +1,9 @@
 import type { ConnectionStatus } from "../transport.ts";
-import { UI_COLOURS } from "./theme.ts";
-import { inTextField, isPaletteKey, isViewKey, otherView } from "./view-mode.ts";
+import { FONT_MAX, FONT_MIN, UI_COLOURS } from "./theme.ts";
+import { createMenu } from "./menu.ts";
+import { isEditKey, isHelpKey, isNarrow, menuItems } from "./menu-model.ts";
+import type { EditButtonState, MenuItemId } from "./menu-model.ts";
+import { inTextField, isPaletteKey, isViewKey } from "./view-mode.ts";
 import { balanceText } from "./wallet.ts";
 import type { ViewMode } from "./view-mode.ts";
 
@@ -15,38 +18,62 @@ const CSS = `
 .al-floor-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${UI_COLOURS.accentText}; font-weight: bold; }
 .al-floor-label[hidden] { display: none; }
 .al-shell[data-compact="true"] .al-floor-label { display: none; }
-.al-corner { position: absolute; z-index: 11; top: var(--al-s2); left: var(--al-s2); display: flex; align-items: center; gap: var(--al-s2); pointer-events: none; }
-.al-balance { padding: var(--al-s1) var(--al-s3); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); pointer-events: none; }
-.al-level { padding: var(--al-s1) var(--al-s3); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font: inherit; font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); pointer-events: auto; cursor: pointer; }
+.al-top-collapsible { display: flex; align-items: center; gap: var(--al-s2); }
+/* The bar is tight: its buttons use a narrower side padding so the job stepper keeps its labels at 1366 px. */
+.al-top-right .al-btn { padding: var(--al-s1) var(--al-s2); }
+.al-top-right[data-narrow="true"] .al-top-collapsible { display: none; }
+.al-chips { display: flex; align-items: center; gap: var(--al-s1); }
+.al-balance { padding: var(--al-s1) var(--al-s2); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; }
+.al-level { padding: var(--al-s1) var(--al-s2); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font: inherit; font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; cursor: pointer; }
 .al-level:hover, .al-level:focus-visible { border-color: var(--al-accent); }
 .al-balance[hidden], .al-level[hidden] { display: none; }
+.al-view-toggle { display: inline-flex; gap: var(--al-s2); }
+.al-view-toggle > span { color: ${UI_COLOURS.muted}; }
+.al-view-toggle[data-view="hotel"] > [data-for="hotel"], .al-view-toggle[data-view="list"] > [data-for="list"] { color: ${UI_COLOURS.accentText}; font-weight: bold; text-decoration: underline; text-underline-offset: 3px; }
+.al-edit[aria-pressed="true"] { background: ${UI_COLOURS.accent}; color: ${UI_COLOURS.inputBg}; border-color: ${UI_COLOURS.accent}; font-weight: bold; }
+.al-edit[aria-pressed="true"]:hover:not(:disabled) { background: ${UI_COLOURS.accentText}; color: ${UI_COLOURS.inputBg}; }
 .al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
-.al-arrange-open { position: absolute; z-index: 11; top: var(--al-s2); right: var(--al-s2); }
-.al-arrange-open[hidden] { display: none; }
 `;
 
-/** Text size controls (A− / A+). */
+/** Text size controls (A− / A+), in the Menu. `size` tells when the limits are reached. */
 export interface FontControls {
+  readonly size: number;
   smaller(): void;
   bigger(): void;
 }
 
 /** Where the HUD parts live: the top bar slots and the stage. */
 export interface HudMounts {
-  /** Connection status goes here, after the title. */
+  /** Connection status and floor name go here, after the title. */
   left: HTMLElement;
-  /** Zoom, text size and help buttons. */
+  /** Elevator, view toggle, Edit room, chips and Menu. */
   right: HTMLElement;
   /** Persistent notice (below the top bar) and transient toast (bottom). */
   banners: HTMLElement;
   stage: HTMLElement;
 }
 
+/** What the controls do. Each one is called from a button, from the Menu and (where there is one) from its key. */
+export interface HudActions {
+  zoom(): void;
+  help(): void;
+  useHere(): void;
+  elevator(): void;
+  /** The hotel / list toggle. */
+  view(): void;
+  /** The command palette. */
+  palette(): void;
+  /** Edit room or Done. `fromKey` is true for the E key: it may be ignored while something else owns the keyboard. */
+  edit(fromKey: boolean): void;
+  /** Opens the Profile panel. */
+  profile(): void;
+}
+
 export interface Hud {
   setStatus(status: ConnectionStatus): void;
   setZoomLabel(zoom: number): void;
-  /** The Ecto balance, in the top left corner of the stage. `null` hides it (no economy: the recorded demo, the scripted engine). */
+  /** The Ecto balance, in the top bar. `null` hides it (no economy: the recorded demo, the scripted engine). */
   setBalance(balance: number | null): void;
   /** The user's level, next to the balance ("Lv 3"); a button that opens the Profile panel. `null` hides it (no progress: the recorded demo, the scripted engine). */
   setLevel(text: string | null, title?: string): void;
@@ -57,25 +84,14 @@ export interface Hud {
   setFloor(name: string): void;
   /** Text of the Elevator shortcut (it counts the floors that wait for the user). */
   setElevatorLabel(label: string, title?: string): void;
-  /** The view in use; the button offers the other one. */
+  /** The view in use; the toggle highlights it. */
   setView(view: ViewMode): void;
-  /** The Arrange button, in the corner of the stage: shown on project floors of the live hotel only; pressed while arranging. */
-  setArrange(available: boolean, active: boolean): void;
+  /** The Edit room button: its words, whether it is pressed and whether it can be used. */
+  setEdit(state: EditButtonState): void;
 }
 
-/** Top bar controls and stage messages: zoom button, text size, help, connection status, notice and toast. */
-export function createHud(
-  mounts: HudMounts,
-  onZoom: () => void,
-  onHelp: () => void = () => {},
-  font?: FontControls,
-  onUseHere: () => void = () => {},
-  onElevator: () => void = () => {},
-  onView: () => void = () => {},
-  onPalette: () => void = () => {},
-  onArrange: () => void = () => {},
-  onProfile: () => void = () => {},
-): Hud {
+/** Top bar controls and stage messages: elevator, view toggle, Edit room, chips and Menu, connection status, notice and toast. */
+export function createHud(mounts: HudMounts, actions: HudActions, font?: FontControls): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -92,58 +108,34 @@ export function createHud(
     return b;
   };
 
+  // What the Menu needs to list its items; kept in step by the setters below.
+  let zoomValue = 1;
+  let viewValue: ViewMode = "hotel";
+  let edit: EditButtonState = { text: "Edit room", pressed: false, disabled: true, title: "" };
+  let balanceValue: number | null = null;
+  let levelValue: string | null = null;
+  let narrow = isNarrow(window.innerWidth);
+
   const elevator = button("Elevator", "Take the elevator to another floor");
-  elevator.addEventListener("click", onElevator);
+  elevator.addEventListener("click", actions.elevator);
   mounts.right.appendChild(elevator);
-  const arrangeButton = button("Arrange", "Move and turn the furniture of this floor");
-  arrangeButton.classList.add("al-arrange-open");
-  arrangeButton.hidden = true;
-  arrangeButton.setAttribute("aria-pressed", "false");
-  arrangeButton.addEventListener("click", onArrange);
-  // On the stage, not in the top bar: the bar has no room for one more button without taking the labels from the stepper.
-  mounts.stage.appendChild(arrangeButton);
-  const viewButton = button("List");
-  viewButton.addEventListener("click", onView);
-  mounts.right.appendChild(viewButton);
-  const palette = button("Commands", "Open the command palette (Ctrl+K)");
-  palette.addEventListener("click", onPalette);
-  mounts.right.appendChild(palette);
-  const zoom = button("");
-  zoom.title = "Toggle zoom (Z)";
-  zoom.addEventListener("click", onZoom);
-  mounts.right.appendChild(zoom);
-  if (font) {
-    for (const [text, label, act] of [
-      ["A−", "Smaller text", font.smaller],
-      ["A+", "Larger text", font.bigger],
-    ] as const) {
-      const b = button(text, label);
-      b.addEventListener("click", act);
-      mounts.right.appendChild(b);
-    }
+
+  const collapsible = document.createElement("div");
+  collapsible.className = "al-top-collapsible";
+  const viewButton = document.createElement("button");
+  viewButton.type = "button";
+  viewButton.className = "al-btn al-view-toggle";
+  for (const v of ["hotel", "list"] as const) {
+    const word = document.createElement("span");
+    word.dataset["for"] = v;
+    word.textContent = v === "hotel" ? "Hotel" : "List";
+    viewButton.appendChild(word);
   }
-  const help = button("?", "How it works");
-  help.title = "How it works";
-  help.addEventListener("click", onHelp);
-  mounts.right.appendChild(help);
-
-  const status = document.createElement("div");
-  status.className = "al-hud al-status";
-  status.setAttribute("role", "status");
-  status.hidden = true;
-  const statusText = document.createElement("span");
-  const useHere = button("Use here");
-  useHere.hidden = true;
-  useHere.style.marginLeft = "var(--al-s3)";
-  useHere.addEventListener("click", onUseHere);
-  status.append(statusText, useHere);
-  mounts.left.appendChild(status);
-
-  const floor = document.createElement("span");
-  floor.className = "al-hud al-floor-label";
-  floor.setAttribute("aria-label", "Current floor");
-  floor.hidden = true;
-  mounts.left.appendChild(floor);
+  viewButton.addEventListener("click", actions.view);
+  const editButton = button("Edit room");
+  editButton.classList.add("al-edit");
+  editButton.setAttribute("aria-pressed", "false");
+  editButton.addEventListener("click", () => actions.edit(false));
 
   const balance = document.createElement("span");
   balance.className = "al-hud al-balance";
@@ -153,17 +145,80 @@ export function createHud(
   const balanceWord = document.createElement("span");
   balanceWord.textContent = " Ecto";
   balance.append(balanceNum, balanceWord);
-  // On the stage, not in the top bar: the bar has no room for one more chip without taking the labels from the stepper.
-  // The balance and the level of the user share one corner container, side by side.
   const level = document.createElement("button");
   level.type = "button";
   level.className = "al-hud al-level";
   level.hidden = true;
-  level.addEventListener("click", onProfile);
-  const corner = document.createElement("div");
-  corner.className = "al-corner";
-  corner.append(balance, level);
-  mounts.stage.appendChild(corner);
+  level.addEventListener("click", actions.profile);
+  const chips = document.createElement("div");
+  chips.className = "al-chips";
+  chips.append(balance, level);
+  collapsible.append(viewButton, editButton, chips);
+  mounts.right.appendChild(collapsible);
+
+  const items = () =>
+    menuItems({
+      narrow,
+      zoom: zoomValue,
+      view: viewValue,
+      editing: edit.pressed,
+      editable: !edit.disabled,
+      balance: balanceValue,
+      level: levelValue,
+      fontMin: font ? font.size <= FONT_MIN : true,
+      fontMax: font ? font.size >= FONT_MAX : true,
+    });
+  const choose = (id: MenuItemId): void => {
+    switch (id) {
+      case "view":
+        return actions.view();
+      case "edit":
+        return actions.edit(false);
+      case "profile":
+        return actions.profile();
+      case "commands":
+        return actions.palette();
+      case "zoom":
+        return actions.zoom();
+      case "text-smaller":
+        return font?.smaller();
+      case "text-larger":
+        return font?.bigger();
+      case "help":
+        return actions.help();
+    }
+  };
+  const menu = createMenu(document, { items, choose });
+  mounts.right.appendChild(menu.element);
+
+  const applyNarrow = (): void => {
+    narrow = isNarrow(window.innerWidth);
+    mounts.right.dataset["narrow"] = String(narrow);
+    // A menu that is open lists the items of the old width.
+    if (menu.isOpen) menu.close();
+  };
+  applyNarrow();
+  window.addEventListener("resize", () => {
+    if (isNarrow(window.innerWidth) !== narrow) applyNarrow();
+  });
+
+  const status = document.createElement("div");
+  status.className = "al-hud al-status";
+  status.setAttribute("role", "status");
+  status.hidden = true;
+  const statusText = document.createElement("span");
+  const useHere = button("Use here");
+  useHere.hidden = true;
+  useHere.style.marginLeft = "var(--al-s3)";
+  useHere.addEventListener("click", actions.useHere);
+  status.append(statusText, useHere);
+  mounts.left.appendChild(status);
+
+  const floor = document.createElement("span");
+  floor.className = "al-hud al-floor-label";
+  floor.setAttribute("aria-label", "Current floor");
+  floor.hidden = true;
+  mounts.left.appendChild(floor);
 
   const notice = document.createElement("div");
   notice.className = "al-hud al-notice";
@@ -181,12 +236,14 @@ export function createHud(
     if (isPaletteKey(e)) {
       // Browsers bind Ctrl+K to the address bar search.
       e.preventDefault();
-      onPalette();
+      actions.palette();
       return;
     }
-    if (inTextField(e.target)) return;
-    if (isViewKey(e)) onView();
-    else if (e.key === "z" || e.key === "Z") onZoom();
+    if (inTextField(e.target) || menu.isOpen) return;
+    if (isViewKey(e)) actions.view();
+    else if (e.key === "z" || e.key === "Z") actions.zoom();
+    else if (isEditKey(e, inTextField)) actions.edit(true);
+    else if (isHelpKey(e, inTextField)) actions.help();
   });
 
   let timer: number | undefined;
@@ -199,7 +256,9 @@ export function createHud(
       useHere.hidden = s !== "replaced";
     },
     setZoomLabel(z) {
-      zoom.textContent = `${z}×`;
+      zoomValue = z;
+      // The value is not printed in the bar any more (it is in the Menu); tests and scripts read it here.
+      mounts.right.dataset["zoom"] = String(z);
     },
     setNotice(text) {
       notice.hidden = text === null;
@@ -217,18 +276,22 @@ export function createHud(
       elevator.setAttribute("aria-label", label === "Elevator" ? t : `${label}. ${t}`);
     },
     setView(view) {
-      const next = otherView(view);
-      viewButton.textContent = next === "list" ? "List" : "Hotel";
-      const text = next === "list" ? "Show the list of projects (L)" : "Show the hotel (L)";
+      viewValue = view;
+      viewButton.dataset["view"] = view;
+      const text = view === "hotel" ? "Show the list of projects (L)" : "Show the hotel (L)";
       viewButton.title = text;
       viewButton.setAttribute("aria-label", text);
     },
-    setArrange(available, active) {
-      arrangeButton.hidden = !available;
-      arrangeButton.setAttribute("aria-pressed", String(active));
-      arrangeButton.dataset["active"] = String(active);
+    setEdit(state) {
+      edit = state;
+      editButton.textContent = state.text;
+      editButton.disabled = state.disabled;
+      editButton.title = state.title;
+      editButton.setAttribute("aria-pressed", String(state.pressed));
+      editButton.dataset["active"] = String(state.pressed);
     },
     setBalance(value) {
+      balanceValue = value;
       balance.hidden = value === null;
       if (value === null) return;
       const text = balanceText(value);
@@ -237,6 +300,7 @@ export function createHud(
       balance.setAttribute("aria-label", text);
     },
     setLevel(text, title) {
+      levelValue = text;
       level.hidden = text === null;
       if (text === null) return;
       level.textContent = text;

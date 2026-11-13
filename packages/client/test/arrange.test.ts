@@ -451,7 +451,7 @@ describe("the arrange bar", () => {
       undo: () => calls.push("undo"),
       pickUp: () => calls.push("pickUp"),
       reset: () => calls.push("reset"),
-      done: () => calls.push("done"),
+      inventory: () => calls.push("inventory"),
     });
     const el = b.element as unknown as FakeElement;
     const button = (label: string): FakeElement => findAll(el, (e) => e.tagName === "button" && e.textContent === label)[0]!;
@@ -505,7 +505,7 @@ describe("the arrange bar", () => {
     expect(confirm.hidden).toBe(true);
   });
 
-  it("Rotate, Undo and Done call the actions", () => {
+  it("Rotate and Undo call the actions; Inventory is pressed while the tray is open and is pressed again for each edit", () => {
     const { b, calls, button, model } = bar();
     model.model.enter();
     model.model.select("plant_2");
@@ -514,7 +514,34 @@ describe("the arrange bar", () => {
     b.update(model.model.view());
     button("Rotate (R)").click();
     button("Undo").click();
-    button("Done").click();
-    expect(calls).toEqual(["rotate", "undo", "done"]);
+    expect(calls).toEqual(["rotate", "undo"]);
+    expect(b.inventoryOpen).toBe(true);
+    button("Inventory").click();
+    expect(b.inventoryOpen).toBe(false);
+    expect(button("Inventory").getAttribute("aria-pressed")).toBe("false");
+    expect(calls).toEqual(["rotate", "undo", "inventory"]);
+    // Leaving and entering again starts with the tray open.
+    model.model.leave();
+    b.update(model.model.view());
+    expect(b.inventoryOpen).toBe(true);
+  });
+
+  it("the first line names the room and says how to leave; there is no Done button (the top bar has it)", () => {
+    const { b, el, button, model } = bar();
+    b.setFloor("Lobby");
+    model.model.enter();
+    b.update(model.model.view());
+    expect(textOf(findAll(el, (e) => e.className === "al-arrange-help")[0]!)).toBe("Editing Lobby: drag furniture, arrows to move, R to turn, Esc when done");
+    expect(button("Done")).toBeUndefined();
+  });
+
+  it("the Inventory and Pick up buttons are only for rooms that take bought furniture", () => {
+    const { b, button, model } = bar();
+    model.model.enter();
+    b.update({ ...model.model.view(), inventory: false });
+    expect(button("Inventory").hidden).toBe(true);
+    expect(button("Pick up").hidden).toBe(true);
+    b.update(model.model.view());
+    expect(button("Inventory").hidden).toBe(false);
   });
 });

@@ -52,6 +52,8 @@ export interface ArrangeView {
   carrying: string | null;
   /** What the inventory tray lists (bought, not placed). */
   tray: TrayItem[];
+  /** The room takes bought furniture (a project floor): the Inventory button and the tray are for it only. */
+  inventory: boolean;
 }
 
 /** A key press while arranging. Arrows move one tile along the floor axes, R turns, Esc leaves, Ctrl+Z undoes. */
@@ -643,6 +645,7 @@ export class ArrangeModel {
       canPickUp: this.canPickUp,
       carrying: c ? c.itemId : null,
       tray: this.tray(),
+      inventory: this.room?.kind === "project",
     };
   }
 
