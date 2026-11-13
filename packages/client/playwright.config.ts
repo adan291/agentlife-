@@ -10,6 +10,7 @@ const channel = process.env["E2E_CHANNEL"];
 const LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-layouts.json");
 /** The shop tests earn and spend Ecto; the wallet and the inventory are scratch files too, never `data/`. */
 const WALLET_FILE = join(tmpdir(), "agentlife-e2e-wallet.json");
+const INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-inventory.json");
 
 /**
  * Layout smoke test (`pnpm --filter @agentlife/client e2e`). Not part of `pnpm check`: it needs a browser.
@@ -38,6 +39,7 @@ export default defineConfig({
         ENGINE: "fake",
         AGENTLIFE_LAYOUTS_FILE: LAYOUTS_FILE,
         AGENTLIFE_WALLET_FILE: WALLET_FILE,
+        AGENTLIFE_INVENTORY_FILE: INVENTORY_FILE,
         // The page is served from WEB_PORT, so the Origin check must allow it.
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`,
       },

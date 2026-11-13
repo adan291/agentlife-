@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "items": [
+    { "id": "armchair", "name": "Velvet armchair", "page": "seating", "price": 30, "defId": "armchair" },
+    { "id": "bench", "name": "Crypt bench", "page": "seating", "price": 24, "defId": "bench" },
+    { "id": "beanbag", "name": "Beanbag", "page": "seating", "price": 18, "defId": "beanbag" },
+    { "id": "throne", "name": "Bone throne", "page": "seating", "price": 90, "defId": "throne" },
+    { "id": "side_table", "name": "Side table", "page": "tables", "price": 16, "defId": "side_table" },
+    { "id": "coffee_table", "name": "Coffee table", "page": "tables", "price": 28, "defId": "coffee_table" },
+    { "id": "round_table", "name": "Round table", "page": "tables", "price": 48, "defId": "round_table" },
+    { "id": "potion_bar", "name": "Potion bar", "page": "tables", "price": 70, "defId": "potion_bar" },
+    { "id": "candelabra", "name": "Candelabra", "page": "lights", "price": 22, "defId": "candelabra" },
+    { "id": "floor_torch", "name": "Floor torch", "page": "lights", "price": 26, "defId": "floor_torch" },
+    { "id": "lava_lamp", "name": "Lava lamp", "page": "lights", "price": 20, "defId": "lava_lamp" },
+    { "id": "crystal_ball", "name": "Crystal ball", "page": "lights", "price": 45, "defId": "crystal_ball" },
+    { "id": "fern", "name": "Fern", "page": "plants", "price": 14, "defId": "fern" },
+    { "id": "palm", "name": "Palm", "page": "plants", "price": 36, "defId": "palm" },
+    { "id": "cactus", "name": "Cactus", "page": "plants", "price": 12, "defId": "cactus" },
+    { "id": "bonsai", "name": "Bonsai", "page": "plants", "price": 32, "defId": "bonsai" },
+    { "id": "gravestone", "name": "Gravestone", "page": "spooky", "price": 25, "defId": "gravestone" },
+    { "id": "coffin", "name": "Coffin", "page": "spooky", "price": 60, "defId": "coffin" },
+    { "id": "cauldron", "name": "Cauldron", "page": "spooky", "price": 38, "defId": "cauldron" },
+    { "id": "skeleton", "name": "Standing skeleton", "page": "spooky", "price": 52, "defId": "skeleton" },
+    { "id": "rune_rug", "name": "Rune rug", "page": "spooky", "price": 34, "defId": "rune_rug" },
+    { "id": "wall_clock", "name": "Wall clock", "page": "walls", "price": 20, "defId": "wall_clock" },
+    { "id": "moon_poster", "name": "Moon poster", "page": "walls", "price": 12, "defId": "moon_poster" },
+    { "id": "tall_mirror", "name": "Tall mirror", "page": "walls", "price": 40, "defId": "tall_mirror" },
+    { "id": "banner", "name": "Hanging banner", "page": "walls", "price": 30, "defId": "banner" }
+  ]
+}

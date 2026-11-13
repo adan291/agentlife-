@@ -75,6 +75,24 @@ export const FURNI_COLOURS = {
   stem: 0x3a8a4a,
   pumpkinFace: 0xffe27a,
   web: 0xd8d0f0,
+  // Sold in the shop (furni-shop).
+  bone: 0xe6dcc0,
+  stone: 0x6b6880,
+  stoneDark: 0x45435a,
+  velvet: 0x8a2f5a,
+  velvetLight: 0xa84a78,
+  cloth: 0x6a3a9a,
+  brass: 0xd9a441,
+  glass: 0x9ad8ff,
+  glassDark: 0x3a6a96,
+  potion: 0x5be58a,
+  lava: 0xff5a8a,
+  lavaGlass: 0x4a2a6a,
+  cactus: 0x3fa35a,
+  soil: 0x3a2418,
+  parchment: 0xe8d8b0,
+  ink: 0x1d1530,
+  rune: 0x8f6bff,
 } as const;
 
 /** Role colours for name tags and avatar bodies. */

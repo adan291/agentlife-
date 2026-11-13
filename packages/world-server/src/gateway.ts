@@ -91,7 +91,7 @@ export interface GatewayOptions {
    * The user's Ecto (furni-shop). Without it the hotel has no economy: no `wallet` message is sent and nothing is
    * granted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
    */
-  economy?: Pick<Economy, "balance" | "grant">;
+  economy?: Pick<Economy, "balance" | "grant" | "shop" | "buy">;
 }
 
 export interface Gateway {
@@ -229,6 +229,24 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (!economy) return;
     const entry = economy.grant(reason, ref, ts);
     if (entry && current) send(current.ws, { type: "wallet", balance: economy.balance, grant: { amount: entry.amount, reason } });
+  };
+
+  const SHOP_CLOSED = "The shop is closed: it needs the real engine.";
+
+  /** The catalogue, the balance and the stock. Without an economy the shop is closed. */
+  const sendShop = (ws: WebSocket): void => {
+    if (!economy) return sendError(ws, "shop_error", SHOP_CLOSED);
+    send(ws, { type: "shop", state: economy.shop() });
+  };
+
+  /** One purchase at the shop counter in the lobby. A refusal says why and changes nothing; a purchase answers with the new balance and shop. */
+  const buyItem = (ws: WebSocket, itemId: string): void => {
+    if (!economy) return sendError(ws, "shop_error", SHOP_CLOSED);
+    if (userRoom() !== LOBBY_ROOM) return sendError(ws, "shop_error", "The shop counter is in the lobby.");
+    const result = economy.buy(itemId);
+    if (!result.ok) return sendError(ws, "shop_error", result.reason);
+    send(ws, { type: "wallet", balance: economy.balance });
+    send(ws, { type: "shop", state: economy.shop() });
   };
 
   const sendJobUpdate = async (roomId: string) => {
@@ -494,6 +512,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       await sendNight(ws);
     } else if (panel === "hr") {
       await sendHr(ws);
+    } else if (panel === "shop") {
+      sendShop(ws);
     }
   };
 
@@ -1359,6 +1379,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         arrange(ws, (roomId, save) => hotel.moveFurniture(roomId, itemId, { x, y, dir }, save));
       } else if (msg.type === "furni_reset") {
         arrange(ws, (roomId, save) => hotel.resetLayout(roomId, save));
+      } else if (msg.type === "shop_state") {
+        sendShop(ws);
+      } else if (msg.type === "shop_buy") {
+        buyItem(ws, msg.itemId);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 const config = EconomyConfigSchema.parse({ version: 1, grants: { job_passed: 15, branch_delivered: 20, review_finished: 10, memory_accepted: 5, night_summary: 25 } });
-const open = (now = 1000, logs: string[] = []) => new Economy({ walletFile: file, config, now: () => now, onLog: (m) => logs.push(m) });
+const open = (now = 1000, logs: string[] = []) => new Economy({ walletFile: file, inventoryFile: join(dir, "inventory.json"), config, now: () => now, onLog: (m) => logs.push(m) });
 const saved = () => JSON.parse(readFileSync(file, "utf8")) as { since: number; balance: number; ledger: unknown[]; granted: string[] };
 
 describe("Economy", () => {
@@ -91,10 +91,102 @@ describe("Economy", () => {
     mkdirSync(file);
     expect(e.grant("job_passed", "task-1", 2000)).toBeUndefined();
     expect(e.balance).toBe(0);
-    expect(logs.some((m) => m.includes("cannot write the wallet"))).toBe(true);
+    expect(logs.some((m) => m.includes("cannot write") && m.includes("wallet.json"))).toBe(true);
     rmSync(file, { recursive: true });
     expect(e.grant("job_passed", "task-1", 2000)?.amount).toBe(15);
     expect(e.balance).toBe(15);
     expect(existsSync(file)).toBe(true);
+  });
+});
+
+describe("Economy purchases", () => {
+  const inventory = () => join(dir, "inventory.json");
+  const savedStock = () => (JSON.parse(readFileSync(inventory(), "utf8")) as { stock: Record<string, number> }).stock;
+  const shopOf = (now = 1000) => new Economy({ walletFile: file, inventoryFile: inventory(), config, now: () => now });
+  const rich = () => {
+    const e = shopOf();
+    e.grant("branch_delivered", "task-1", 2000);
+    e.grant("night_summary", "2026-11-12", 2000);
+    return e; // 45 Ecto
+  };
+
+  it("sells the shipped catalogue: 25 items, no stock and the balance", () => {
+    const shop = shopOf().shop();
+    expect(shop.items.length).toBeGreaterThanOrEqual(24);
+    expect(shop).toMatchObject({ balance: 0, stock: [], stockMax: 200 });
+  });
+
+  it("takes the price, adds the item to the stock and writes both files", () => {
+    const e = rich();
+    const r = e.buy("armchair"); // 30 Ecto
+    expect(r.ok).toBe(true);
+    expect(e.balance).toBe(15);
+    expect(e.shop().stock).toEqual([{ itemId: "armchair", count: 1 }]);
+    expect(savedStock()).toEqual({ armchair: 1 });
+    expect(saved().balance).toBe(15);
+    expect(e.ledger.at(-1)).toMatchObject({ amount: -30, reason: "purchase", ref: "armchair" });
+  });
+
+  it("refuses with the reason and changes nothing and writes nothing", () => {
+    const e = rich();
+    expect(e.buy("throne")).toEqual({ ok: false, reason: "You need 90 Ecto and have 45." });
+    expect(e.buy("no_such_item")).toEqual({ ok: false, reason: "That item is not in the shop." });
+    expect(e.buy("__proto__")).toEqual({ ok: false, reason: "That item is not in the shop." });
+    expect(e.balance).toBe(45);
+    expect(e.stockTotal).toBe(0);
+    expect(existsSync(inventory())).toBe(false);
+  });
+
+  it("keeps the balance and the stock across a restart", () => {
+    const first = rich();
+    first.buy("fern");
+    first.buy("fern");
+    first.buy("cactus");
+    const second = shopOf(9000);
+    expect(second.balance).toBe(45 - 14 - 14 - 12);
+    expect(second.shop().stock).toEqual([
+      { itemId: "fern", count: 2 },
+      { itemId: "cactus", count: 1 },
+    ]);
+    // A purchase after the restart adds to the same stock.
+    expect(second.buy("fern").ok).toBe(false); // 5 Ecto left
+    expect(second.grant("job_passed", "task-9", 20000)?.amount).toBe(15);
+    expect(second.buy("fern").ok).toBe(true);
+    expect(savedStock()).toEqual({ fern: 3, cactus: 1 });
+  });
+
+  it("refuses the 201st item", () => {
+    writeFileSync(inventory(), JSON.stringify({ version: 1, stock: { fern: 200 } }), "utf8");
+    const e = rich();
+    expect(e.buy("cactus")).toEqual({ ok: false, reason: "Your inventory is full (200 items)." });
+    expect(e.balance).toBe(45);
+  });
+
+  it("moves an unreadable inventory aside and starts with nothing", () => {
+    writeFileSync(inventory(), JSON.stringify({ version: 1, stock: { fern: -1 } }), "utf8");
+    const logs: string[] = [];
+    const e = new Economy({ walletFile: file, inventoryFile: inventory(), config, now: () => 1000, onLog: (m) => logs.push(m) });
+    expect(e.stockTotal).toBe(0);
+    expect(readdirSync(dir).some((n) => n.startsWith("inventory.json.bad-"))).toBe(true);
+  });
+
+  it("refuses the purchase and keeps the Ecto when the inventory cannot be written", () => {
+    const e = rich();
+    mkdirSync(inventory()); // a folder where the file should be
+    expect(e.buy("fern")).toEqual({ ok: false, reason: "Could not save your purchase." });
+    expect(e.balance).toBe(45);
+    expect(e.stockTotal).toBe(0);
+    expect(saved().balance).toBe(45);
+  });
+
+  it("refuses the purchase, restores the inventory file and keeps the Ecto when the wallet cannot be written", () => {
+    const e = rich();
+    expect(e.buy("fern").ok).toBe(true); // 31 left, stock {fern: 1}
+    rmSync(file);
+    mkdirSync(file); // the wallet can no longer be replaced
+    expect(e.buy("cactus")).toEqual({ ok: false, reason: "Could not save your purchase." });
+    expect(e.balance).toBe(31);
+    expect(e.shop().stock).toEqual([{ itemId: "fern", count: 1 }]);
+    expect(savedStock()).toEqual({ fern: 1 });
   });
 });

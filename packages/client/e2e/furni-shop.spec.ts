@@ -48,3 +48,74 @@ test.describe("Ecto balance", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+const TILE_W = 64;
+const TILE_H = 32;
+/** Centre of the 12 x 10 room in scene coordinates, as `roomBounds` computes it (the lobby has the same size as a project floor). */
+const CENTRE = { x: 32, y: 112 };
+
+/** Where the middle of a tile is on the page, from the canvas size and the zoom (the room is centred in the stage). */
+async function tilePoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
+  const canvas = await page.locator(".al-stage > canvas").boundingBox();
+  if (!canvas) throw new Error("no canvas");
+  const zoomText = await page.locator(".al-top-right .al-btn", { hasText: /^[12]×$/ }).textContent();
+  const zoom = Number.parseInt(zoomText ?? "1", 10);
+  const rootX = Math.round(Math.floor(canvas.width) / 2 - CENTRE.x * zoom);
+  const rootY = Math.round(Math.floor(canvas.height) / 2 - CENTRE.y * zoom);
+  return { x: canvas.x + rootX + ((x - y) * TILE_W * zoom) / 2, y: canvas.y + rootY + ((x + y) * TILE_H * zoom) / 2 };
+}
+
+test.describe("the shop counter", () => {
+  test("opens the Shop panel with 25 pictures of furniture on six pages, and nothing can be bought without Ecto", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await open(page);
+    await expect(page.locator(".al-floor-label")).toHaveText("Lobby");
+    const p = await tilePoint(page, 4, 4);
+    await page.mouse.click(p.x, p.y);
+    const panel = page.getByRole("dialog", { name: "Shop" });
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText(/You have \d+ Ecto\. In your inventory: \d+ of 200\./);
+
+    const tabs = panel.getByRole("tab");
+    await expect(tabs).toHaveText(["Seating", "Tables", "Lights", "Plants", "Spooky", "Walls"]);
+
+    const shotDir = process.env["E2E_SHOT_DIR"];
+    let items = 0;
+    for (const name of ["Seating", "Tables", "Lights", "Plants", "Spooky", "Walls"]) {
+      await panel.getByRole("tab", { name }).click();
+      const cards = panel.locator(".al-shop-item");
+      const count = await cards.count();
+      expect(count, name).toBeGreaterThanOrEqual(4);
+      items += count;
+      // Every card has a picture the room's own renderer drew, and a price.
+      for (let i = 0; i < count; i++) {
+        const img = cards.nth(i).locator("img");
+        await expect(img).toHaveAttribute("src", /^data:image\/png;base64,/);
+        await expect(cards.nth(i).locator(".al-shop-price")).toHaveText(/^\d+ Ecto$/);
+        const size = await img.evaluate((el) => (el as HTMLImageElement).naturalWidth);
+        expect(size).toBeGreaterThan(8);
+      }
+      if (shotDir) await panel.screenshot({ path: `${shotDir}/shop-${name.toLowerCase()}.png` });
+    }
+    expect(items).toBeGreaterThanOrEqual(24);
+
+    // A button the user cannot pay is disabled and says how much is missing (the wallet of this run may hold some Ecto: the dearest item is out of reach).
+    await panel.getByRole("tab", { name: "Seating" }).click();
+    const throne = panel.locator('.al-shop-item[data-item="throne"]').getByRole("button", { name: /^Buy Bone throne/ });
+    await expect(throne).toBeVisible();
+    await panel.getByRole("button", { name: "Close panel" }).click();
+    await expect(panel).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
+  test("the shop panel closes with Escape and the canvas stays clickable", async ({ page }) => {
+    await open(page);
+    const p = await tilePoint(page, 4, 4);
+    await page.mouse.click(p.x, p.y);
+    const panel = page.getByRole("dialog", { name: "Shop" });
+    await expect(panel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+  });
+});

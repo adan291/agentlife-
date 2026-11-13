@@ -28,7 +28,7 @@ afterEach(async () => {
 
 const config = EconomyConfigSchema.parse({ version: 1, grants: { job_passed: 15, branch_delivered: 20, review_finished: 10, memory_accepted: 5, night_summary: 25 } });
 const SINCE = 1000;
-const economy = () => new Economy({ walletFile, config, now: () => SINCE });
+const economy = () => new Economy({ walletFile, inventoryFile: join(dir, "inventory.json"), config, now: () => SINCE });
 
 const proposal = (n: number, sourceTaskId: string): MemoryProposal => ({ id: `prop-00000${n}`, kind: "pitfall", text: `Remember ${n}`, sourceTaskId, createdAt: n });
 const summary = (nightKey: string, done: number): MorningSummary => ({
