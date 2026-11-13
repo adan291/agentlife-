@@ -161,7 +161,7 @@ test.describe("place bought furniture on a floor", () => {
     // A taken tile is red with the reason, and nothing is sent.
     await trayItem(page, "fern").click();
     await page.mouse.move(plant.x, plant.y, { steps: 6 });
-    await expect(status(page)).toHaveText("That tile is taken.");
+    await expect(status(page)).toHaveText("That tile is taken by the potted plant.");
     await expect(status(page)).toHaveAttribute("data-tone", "bad");
 
     // Then a free tile: click to place.
@@ -182,9 +182,14 @@ test.describe("place bought furniture on a floor", () => {
     expect(errors).toEqual([]);
   });
 
-  test("the lobby takes no bought furniture: no tray, no Inventory button", async ({ page }) => {
+  test("the lobby takes no bought furniture: Edit room works, but there is no Inventory button and no tray", async ({ page }) => {
     await open(page);
-    await expect(arrangeButton(page)).toBeDisabled();
+    await expect(arrangeButton(page)).toBeEnabled();
+    await arrangeButton(page).click();
+    await expect(bar(page)).toBeVisible();
+    await expect(bt(page, "Inventory")).toBeHidden();
     await expect(tray(page)).toBeHidden();
+    await arrangeButton(page).click();
+    await expect(bar(page)).toBeHidden();
   });
 });

@@ -10,8 +10,15 @@ import type { PlacedFurni, RoomDef } from "@agentlife/shared";
  * Arrange mode passes `{ includeWalkable: true }`: a cobweb can be moved too.
  */
 export function pickFurni(room: RoomDef, sx: number, sy: number, opts: { includeWalkable?: boolean } = {}): PlacedFurni | undefined {
-  let best: PlacedFurni | undefined;
-  let bestDepth = -Infinity;
+  return pickAllFurni(room, sx, sy, opts)[0];
+}
+
+/**
+ * Every piece under the point, front-most first. Arrange mode needs the whole list: a piece that stands behind another
+ * (a plant behind the sofa) is under the same point, and the piece the user has selected must stay grabbable there.
+ */
+export function pickAllFurni(room: RoomDef, sx: number, sy: number, opts: { includeWalkable?: boolean } = {}): PlacedFurni[] {
+  const hits: { piece: PlacedFurni; depth: number }[] = [];
   for (const p of room.furni) {
     const def = FURNI_CATALOG[p.defId];
     if (!def || (def.walkable && !def.interaction && !isSeatDef(def) && !opts.includeWalkable)) continue;
@@ -23,11 +30,8 @@ export function pickFurni(room: RoomDef, sx: number, sy: number, opts: { include
     }
     if (!hit) continue;
     const { w, l } = footprintSize(def, p.dir);
-    const depth = depthKey({ x: p.x, y: p.y, w, l, layer: LAYER.furni });
-    if (depth > bestDepth) {
-      best = p;
-      bestDepth = depth;
-    }
+    hits.push({ piece: p, depth: depthKey({ x: p.x, y: p.y, w, l, layer: LAYER.furni }) });
   }
-  return best;
+  // A stable sort: pieces with the same depth keep the order of the room.
+  return hits.sort((a, b) => b.depth - a.depth).map((h) => h.piece);
 }

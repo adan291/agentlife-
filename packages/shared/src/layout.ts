@@ -27,7 +27,16 @@ export type Placement = z.infer<typeof PlacementSchema>;
 export const LAYOUT_MAX_PIECES = 100;
 
 const ItemIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/, "invalid item id");
-const ProjectIdKeySchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/, "invalid project id");
+/**
+ * A key of `data/layouts.json`: a room id (`lobby`, `hr`, `project:<id>`). Files written before every room could be
+ * arranged used the bare project id; those keys are read as `project:<id>` (`roomKeyOf`).
+ */
+const RoomKeySchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9-]{0,99}|[a-z0-9][a-z0-9-]{0,99})$/, "invalid room id");
+
+/** `lobby`, `hr` and `project:<id>` stay as they are; a bare project id (the old file format) becomes `project:<id>`. */
+export function roomKeyOf(key: string): string {
+  return key === "lobby" || key === "hr" || key.startsWith("project:") ? key : `project:${key}`;
+}
 
 /** The pieces of one floor that are not where the template put them. */
 export const LayoutSchema = z
@@ -35,9 +44,11 @@ export const LayoutSchema = z
   .refine((l) => Object.keys(l).length <= LAYOUT_MAX_PIECES, `a layout has at most ${LAYOUT_MAX_PIECES} pieces`);
 export type Layout = z.infer<typeof LayoutSchema>;
 
-/** `data/layouts.json`. */
-export const LayoutsFileSchema = z.record(ProjectIdKeySchema, LayoutSchema);
-export type LayoutsFile = z.infer<typeof LayoutsFileSchema>;
+/** `data/layouts.json`: `{ [roomId]: Layout }`. An old file with bare project ids is read with its keys turned into room ids. */
+export const LayoutsFileSchema = z
+  .record(RoomKeySchema, LayoutSchema)
+  .transform((file): Record<string, Layout> => Object.fromEntries(Object.entries(file).map(([k, v]) => [roomKeyOf(k), v])));
+export type LayoutsFile = z.output<typeof LayoutsFileSchema>;
 
 export type MoveCode = "unknown_item" | "pinned" | "outside" | "taken" | "wall" | "spot" | "occupied" | "blocks_path";
 
@@ -55,15 +66,16 @@ export interface MoveOptions {
   catalog?: Catalog;
 }
 
-const REASONS: Record<Exclude<MoveCode, "blocks_path">, string> = {
+const REASONS: Record<Exclude<MoveCode, "blocks_path" | "taken" | "spot">, string> = {
   unknown_item: "That piece is not in this room.",
   pinned: "The elevator stays where it is.",
   outside: "That is outside the room.",
-  taken: "That tile is taken.",
-  wall: "This piece goes on a wall.",
-  spot: "A standing spot of the team is on that tile.",
+  wall: "Against a wall this piece faces the room. Move it away from the wall to turn it.",
   occupied: "Someone is standing there.",
 };
+
+/** Words for the agents whose standing spot has its own name in a refusal. */
+const SPOT_OWNER: Readonly<Record<string, string>> = { architect: "Architect", developer: "Developer", qa: "QA", builder: "Builder", hr: "HR agent" };
 
 const tileKey = (t: Tile): string => `${t.x},${t.y}`;
 
@@ -98,8 +110,15 @@ interface Ctx {
   hm: Heightmap;
   /** Pieces on each tile (every piece counts, walkable or not). */
   owners: Map<string, string[]>;
-  /** Anchors that do not follow a piece: the elevator door tile and the standing spots. */
-  spots: Set<string>;
+  /** Anchors that do not follow a piece: the elevator door tile and the standing spots, with the refusal each one gives. */
+  spots: Map<string, string>;
+}
+
+/** What a refusal says about a standing spot that a solid piece would cover. */
+function spotReason(a: Anchor): string {
+  if (a.name === "door") return "The tile in front of the elevator must stay free.";
+  const owner = a.name.startsWith("home_") ? SPOT_OWNER[a.name.slice("home_".length)] : undefined;
+  return owner ? `The ${owner}'s standing spot is on that tile.` : "A standing spot of the team is on that tile.";
 }
 
 function makeCtx(room: RoomDef, catalog: Catalog): Ctx {
@@ -114,26 +133,36 @@ function makeCtx(room: RoomDef, catalog: Catalog): Ctx {
       else owners.set(k, [p.itemId]);
     }
   }
-  const spots = new Set<string>([tileKey(room.door)]);
-  for (const a of room.anchors) if (a.follows === undefined) spots.add(tileKey(a));
+  const spots = new Map<string, string>([[tileKey(room.door), spotReason(room.door)]]);
+  for (const a of room.anchors) if (a.follows === undefined) spots.set(tileKey(a), spotReason(a));
   return { room, catalog, hm: parseHeightmap(room.heightmap), owners, spots };
 }
 
-/** Wall pieces hug the north wall facing south (dir 4) or the west wall facing east (dir 2): the tile behind has no floor. */
-function onWall(ctx: Ctx, p: PlacedFurni, def: FurniDef): boolean {
+/**
+ * Which drawn walls a footprint stands against: the north wall when every tile of its top row has no floor behind it
+ * (`y - 1`), the west wall likewise (`x - 1`). A corner tile is against both.
+ */
+function wallsBehind(ctx: Ctx, p: PlacedFurni, def: FurniDef): { north: boolean; west: boolean } {
   const tiles = footprintTiles(p, def);
-  if (p.dir === 4) {
-    const top = Math.min(...tiles.map((t) => t.y));
-    return tiles.filter((t) => t.y === top).every((t) => ctx.hm.height(t.x, t.y - 1) === null);
-  }
-  if (p.dir === 2) {
-    const left = Math.min(...tiles.map((t) => t.x));
-    return tiles.filter((t) => t.x === left).every((t) => ctx.hm.height(t.x - 1, t.y) === null);
-  }
-  return false;
+  const top = Math.min(...tiles.map((t) => t.y));
+  const left = Math.min(...tiles.map((t) => t.x));
+  return {
+    north: tiles.filter((t) => t.y === top).every((t) => ctx.hm.height(t.x, t.y - 1) === null),
+    west: tiles.filter((t) => t.x === left).every((t) => ctx.hm.height(t.x - 1, t.y) === null),
+  };
 }
 
-function problem(code: Exclude<MoveCode, "blocks_path">, itemId: string): LayoutProblem {
+/**
+ * A wall piece may stand anywhere on the floor. Against a wall it faces the room (dir 4 on the north wall, dir 2 on the
+ * west wall; a corner accepts both), so it never shows its back to the room.
+ */
+function wallFits(ctx: Ctx, p: PlacedFurni, def: FurniDef): boolean {
+  const { north, west } = wallsBehind(ctx, p, def);
+  if (!north && !west) return true;
+  return (north && p.dir === 4) || (west && p.dir === 2);
+}
+
+function problem(code: Exclude<MoveCode, "blocks_path" | "taken" | "spot">, itemId: string): LayoutProblem {
   return { code, itemId, reason: REASONS[code] };
 }
 
@@ -143,9 +172,19 @@ function pieceProblem(ctx: Ctx, p: PlacedFurni): LayoutProblem | undefined {
   if (!def) return problem("unknown_item", p.itemId);
   const tiles = footprintTiles(p, def);
   if (tiles.some((t) => ctx.hm.height(t.x, t.y) === null)) return problem("outside", p.itemId);
-  if (tiles.some((t) => (ctx.owners.get(tileKey(t))?.length ?? 0) > 1)) return problem("taken", p.itemId);
-  if (def.mount === "wall" && !onWall(ctx, p, def)) return problem("wall", p.itemId);
-  if (!def.walkable && tiles.some((t) => ctx.spots.has(tileKey(t)))) return problem("spot", p.itemId);
+  for (const t of tiles) {
+    const other = ctx.owners.get(tileKey(t))?.find((id) => id !== p.itemId);
+    if (other === undefined) continue;
+    const otherDef = ctx.catalog[ctx.room.furni.find((q) => q.itemId === other)?.defId ?? ""];
+    return { code: "taken", itemId: p.itemId, reason: otherDef ? `That tile is taken by the ${otherDef.name.toLowerCase()}.` : "That tile is taken." };
+  }
+  if (def.mount === "wall" && !wallFits(ctx, p, def)) return problem("wall", p.itemId);
+  if (!def.walkable) {
+    for (const t of tiles) {
+      const reason = ctx.spots.get(tileKey(t));
+      if (reason !== undefined) return { code: "spot", itemId: p.itemId, reason };
+    }
+  }
   return undefined;
 }
 
@@ -159,7 +198,7 @@ interface Target {
 function anchorLabel(a: Anchor): string {
   if (a.name === "door") return "the elevator";
   if (a.name === "desk") return `the ${a.agent ?? "agent"} desk`;
-  if (a.name.startsWith("home_")) return "a standing spot";
+  if (a.name.startsWith("home_")) return "a standing spot of the team";
   return `the ${a.name}`;
 }
 

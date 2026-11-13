@@ -18,6 +18,7 @@ import {
   projectRoomId,
   resolveAnchor,
   roomForProject,
+  roomKeyOf,
   useTile,
   validateRoom,
 } from "../src/index.ts";
@@ -96,11 +97,15 @@ describe("checkMove", () => {
   it.each([
     ["outside", "plant_2", { x: 12, y: 3, dir: 4 }, "That is outside the room."],
     ["outside", "plant_2", { x: -1, y: 3, dir: 4 }, "That is outside the room."],
-    ["taken", "plant_2", { x: 4, y: 2, dir: 4 }, "That tile is taken."],
-    ["taken", "sofa_1", { x: 9, y: 8, dir: 0 }, "That tile is taken."],
-    ["wall", "library_shelf_1", { x: 6, y: 3, dir: 4 }, "This piece goes on a wall."],
-    ["wall", "mailbox_1", { x: 0, y: 6, dir: 0 }, "This piece goes on a wall."],
-    ["spot", "plant_2", { x: 6, y: 3, dir: 4 }, "A standing spot of the team is on that tile."],
+    ["taken", "plant_2", { x: 4, y: 2, dir: 4 }, "That tile is taken by the agent desk."],
+    ["taken", "sofa_1", { x: 9, y: 8, dir: 0 }, "That tile is taken by the potted plant."],
+    ["taken", "plant_2", { x: 3, y: 8, dir: 4 }, "That tile is taken by the computer desk."],
+    ["wall", "mailbox_1", { x: 0, y: 6, dir: 0 }, "Against a wall this piece faces the room. Move it away from the wall to turn it."],
+    ["wall", "library_shelf_1", { x: 6, y: 0, dir: 2 }, "Against a wall this piece faces the room. Move it away from the wall to turn it."],
+    ["spot", "plant_2", { x: 6, y: 3, dir: 4 }, "The Architect's standing spot is on that tile."],
+    ["spot", "plant_2", { x: 8, y: 6, dir: 4 }, "The QA's standing spot is on that tile."],
+    ["spot", "plant_2", { x: 5, y: 3, dir: 4 }, "A standing spot of the team is on that tile."],
+    ["spot", "plant_2", { x: 1, y: 8, dir: 4 }, "The tile in front of the elevator must stay free."],
     ["pinned", "elevator_1", { x: 0, y: 4, dir: 2 }, "The elevator stays where it is."],
     ["unknown_item", "nothing_1", { x: 3, y: 3, dir: 4 }, "That piece is not in this room."],
   ] as const)("refuses with %s: %s", (code, id, to, reason) => {
@@ -172,6 +177,97 @@ describe("checkMove", () => {
   });
 });
 
+describe("wall pieces", () => {
+  /** A bare 5 x 5 room with one mailbox in the north-west corner. The reachability rules have nothing to say here. */
+  const bare = validateRoom({
+    id: "bare",
+    name: "Bare",
+    kind: "hr",
+    heightmap: ["00000", "00000", "00000", "00000", "00000"],
+    door: { name: "door", x: 2, y: 4, dir: 0 },
+    anchors: [],
+    furni: [{ itemId: "mb", defId: "mailbox", x: 0, y: 0, dir: 4 }],
+  });
+  const ok = (to: Placement) => move(bare, "mb", to).ok;
+
+  it("against the north wall it faces south, against the west wall east, and a corner takes both", () => {
+    expect(ok({ x: 2, y: 0, dir: 4 })).toBe(true);
+    expect(ok({ x: 2, y: 0, dir: 2 })).toBe(false);
+    expect(ok({ x: 2, y: 0, dir: 0 })).toBe(false);
+    expect(ok({ x: 2, y: 0, dir: 6 })).toBe(false);
+    expect(ok({ x: 0, y: 2, dir: 2 })).toBe(true);
+    expect(ok({ x: 0, y: 2, dir: 4 })).toBe(false);
+    expect(ok({ x: 0, y: 2, dir: 6 })).toBe(false);
+    expect(ok({ x: 0, y: 0, dir: 4 })).toBe(true);
+    expect(ok({ x: 0, y: 0, dir: 2 })).toBe(true);
+    expect(ok({ x: 0, y: 0, dir: 0 })).toBe(false);
+    expect(ok({ x: 0, y: 0, dir: 6 })).toBe(false);
+  });
+
+  it("away from the walls it stands free and turns to any direction on its own tile", () => {
+    for (const dir of [0, 2, 4, 6] as const) expect(ok({ x: 2, y: 2, dir }), `dir ${dir}`).toBe(true);
+    // The east and south edges are not walls of the room: a piece there is free too (facing out of the room it
+    // would have nobody to reach it, which is a different rule).
+    for (const dir of [0, 4, 6] as const) expect(ok({ x: 4, y: 2, dir }), `dir ${dir}`).toBe(true);
+  });
+
+  it("a free wall piece can be put back against a wall, facing the room", () => {
+    const free = move(bare, "mb", { x: 2, y: 2, dir: 6 });
+    expect(free.ok).toBe(true);
+    if (!free.ok) return;
+    expect(move(free.room, "mb", { x: 2, y: 0, dir: 4 }).ok).toBe(true);
+    expect(move(free.room, "mb", { x: 2, y: 0, dir: 6 }).ok).toBe(false);
+  });
+
+  it("the refusal says why and what to do", () => {
+    expect(move(bare, "mb", { x: 2, y: 0, dir: 0 })).toEqual({
+      ok: false,
+      code: "wall",
+      reason: "Against a wall this piece faces the room. Move it away from the wall to turn it.",
+    });
+  });
+
+  it("a 1 x 1 piece of any kind turns on its own tile, in every direction, when it has room", () => {
+    for (const id of ["plant_2", "lamp_1", "jack_lamp_1", "chair_1"]) {
+      const at = piece(floor, id);
+      for (const dir of [0, 2, 4, 6] as const) expect(move(floor, id, { x: at.x, y: at.y, dir }).ok, `${id} dir ${dir}`).toBe(true);
+    }
+  });
+});
+
+describe("every room follows the rules", () => {
+  it("the lobby and the HR office are valid arrangements as they are", () => {
+    expect(layoutProblem(lobby)).toBeUndefined();
+    expect(layoutProblem(hr)).toBeUndefined();
+  });
+
+  it("in the lobby and the HR office the desks, the Reception, the shop counter and the HR desk stay reachable", () => {
+    // A plant on the tile in front of each interactive piece cuts it off.
+    for (const [room, id] of [
+      [lobby, "reception_desk_1"],
+      [lobby, "shop_counter_1"],
+      [hr, "hr_desk_1"],
+    ] as const) {
+      const front = useTile(piece(room, id));
+      const plant = room.furni.find((p) => p.defId === "plant")!;
+      const r = move(room, plant.itemId, { x: front.x, y: front.y, dir: 4 });
+      expect(r, `${room.id}: ${id}`).toMatchObject({ ok: false });
+    }
+  });
+
+  it("their elevators and doors do not move", () => {
+    const door = lobby.furni.find((p) => p.defId === "door")!;
+    expect(checkMove(lobby, door.itemId, { x: 3, y: 3, dir: 4 })).toMatchObject({ ok: false, code: "pinned" });
+  });
+
+  it("the lobby's Builder desk takes its seat with it, and the HR ghost has a spot no piece may cover", () => {
+    const r = move(lobby, "desk_builder", { x: 11, y: 4, dir: 6 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(resolveAnchor(r.room, "desk", "builder")).toMatchObject({ x: 10, y: 4, dir: 2 });
+    expect(move(hr, "plant_2", { x: 7, y: 1, dir: 4 })).toEqual({ ok: false, code: "spot", reason: "The HR agent's standing spot is on that tile." });
+  });
+});
+
 describe("layouts", () => {
   const plantAway: Layout = { plant_2: { x: 8, y: 8, dir: 4 }, desk_qa: { x: 10, y: 6, dir: 6 } };
 
@@ -226,14 +322,25 @@ describe("layouts", () => {
     expect(LayoutSchema.safeParse({ plant_2: { x: 1.5, y: 1, dir: 4 } }).success).toBe(false);
     const many = Object.fromEntries(Array.from({ length: 101 }, (_, i) => [`p${i}`, { x: 1, y: 1, dir: 4 }]));
     expect(LayoutSchema.safeParse(many).success).toBe(false);
-    expect(LayoutsFileSchema.safeParse({ demo: plantAway }).success).toBe(true);
+    expect(LayoutsFileSchema.safeParse({ "project:demo": plantAway, lobby: plantAway, hr: plantAway }).success).toBe(true);
     expect(LayoutsFileSchema.safeParse({ "Not A Project": plantAway }).success).toBe(false);
+    expect(LayoutsFileSchema.safeParse({ "project:Not A Project": plantAway }).success).toBe(false);
     expect(LayoutsFileSchema.safeParse([]).success).toBe(false);
+  });
+
+  it("a layouts file from before every room could be arranged is read with room ids as keys", () => {
+    expect(LayoutsFileSchema.parse({ demo: plantAway, "other-1": plantAway })).toEqual({ "project:demo": plantAway, "project:other-1": plantAway });
+    // Room ids already in the new form stay as they are.
+    expect(LayoutsFileSchema.parse({ "project:demo": plantAway, lobby: plantAway, hr: plantAway })).toEqual({ "project:demo": plantAway, lobby: plantAway, hr: plantAway });
+    expect(roomKeyOf("demo")).toBe("project:demo");
+    expect(roomKeyOf("project:demo")).toBe("project:demo");
+    expect(roomKeyOf("lobby")).toBe("lobby");
+    expect(roomKeyOf("hr")).toBe("hr");
   });
 });
 
 describe("arranging in the hotel", () => {
-  function makeHotel(layoutOfProject?: (id: string) => Layout | undefined) {
+  function makeHotel(layoutOfRoom?: (roomId: string) => Layout | undefined) {
     let t = 1_000_000;
     const hotel = new Hotel({
       lobby,
@@ -242,7 +349,7 @@ describe("arranging in the hotel", () => {
       clock: () => t,
       sim: { msPerTile: 10 },
       startRoom: projectRoomId("demo"),
-      ...(layoutOfProject ? { layoutOf: layoutOfProject } : {}),
+      ...(layoutOfRoom ? { layoutOf: layoutOfRoom } : {}),
     });
     hotel.addProject({ id: "demo", name: "Demo" });
     return { hotel, advance: (ms: number) => (t += ms), room: projectRoomId("demo") };
@@ -275,11 +382,42 @@ describe("arranging in the hotel", () => {
     expect(piece(hotel.sim(room)!.room, "plant_2")).toMatchObject({ x: 9, y: 8 });
   });
 
-  it("the lobby and the HR office cannot be arranged", () => {
+  it("every room can be arranged, in the lobby and the HR office as well; an unknown room cannot", () => {
     const { hotel } = makeHotel();
-    for (const id of ["lobby", "hr", "project:nope"]) {
-      expect(hotel.moveFurniture(id, "plant_1", { x: 3, y: 3, dir: 4 })).toMatchObject({ ok: false, code: "not_editable" });
-      expect(hotel.resetLayout(id)).toMatchObject({ ok: false, code: "not_editable" });
+    const saved: Layout[] = [];
+    expect(hotel.moveFurniture("lobby", "plant_1", { x: 9, y: 3, dir: 4 }, (l) => saved.push(l)).ok).toBe(true);
+    expect(saved).toEqual([{ plant_1: { x: 9, y: 3, dir: 4 } }]);
+    expect(piece(hotel.sim("lobby")!.room, "plant_1")).toMatchObject({ x: 9, y: 3 });
+    expect(hotel.moveFurniture("hr", "plant_2", { x: 8, y: 3, dir: 4 }, (l) => saved.push(l)).ok).toBe(true);
+    expect(saved.at(-1)).toEqual({ plant_2: { x: 8, y: 3, dir: 4 } });
+    // The lobby layout is its own: moving in the HR office did not touch the lobby.
+    expect(piece(hotel.sim("lobby")!.room, "plant_1")).toMatchObject({ x: 9, y: 3 });
+    expect(hotel.resetLayout("lobby", (l) => saved.push(l)).ok).toBe(true);
+    expect(saved.at(-1)).toEqual({});
+    expect(piece(hotel.sim("lobby")!.room, "plant_1")).toMatchObject({ x: 11, y: 0 });
+    expect(hotel.moveFurniture("project:nope", "plant_1", { x: 3, y: 3, dir: 4 })).toMatchObject({ ok: false, code: "not_editable" });
+    expect(hotel.resetLayout("project:nope")).toMatchObject({ ok: false, code: "not_editable" });
+  });
+
+  it("the lobby and the HR office keep a saved layout when the hotel is built again", () => {
+    const stored: Record<string, Layout> = { lobby: { plant_1: { x: 9, y: 3, dir: 4 } }, hr: { plant_2: { x: 8, y: 3, dir: 4 } } };
+    const { hotel } = makeHotel((id) => stored[id]);
+    expect(piece(hotel.sim("lobby")!.room, "plant_1")).toMatchObject({ x: 9, y: 3 });
+    expect(piece(hotel.sim("hr")!.room, "plant_2")).toMatchObject({ x: 8, y: 3 });
+  });
+
+  it("a saved layout that no longer fits leaves the piece where the template has it", () => {
+    // The Reception desk's tile, taken by the plant: refused, and the rest of the room is as the template made it.
+    const { hotel } = makeHotel((id) => (id === "lobby" ? { plant_1: { x: 1, y: 0, dir: 4 } } : undefined));
+    expect(piece(hotel.sim("lobby")!.room, "plant_1")).toMatchObject({ x: 11, y: 0 });
+  });
+
+  it("bought furniture stays on project floors", () => {
+    const { hotel } = makeHotel();
+    const fern = { itemId: "bought_1", defId: "fern", x: 3, y: 3, dir: 4 as const };
+    for (const id of ["lobby", "hr"]) {
+      expect(hotel.placeFurniture(id, fern)).toEqual({ ok: false, code: "not_editable", reason: "Bought furniture can only stand on project floors." });
+      expect(hotel.pickUpFurniture(id, "bought_1")).toMatchObject({ ok: false, code: "not_editable" });
     }
   });
 
@@ -293,7 +431,7 @@ describe("arranging in the hotel", () => {
   });
 
   it("a floor built with a saved layout has it, and reset brings the template back", () => {
-    const { hotel, room } = makeHotel((id) => (id === "demo" ? { plant_2: { x: 8, y: 8, dir: 4 } } : undefined));
+    const { hotel, room } = makeHotel((id) => (id === projectRoomId("demo") ? { plant_2: { x: 8, y: 8, dir: 4 } } : undefined));
     expect(piece(hotel.sim(room)!.room, "plant_2")).toMatchObject({ x: 8, y: 8 });
     const saved: Layout[] = [];
     const r = hotel.resetLayout(room, (l) => saved.push(l));

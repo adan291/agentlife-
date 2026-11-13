@@ -1505,15 +1505,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   /**
-   * Arrange mode: one change of the furniture of the user's project floor. The rules are the shared ones (`checkMove`);
-   * a refusal names the rule and changes nothing. The new pieces and anchors go to the user after the walks already
-   * queued, so the avatars do not jump. `stock` also sends the shop (the inventory tray shows the stock).
+   * Edit mode: one change of the furniture of the room the user is in (every room can be arranged). The rules are the
+   * shared ones (`checkMove`); a refusal names the rule and changes nothing. The new pieces and anchors go to the user
+   * after the walks already queued, so the avatars do not jump. `stock` also sends the shop (the inventory tray shows the
+   * stock). `projectId` is undefined outside project floors; only bought pieces need it, and they stay on project floors.
    */
-  const arrange = (ws: WebSocket, change: (roomId: string, projectId: string, save: (layout: Layout) => void) => ArrangeResult, stock = false): void => {
+  const arrange = (
+    ws: WebSocket,
+    change: (roomId: string, projectId: string | undefined, save: (layout: Layout) => void) => ArrangeResult,
+    stock = false,
+  ): void => {
     const roomId = userRoom();
-    const projectId = roomId === undefined ? undefined : projectIdOfRoom(roomId);
-    if (roomId === undefined || projectId === undefined) return sendError(ws, "layout_error", "Only project floors can be arranged.");
-    const result = change(roomId, projectId, (layout) => options.layouts?.set(projectId, layout));
+    if (roomId === undefined) return sendError(ws, "layout_error", "That room cannot be arranged.");
+    const result = change(roomId, projectIdOfRoom(roomId), (layout) => options.layouts?.set(roomId, layout));
     if (!result.ok) return sendError(ws, "layout_error", result.reason);
     const { furni, anchors } = result.room;
     enqueue(() => {
@@ -1523,17 +1527,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   const NO_SHOP_TO_PLACE: ArrangeResult = { ok: false, code: "no_stock", reason: "You have nothing to place: the shop is closed." };
+  const PROJECT_FLOORS_ONLY: ArrangeResult = { ok: false, code: "not_editable", reason: "Bought furniture can only stand on project floors." };
 
   /** A move of a piece. A bought piece is kept in the inventory file, a piece of the template in the layout file. */
-  const moveItem = (roomId: string, projectId: string, itemId: string, to: Placement, save: (layout: Layout) => void): ArrangeResult => {
-    if (!hotel.isExtra(roomId, itemId)) return hotel.moveFurniture(roomId, itemId, to, save);
+  const moveItem = (roomId: string, projectId: string | undefined, itemId: string, to: Placement, save: (layout: Layout) => void): ArrangeResult => {
+    if (projectId === undefined || !hotel.isExtra(roomId, itemId)) return hotel.moveFurniture(roomId, itemId, to, save);
     const plan = economy?.planMove(projectId, itemId, to);
     if (!plan?.ok) return { ok: false, code: "unknown_item", reason: plan?.reason ?? "That piece is not in this room." };
     return hotel.moveFurniture(roomId, itemId, to, () => plan.commit());
   };
 
   /** Stands a bought item on the floor. The inventory file is written only after the hotel accepted the spot. */
-  const placeItem = (roomId: string, projectId: string, itemId: string, to: Placement): ArrangeResult => {
+  const placeItem = (roomId: string, projectId: string | undefined, itemId: string, to: Placement): ArrangeResult => {
+    if (projectId === undefined) return PROJECT_FLOORS_ONLY;
     if (!economy) return NO_SHOP_TO_PLACE;
     const plan = economy.planPlace(projectId, itemId, to);
     if (!plan.ok) return { ok: false, code: "no_stock", reason: plan.reason };
@@ -1541,12 +1547,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   };
 
   /** Takes a bought piece back into the inventory. Pieces of the template are refused by the hotel. */
-  const pickUpItem = (roomId: string, projectId: string, itemId: string): ArrangeResult =>
-    hotel.pickUpFurniture(roomId, itemId, () => {
+  const pickUpItem = (roomId: string, projectId: string | undefined, itemId: string): ArrangeResult => {
+    if (projectId === undefined) return PROJECT_FLOORS_ONLY;
+    return hotel.pickUpFurniture(roomId, itemId, () => {
       const plan = economy?.planPickUp(projectId, itemId);
       if (!plan?.ok) throw new Error(plan?.reason ?? "not one of yours");
       plan.commit();
     });
+  };
 
   const watchOverview = (on: boolean) => {
     if (!current) return;

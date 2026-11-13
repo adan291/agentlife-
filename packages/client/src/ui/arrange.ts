@@ -153,9 +153,9 @@ export class ArrangeModel {
     return this.active;
   }
 
-  /** Project floors only; the lobby and the HR office cannot be arranged. */
+  /** Every room can be arranged: the lobby and the HR office as well as the project floors. */
   get available(): boolean {
-    return this.room?.kind === "project";
+    return this.room !== null;
   }
 
   get selectedId(): string | null {
@@ -327,17 +327,30 @@ export class ArrangeModel {
 
   // ---- dragging ----
 
-  /** The pointer went down at `tile`; `itemId` is the piece under it, if any. */
-  pointerDown(itemId: string | null, tile: Tile): void {
+  /**
+   * The pointer went down at `tile`; `under` lists the pieces under it, front-most first. When the pointer is on the
+   * tile of the piece that is already selected, that piece wins even if a taller piece in front of it covers the spot:
+   * a piece the user has just moved stays grabbable where it was dropped. Otherwise the front-most piece is selected.
+   */
+  pointerDown(under: readonly string[], tile: Tile): void {
     if (!this.active || this.pending) return;
     this.drag = null;
     if (this.carrying) {
       this.carryTo(tile);
       return;
     }
+    const itemId = this.selectedAt(under, tile) ?? under[0] ?? null;
     if (!this.select(itemId)) return;
     const at = itemId === null ? undefined : this.placementOf(itemId);
     if (itemId !== null && at) this.drag = { itemId, grabX: tile.x - at.x, grabY: tile.y - at.y, to: at };
+  }
+
+  /** The selected piece, when it is under the pointer and the pointer is on one of its own tiles. */
+  private selectedAt(under: readonly string[], tile: Tile): string | null {
+    const id = this.selected;
+    const at = id === null ? undefined : this.placementOf(id);
+    if (id === null || !at || !under.includes(id)) return null;
+    return this.tilesAt(id, at).some((t) => t.x === tile.x && t.y === tile.y) ? id : null;
   }
 
   pointerMove(tile: Tile): void {

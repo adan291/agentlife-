@@ -1,5 +1,7 @@
 # Design Document: furni-move
 
+> Changed by ui-tidy (2026-11-13): every room can be arranged (not only project floors), layouts are stored per room id, a wall piece may stand free and faces the room only against a wall, refusals name the piece or the spot, and the Arrange button is now "Edit room" in the top bar with its tool bar in a banner under it. See `.kiro/specs/ui-tidy/design.md`; where the two differ, that file wins.
+
 Pure rules live in `@agentlife/shared` (`layout.ts`), the world-server stores and applies them, the client (task 3) only draws and sends messages. The agent-engine does not change.
 
 ## Vocabulary

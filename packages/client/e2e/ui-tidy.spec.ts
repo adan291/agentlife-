@@ -160,10 +160,15 @@ test.describe("Edit room", () => {
     await editButton(page).click();
   });
 
-  test("is disabled in the lobby, for now (task 2 makes every room editable)", async ({ page }) => {
+  test("works in the lobby too, with the same banner and no inventory", async ({ page }) => {
     await open(page, 1366, 768, null);
-    await expect(editButton(page)).toBeDisabled();
+    await expect(editButton(page)).toBeEnabled();
     await page.keyboard.press("e");
+    await expect(editBar(page)).toBeVisible();
+    await expect(editBar(page).locator(".al-arrange-help")).toHaveText("Editing Lobby: drag furniture, arrows to move, R to turn, Esc when done");
+    await expect(editBar(page).getByRole("button", { name: "Inventory", exact: true })).toBeHidden();
+    await expect(page.locator(".al-tray")).toBeHidden();
+    await page.keyboard.press("Escape");
     await expect(editBar(page)).toBeHidden();
   });
 });

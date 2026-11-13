@@ -3,8 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ClientMsgSchema, checkMove, layoutProblem, validateRoom } from "@agentlife/shared";
+import { ClientMsgSchema, checkMove, layoutProblem, tileToScreen, validateRoom } from "@agentlife/shared";
 import type { ClientMsg, Placement, RoomDef } from "@agentlife/shared";
+import { pickAllFurni, pickFurni } from "../src/scene/pick.ts";
 import { ANSWER_TIMEOUT_MS, ArrangeModel, QUEUE_MAX, arrangeKey } from "../src/ui/arrange.ts";
 import { createArrangeBar } from "../src/ui/arrange-bar.ts";
 import { FakeDocument, findAll, textOf } from "./fake-dom.ts";
@@ -69,15 +70,21 @@ describe("arrangeKey", () => {
 });
 
 describe("entering and leaving", () => {
-  it("only a project floor can be arranged", () => {
+  it("every room can be arranged, the lobby too; a model that knows no room cannot", () => {
     const h = harness(lobby);
-    expect(h.model.available).toBe(false);
-    expect(h.model.enter()).toBe(false);
-    expect(h.model.isActive).toBe(false);
+    expect(h.model.available).toBe(true);
+    expect(h.model.enter()).toBe(true);
+    expect(h.model.isActive).toBe(true);
+    // Bought furniture stands on project floors only: the lobby has no inventory.
+    expect(h.model.view().inventory).toBe(false);
     const p = harness();
     expect(p.model.available).toBe(true);
     expect(p.model.enter()).toBe(true);
     expect(p.model.isActive).toBe(true);
+    expect(p.model.view().inventory).toBe(true);
+    const none = new ArrangeModel(() => undefined);
+    expect(none.available).toBe(false);
+    expect(none.enter()).toBe(false);
   });
 
   it("does nothing until arranging, and a new room stops it", () => {
@@ -134,11 +141,47 @@ describe("selecting", () => {
   it("clicking empty floor clears the selection", () => {
     const h = harness();
     h.model.enter();
-    h.model.pointerDown("plant_2", { x: 9, y: 8 });
+    h.model.pointerDown(["plant_2"], { x: 9, y: 8 });
     h.model.pointerUp();
     expect(h.model.selectedId).toBe("plant_2");
-    h.model.pointerDown(null, { x: 5, y: 5 });
+    h.model.pointerDown([], { x: 5, y: 5 });
     expect(h.model.selectedId).toBeNull();
+  });
+
+  it("the front-most piece under the pointer is selected", () => {
+    const h = harness();
+    h.model.enter();
+    h.model.pointerDown(["sofa_1", "plant_2"], { x: 6, y: 9 });
+    h.model.pointerUp();
+    expect(h.model.selectedId).toBe("sofa_1");
+  });
+
+  it("the selected piece stays grabbable on its own tile when a piece in front covers the spot", () => {
+    const h = harness();
+    h.model.enter();
+    h.model.select("plant_2");
+    // The plant (9, 8) is under the pointer together with the sofa in front of it, and the pointer is on the plant's tile.
+    h.model.pointerDown(["sofa_1", "plant_2"], { x: 9, y: 8 });
+    h.model.pointerMove({ x: 8, y: 8 });
+    h.model.pointerUp();
+    expect(h.model.selectedId).toBe("plant_2");
+    expect(h.sent).toEqual([{ type: "furni_move", itemId: "plant_2", x: 8, y: 8, dir: 4 }]);
+  });
+
+  it("the selected piece does not steal a press that is on another piece's tile", () => {
+    const h = harness();
+    h.model.enter();
+    h.model.select("plant_2");
+    h.model.pointerDown(["sofa_1", "plant_2"], { x: 6, y: 9 });
+    expect(h.model.selectedId).toBe("sofa_1");
+  });
+
+  it("a press selects the front-most piece when the selected one is not under the pointer", () => {
+    const h = harness();
+    h.model.enter();
+    h.model.select("plant_2");
+    h.model.pointerDown(["plant_1"], { x: 11, y: 0 });
+    expect(h.model.selectedId).toBe("plant_1");
   });
 });
 
@@ -235,13 +278,43 @@ describe("turning", () => {
     expect(h.model.view().where).toBe("tile 9, 8, facing west");
   });
 
-  it("a wall piece that cannot turn says it goes on a wall", () => {
+  it("a wall piece against a wall cannot turn, and the reason says to move it away from the wall", () => {
     const h = harness();
     h.model.enter();
     h.model.select("test_lab_1");
     h.model.rotate();
     expect(h.sent).toEqual([]);
-    expect(h.model.view()).toMatchObject({ status: "This piece goes on a wall.", tone: "bad" });
+    expect(h.model.view()).toMatchObject({
+      status: "Against a wall this piece faces the room. Move it away from the wall to turn it.",
+      tone: "bad",
+    });
+  });
+
+  it("once it is away from the wall it turns on its own tile, all the way round", () => {
+    const h = harness();
+    h.model.enter();
+    h.model.select("test_lab_1");
+    h.model.step(0, 1);
+    h.model.step(0, 1);
+    h.answer();
+    h.answer();
+    expect(at(h.room(), "test_lab_1")).toEqual({ x: 7, y: 2, dir: 4 });
+    for (const dir of [6, 0, 2, 4]) {
+      h.model.rotate();
+      h.answer();
+      expect(at(h.room(), "test_lab_1")).toEqual({ x: 7, y: 2, dir });
+    }
+  });
+
+  it("a 1x1 piece turns on its own tile, all the way round", () => {
+    const h = harness();
+    h.model.enter();
+    h.model.select("plant_2");
+    for (const dir of [6, 0, 2, 4]) {
+      h.model.rotate();
+      h.answer();
+      expect(at(h.room(), "plant_2")).toEqual({ x: 9, y: 8, dir });
+    }
   });
 });
 
@@ -249,7 +322,7 @@ describe("dragging", () => {
   it("previews green on a free tile, sends on release and keeps the grab point", () => {
     const h = harness();
     h.model.enter();
-    h.model.pointerDown("plant_2", { x: 9, y: 8 });
+    h.model.pointerDown(["plant_2"], { x: 9, y: 8 });
     h.model.pointerMove({ x: 7, y: 8 });
     expect(h.model.overlay()?.preview).toEqual({ tiles: [{ x: 7, y: 8 }], ok: true });
     expect(h.model.view().tone).toBe("ok");
@@ -264,7 +337,7 @@ describe("dragging", () => {
     const h = harness();
     h.model.enter();
     const desk = at(template, "desk_developer");
-    h.model.pointerDown("desk_developer", { x: desk.x + 1, y: desk.y });
+    h.model.pointerDown(["desk_developer"], { x: desk.x + 1, y: desk.y });
     h.model.pointerMove({ x: desk.x + 1, y: desk.y + 1 });
     const preview = h.model.overlay()?.preview;
     expect(preview?.tiles.some((t) => t.x === desk.x && t.y === desk.y + 1)).toBe(true);
@@ -273,11 +346,11 @@ describe("dragging", () => {
   it("previews red with the reason on a taken tile and sends nothing on release", () => {
     const h = harness();
     h.model.enter();
-    h.model.pointerDown("plant_2", { x: 9, y: 8 });
+    h.model.pointerDown(["plant_2"], { x: 9, y: 8 });
     const sofa = at(template, "sofa_1");
     h.model.pointerMove({ x: sofa.x, y: sofa.y });
     expect(h.model.overlay()?.preview?.ok).toBe(false);
-    expect(h.model.view()).toMatchObject({ status: "That tile is taken.", tone: "bad" });
+    expect(h.model.view()).toMatchObject({ status: "That tile is taken by the sofa.", tone: "bad" });
     h.model.pointerUp();
     expect(h.sent).toEqual([]);
     expect(h.model.overlay()?.preview?.ok).toBe(false);
@@ -286,7 +359,7 @@ describe("dragging", () => {
   it("releasing where it started changes nothing", () => {
     const h = harness();
     h.model.enter();
-    h.model.pointerDown("plant_2", { x: 9, y: 8 });
+    h.model.pointerDown(["plant_2"], { x: 9, y: 8 });
     h.model.pointerMove({ x: 8, y: 8 });
     h.model.pointerMove({ x: 9, y: 8 });
     h.model.pointerUp();
@@ -420,7 +493,7 @@ describe("any sequence of arrange actions leaves a valid room", () => {
           else if (a.kind === "reset") h.model.resetLayout();
           else {
             const p = at(h.room(), a.id);
-            h.model.pointerDown(a.id, { x: p.x, y: p.y });
+            h.model.pointerDown([a.id], { x: p.x, y: p.y });
             h.model.pointerMove({ x: a.x, y: a.y });
             h.model.pointerUp();
           }
@@ -438,6 +511,23 @@ describe("any sequence of arrange actions leaves a valid room", () => {
       }),
       { numRuns: 150 },
     );
+  });
+});
+
+describe("picking while arranging", () => {
+  it("lists every piece under a point, front-most first, and pickFurni is the first of them", () => {
+    // A plant right behind the sofa: the middle of its tile is under the sofa's box too.
+    const sofa = at(template, "sofa_1");
+    const behind = { itemId: "plant_x", defId: "plant", x: sofa.x, y: sofa.y - 1, dir: 4 as const };
+    const room = { ...template, furni: [...template.furni, behind] };
+    const p = tileToScreen({ x: behind.x, y: behind.y });
+    expect(pickAllFurni(room, p.sx, p.sy).map((q) => q.itemId)).toEqual(["sofa_1", "plant_x"]);
+    expect(pickFurni(room, p.sx, p.sy)?.itemId).toBe("sofa_1");
+    // On the sofa's own tile only the sofa is there, and on an empty tile nothing.
+    const s = tileToScreen({ x: sofa.x, y: sofa.y });
+    expect(pickAllFurni(room, s.sx, s.sy).map((q) => q.itemId)).toEqual(["sofa_1"]);
+    const empty = tileToScreen({ x: 2, y: 1 });
+    expect(pickAllFurni(room, empty.sx, empty.sy)).toEqual([]);
   });
 });
 

@@ -61,29 +61,35 @@ Items, in order (the first three exist only when `narrow`, with a separator afte
 ## Arranging that works (requirement 6, task 2)
 
 ### The re-select bug (6.1)
-The Playwright test is written first (move the plant three times, turn it twice, no reload; mouse and keys) and run against the unchanged code. The cause is written here once the test shows it (section "Cause of the re-select bug" at the end).
+The Playwright test was written first (`furni-move.spec.ts`, "a moved piece can be grabbed, moved and turned again where it was dropped"): three drags by mouse, each from the tile where the last drop left the plant, a fourth with the plant right behind the sofa, two turns and a move by key, then a re-select by its drawing. It failed on the old code: "Sofa: tile 5, 9" was selected and dragged instead of the plant.
+
+**Cause.** `pickFurni` returns the front-most piece whose hit volume (its footprint raised to its full height) is under the pointer. A piece that stands next to or behind a taller one is inside that piece's volume, so the press on the tile where the user dropped it grabbed the neighbour. Nothing was wrong with the state after a move (the model, the scene and the server agree); the picking was.
+
+**Fix.** `pickAllFurni(room, sx, sy, opts)` lists every piece under the pointer, front-most first (`pickFurni` is its first). The scene sends the whole list to the model (`ArrangeInput.down(itemIds, tile)`). `ArrangeModel.pointerDown(under, tile)` keeps the piece that is already selected when it is in the list and the pointer is on one of its own tiles; otherwise the front-most piece is selected, as before. A piece the user has just moved stays selected, so it can be grabbed again on the tile where it was dropped, however tall the piece in front of it. A piece that was deselected is selected again by pressing on its drawing above the tile, where nothing in front covers it (the test does this at the end).
+
+Not done: picking by the drawn pixels, which would also stop the hit volume of a narrow piece (a plant) from covering what stands behind it. Recorded as a known limit.
 
 ### Wall pieces and turning (6.2)
-`wall` rule of `checkMove`, replaced. A wall piece (`mount: "wall"`) *hugs* the north wall when every tile of its top row has no floor behind it (`y - 1`), and the west wall likewise (`x - 1`).
-- Hugging a wall: it must face the room (dir 4 on the north wall, dir 2 on the west wall; a corner tile accepts both). Anything else is refused: "Against a wall this piece faces the room. Move it away from the wall to turn it."
-- Not hugging any wall: any direction. A wall piece may stand free on the floor.
+`wall` rule of `checkMove`, replaced. A wall piece (`mount: "wall"`) is *against* the north wall when every tile of its top row has no floor behind it (`y - 1`), and against the west wall likewise (`x - 1`); a corner tile is against both.
+- Against a wall it must face the room (dir 4 on the north wall, dir 2 on the west wall; a corner accepts both). Anything else is refused: "Against a wall this piece faces the room. Move it away from the wall to turn it."
+- Not against any wall: any direction. A wall piece may stand free on the floor.
 - Floor pieces are unchanged. A 1x1 piece turns on its own tile, because the footprint does not change with the direction. The client already tries the next three quarter turns and uses the first that fits; it shows the first reason when none does.
 
 ### Clearer refusals (6.3)
-- `taken` names the piece in the way: "That tile is taken by the Potted plant."
-- `spot` says which spot: "The elevator door tile must stay free." for the door, "A standing spot of the team (the dots) is on that tile." for the others.
-- `blocks_path` already names the target that becomes unreachable ("Blocks the path to the mailbox."). The anchors get better labels: "the Developer desk", "a standing spot of the team".
+- `taken` names the piece in the way: "That tile is taken by the potted plant." (the catalogue name in lower case).
+- `spot` says which spot: "The tile in front of the elevator must stay free." for the door tile; "The Architect's standing spot is on that tile." (also Developer, QA, Builder, HR agent) and "A standing spot of the team is on that tile." for the guests' spots.
+- `blocks_path` already names the target that becomes unreachable ("Blocks the path to the mailbox."; "Nobody could reach the computer desk from there." when it is the moved piece itself). The label of a standing spot is now "a standing spot of the team".
 - Pieces may touch each other and any wall; no rule beyond the ones above.
 
 ### Every room editable (6.4)
 - The Hotel keeps a base room (`bases`) for the lobby and the HR office too. `moveFurniture` and `resetLayout` work on any room; `NOT_EDITABLE` stays for an unknown room. Bought pieces (`placeFurniture`, `pickUpFurniture`) stay on project floors only: the inventory is kept per project (`data/inventory.json`) and the lobby and the HR office are not projects. The Inventory button and the tray are hidden there, and the server answers `layout_error` "Bought furniture can only stand on project floors." to a `furni_place` or `furni_pickup` for them.
 - The same rules apply (`layoutProblem` must hold for the lobby and `hr.json` as they are; a test checks both). The elevator and the doors are pinned (`isPinned`). Reachability targets already cover the Reception, the shop counter, the directory and the HR desk (every interactive piece), plus every anchor.
 - `lobby.json`: the `desk` anchor of the Builder gets `follows: "desk_builder"` (same rule as the project desks). `hr.json` gets an anchor `home_hr` at the tile of the HR ghost (7,1), a standing spot no solid piece may cover; the client puts the HR ghost on that anchor instead of the constant `HR_GHOST_TILE`. `home_hr` joins `AnchorNameSchema`; it is not required of any room.
-- Layout storage is keyed by **room id** (`lobby`, `hr`, `project:<id>`). `LayoutStore.get(roomId)`, `set(roomId, layout)`. A file written before this change has bare project ids as keys; they are converted to `project:<id>` when the file is read (a key that is not `lobby`, `hr` or already prefixed), and the file is rewritten in the new form on the next save. A project whose id is literally `lobby` or `hr` would have its old arrangement read as the room's (applied only where it fits, `applyLayout` never throws); accepted, nobody has one.
+- Layout storage is keyed by **room id** (`lobby`, `hr`, `project:<id>`), through `LayoutsFileSchema` (a transform that turns a bare project id into `project:<id>`, `roomKeyOf`). `LayoutStore.get(roomId)`, `set(roomId, layout)`. A file written before this change has bare project ids as keys; they are read as `project:<id>` and the file is rewritten in the new form on the next save. A project whose id is literally `lobby` or `hr` would have its old arrangement read as the room's (applied only where it fits, `applyLayout` never throws); accepted, nobody has one.
 - `Hotel` option `layoutOf(roomId)` (was `layoutOf(projectId)`), applied to the lobby and the HR office at construction and to a project floor in `addProject`.
-- The gateway's `arrange` passes the room id to `LayoutStore.set`; `projectId` is `undefined` outside project floors and only matters for bought pieces.
-- Client: `ArrangeModel.available` is true for any room it knows. `room_layout` already carries the room id. The scene (`applyRoomLayout`) already rebuilds only the furniture. The demo stays read-only: Edit room is disabled when there is no live transport.
+- The gateway's `arrange` passes the room id to `LayoutStore.set`; `projectId` is `undefined` outside project floors and only matters for bought pieces (`furni_place` and `furni_pickup` answer `layout_error` there; a `furni_move` of a bought piece needs the project).
+- Client: `ArrangeModel.available` is true once the model knows a room. `room_layout` already carries the room id. The scene (`applyRoomLayout`) already rebuilds only the furniture. The HR ghost stands on the room's `home_hr` anchor (fallback (7,1) for an older room file). The demo stays read-only: Edit room is disabled when there is no live transport (`editButtonState`).
 
 ## Tests
-- Unit (Vitest): `menu-model` (items, shortcuts, narrow rule, disabled states), Edit room button state, `taken`, `spot`, `wall` rules and their reasons, the lobby and the HR office pass `layoutProblem`, layout store keys and legacy conversion, Hotel arranging the lobby and the HR office, bought pieces refused there.
-- Playwright: Menu by keyboard runs Zoom; Edit room enters and leaves on a project floor (disabled in the lobby in task 1, enabled and arranging in task 2); no overflow of the top bar at 360, 800, 1366 px; the re-select test of task 2; the other arrange specs follow the new places.
+- Unit (Vitest): `menu-model` (items, shortcuts, narrow rule, disabled states), Edit room button state, `taken`, `spot`, `wall` rules and their reasons, the lobby and the HR office pass `layoutProblem`, layout store keys and legacy conversion, Hotel arranging the lobby and the HR office, bought pieces refused there, the pick list and the selected-piece rule.
+- Playwright: Menu by keyboard runs Zoom; Edit room enters and leaves on a project floor and in the lobby (task 1 had it disabled in the lobby; task 2 turned it on); no overflow of the top bar at 360, 800, 1366 px; the re-select test of task 2; lobby, HR office and project-floor editing (`edit-rooms.spec.ts`); the other arrange specs follow the new places.

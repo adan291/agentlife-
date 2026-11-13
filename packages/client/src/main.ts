@@ -348,7 +348,7 @@ function syncArrange(): void {
   panels.lock(arranging);
   world.setArrangeInput(
     arranging
-      ? { down: (itemId, tile) => arrange.pointerDown(itemId, tile), move: (tile) => arrange.pointerMove(tile), up: () => arrange.pointerUp(), leave: () => arrange.pointerLeave() }
+      ? { down: (itemIds, tile) => arrange.pointerDown(itemIds, tile), move: (tile) => arrange.pointerMove(tile), up: () => arrange.pointerUp(), leave: () => arrange.pointerLeave() }
       : null,
   );
 }
@@ -360,7 +360,7 @@ function toggleArrange(): void {
     return;
   }
   if (live === undefined || !arrange.available) {
-    hud.toast("You can arrange the furniture of a project floor.");
+    hud.toast("The recorded demo cannot be edited. Run AGENT LIFE on your computer to arrange your rooms.");
     return;
   }
   if (view === "list") setView("hotel");

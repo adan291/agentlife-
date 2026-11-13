@@ -11,7 +11,7 @@ import { AvatarView } from "./avatar-view.ts";
 import { builderTagName, sessionLabel } from "./crew-label.ts";
 import { FurniView } from "./furni-view.ts";
 import { AvatarOverlay } from "./overlay.ts";
-import { pickFurni } from "./pick.ts";
+import { pickAllFurni, pickFurni } from "./pick.ts";
 import { buildSigns } from "./door-signs.ts";
 import { RoomView } from "./room-view.ts";
 import type { SpriteProvider } from "./textures.ts";
@@ -34,8 +34,8 @@ const FIT_MARGIN_PX = 16;
 
 /** What the scene tells arrange mode about the pointer (the model decides what it means). */
 export interface ArrangeInput {
-  /** The pointer went down on `itemId` (null: on empty floor or wall) at the floor tile `tile`. */
-  down(itemId: string | null, tile: Tile): void;
+  /** The pointer went down on the pieces `itemIds` (front-most first; empty: on empty floor or wall) at the floor tile `tile`. */
+  down(itemIds: readonly string[], tile: Tile): void;
   move(tile: Tile): void;
   up(): void;
   /** The pointer left the canvas. */
@@ -61,8 +61,8 @@ interface AvatarEntry {
   overlay: AvatarOverlay;
 }
 
-/** Where the HR ghost stands in the HR office, next to its desk. */
-const HR_GHOST_TILE = { x: 7, y: 1 } as const;
+/** Where the HR ghost stands when the room has no `home_hr` spot (an older room file). */
+const HR_GHOST_FALLBACK = { x: 7, y: 1 } as const;
 
 /**
  * The visible world: room, furniture, avatars and their overlays, plus mouse input.
@@ -427,7 +427,7 @@ export class WorldView {
       this.overlays.addChild(overlay.container);
       this.avatars.set(a.id, { view, overlay });
     }
-    if (msg.room.kind === "hr") this.addHrGhost();
+    if (msg.room.kind === "hr") this.addHrGhost(msg.room);
 
     if (!this.zoomChosen) this.chooseAutoZoom();
     this.layout();
@@ -534,9 +534,10 @@ export class WorldView {
     }
   }
 
-  /** The HR office has an HR agent behind its desk. It is scenery: the simulation does not know it. */
-  private addHrGhost(): void {
-    const view = new AvatarView("hr", "hr", this.sprites, { ...HR_GHOST_TILE }, 4);
+  /** The HR office has an HR agent behind its desk. It is scenery: the simulation does not know it. It stands on the room's `home_hr` spot. */
+  private addHrGhost(room: RoomDef): void {
+    const spot = room.anchors.find((a) => a.name === "home_hr") ?? HR_GHOST_FALLBACK;
+    const view = new AvatarView("hr", "hr", this.sprites, { x: spot.x, y: spot.y }, 4);
     const overlay = new AvatarOverlay("HR", ROLE_COLOURS.hr, this.sprites, true);
     overlay.setState("idle");
     this.objects.addChild(view.sprite);
@@ -688,10 +689,14 @@ export class WorldView {
   private onPointerDown(e: FederatedPointerEvent): void {
     if (!this.arrangeInput || !this.room) return;
     const [x, y] = this.localPoint(e);
-    const piece = pickFurni(this.room.room, x, y, { includeWalkable: true });
-    this.dragging = piece !== undefined && !isPinned(FURNI_CATALOG[piece.defId]);
+    const under = pickAllFurni(this.room.room, x, y, { includeWalkable: true });
+    const top = under[0];
+    this.dragging = top !== undefined && !isPinned(FURNI_CATALOG[top.defId]);
     if (this.dragging) this.app.canvas.style.cursor = "grabbing";
-    this.arrangeInput.down(piece?.itemId ?? null, screenToTile(x, y));
+    this.arrangeInput.down(
+      under.map((p) => p.itemId),
+      screenToTile(x, y),
+    );
   }
 
   private onPointerUp(): void {

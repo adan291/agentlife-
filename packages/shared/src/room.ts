@@ -66,6 +66,7 @@ export const AnchorNameSchema = z.enum([
   "home_developer",
   "home_qa",
   "home_builder",
+  "home_hr",
   "home_guest1",
   "home_guest2",
   "home_guest3",
