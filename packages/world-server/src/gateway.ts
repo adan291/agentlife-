@@ -24,11 +24,13 @@ import type {
   AgentId,
   AgentWork,
   Approval,
+  ArrangeResult,
   ErrorCode,
   FloorStatus,
   GuestId,
   Hotel,
   HrAction,
+  Layout,
   MemoryAction,
   PipelineStep,
   JobKind,
@@ -47,6 +49,7 @@ import type {
   WelcomeMsg,
 } from "@agentlife/shared";
 import type { EngineLink, StartJobOptions } from "./engine-link.ts";
+import type { LayoutStore } from "./layout-store.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
 
@@ -79,6 +82,8 @@ export interface GatewayOptions {
   overviewDebounceMs?: number;
   /** Clock for the rate limiter. */
   clock?: () => number;
+  /** Where arrangements of project floors are saved. Without it a move still works but is not kept across restarts. */
+  layouts?: Pick<LayoutStore, "set">;
 }
 
 export interface Gateway {
@@ -1168,6 +1173,21 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     });
   };
 
+  /**
+   * Arrange mode: one change of the furniture of the user's project floor. The rules are the shared ones (`checkMove`);
+   * a refusal names the rule and changes nothing. The new pieces and anchors go to the user after the walks already
+   * queued, so the avatars do not jump.
+   */
+  const arrange = (ws: WebSocket, change: (roomId: string, save: (layout: Layout) => void) => ArrangeResult): void => {
+    const roomId = userRoom();
+    const projectId = roomId === undefined ? undefined : projectIdOfRoom(roomId);
+    if (roomId === undefined || projectId === undefined) return sendError(ws, "layout_error", "Only project floors can be arranged.");
+    const result = change(roomId, (layout) => options.layouts?.set(projectId, layout));
+    if (!result.ok) return sendError(ws, "layout_error", result.reason);
+    const { furni, anchors } = result.room;
+    enqueue(() => toUser(roomId, { type: "room_layout", roomId, furni, anchors }));
+  };
+
   const watchOverview = (on: boolean) => {
     if (!current) return;
     current.overviewWatch = on;
@@ -1296,6 +1316,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void pipelineAct(ws, { save: msg.steps });
       } else if (msg.type === "pipeline_reset") {
         void pipelineAct(ws, { reset: true });
+      } else if (msg.type === "furni_move") {
+        const { itemId, x, y, dir } = msg;
+        arrange(ws, (roomId, save) => hotel.moveFurniture(roomId, itemId, { x, y, dir }, save));
+      } else if (msg.type === "furni_reset") {
+        arrange(ws, (roomId, save) => hotel.resetLayout(roomId, save));
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

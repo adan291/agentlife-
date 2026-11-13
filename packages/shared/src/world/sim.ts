@@ -54,9 +54,9 @@ export interface WorldSimOptions {
  * `nextDeferredAt()` to schedule its own wake-up.
  */
 export class WorldSim {
-  readonly room: RoomDef;
+  private current: RoomDef;
   private readonly clock: () => number;
-  private readonly grid: PathGrid;
+  private grid: PathGrid;
   private readonly msPerTile: number;
   /** Agents that live in this room (a project room has no Builder, the lobby only the Builder). */
   private readonly agentIds: readonly AgentId[];
@@ -66,7 +66,7 @@ export class WorldSim {
   private joined = false;
 
   constructor(room: RoomDef, clock: () => number, options: WorldSimOptions = {}) {
-    this.room = room;
+    this.current = room;
     this.clock = clock;
     this.grid = buildPathGrid(room);
     this.msPerTile = options.msPerTile ?? DEFAULT_MS_PER_TILE;
@@ -90,6 +90,31 @@ export class WorldSim {
 
   private now(): number {
     return Math.floor(this.clock());
+  }
+
+  /** The room as it is now (furniture can be rearranged on a project floor, see `updateRoom`). */
+  get room(): RoomDef {
+    return this.current;
+  }
+
+  /**
+   * Swaps the room for a rearranged one (same heightmap, door and anchors that do not follow furniture) and rebuilds
+   * the path grid. Avatars keep their tiles; the caller has checked that nobody stands where furniture now is.
+   */
+  updateRoom(room: RoomDef): void {
+    this.current = room;
+    this.grid = buildPathGrid(room);
+  }
+
+  /** The tile of every avatar and the rest of every walk in progress: places a piece must not be put on. */
+  tilesInUse(): Tile[] {
+    const now = this.now();
+    const tiles: Tile[] = [];
+    for (const a of this.avatars.values()) {
+      tiles.push(this.tileAt(a, now));
+      if (a.walk) tiles.push(...a.walk.path.slice(this.completedSteps(a, now)));
+    }
+    return tiles;
   }
 
   /** Single user in the MVP: joining again replaces the previous user avatar. */

@@ -89,6 +89,11 @@ export const AnchorSchema = z.object({
   dir: DirSchema,
   /** Owner of a `desk` anchor. */
   agent: AgentIdSchema.optional(),
+  /**
+   * Item id of the piece this anchor belongs to (furni-move): the anchor is the tile in front of that piece and
+   * moves with it. `checkRoom` makes sure the coordinates agree.
+   */
+  follows: z.string().min(1).max(100).optional(),
 });
 export type Anchor = z.infer<typeof AnchorSchema>;
 
@@ -285,6 +290,17 @@ export function checkRoom(room: RoomDef, catalog: Catalog = FURNI_CATALOG): Room
   });
   room.anchors.forEach((a, i) => {
     if (a.name === "desk" && !a.agent) add(`anchors.${i}.agent`, "'desk' anchor needs an agent");
+  });
+
+  // An anchor that follows a piece is the tile in front of it, facing it.
+  room.anchors.forEach((a, i) => {
+    if (a.follows === undefined) return;
+    const piece = room.furni.find((p) => p.itemId === a.follows);
+    if (!piece || !catalog[piece.defId]) return add(`anchors.${i}.follows`, `anchor '${a.name}' follows unknown piece '${a.follows}'`);
+    const u = useTile(piece, catalog);
+    if (u.x !== a.x || u.y !== a.y || a.dir !== (piece.dir + 4) % 8) {
+      add(`anchors.${i}.follows`, `anchor '${a.name}' is not on the tile in front of '${a.follows}' (${u.x}, ${u.y}), facing it`);
+    }
   });
 
   // Interactive items need a walkable use tile.

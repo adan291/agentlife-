@@ -5,13 +5,14 @@ import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts"
 import { FloorStatusSchema } from "./floors.ts";
 import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
+import { PlacementSchema } from "./layout.ts";
 import { GOAL_MAX_CHARS } from "./limits.ts";
 import { MemoryActionSchema, MemoryStateSchema } from "./memory.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { OverviewFloorSchema, ShowablePanelSchema } from "./overview.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
-import { AgentIdSchema, GuestIdSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
+import { AgentIdSchema, AnchorSchema, GuestIdSchema, PlacedFurniSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
 
 export const MAX_MESSAGE_BYTES = 16 * 1024;
 export const MAX_MESSAGES_PER_SECOND = 20;
@@ -138,6 +139,7 @@ export const ErrorCodeSchema = z.enum([
   "hr_error",
   "memory_error",
   "pipeline_error",
+  "layout_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -219,6 +221,14 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("pipeline_save"), steps: PipelineSchema }),
   /** Board: back to the default pipeline. Answered with `pipeline`. */
   z.object({ type: z.literal("pipeline_reset") }),
+  /**
+   * Arrange mode (project floors): put one piece of the floor you stand on at a new place and facing. The server checks the
+   * floor, the walls, overlaps and that everything stays reachable from the elevator. Answered with `room_layout`, or
+   * `error` `layout_error` with the reason (the room does not change).
+   */
+  z.object({ type: z.literal("furni_move"), itemId: z.string().min(1).max(100), ...PlacementSchema.shape }),
+  /** Arrange mode: every piece back where the template has it. Answered like `furni_move`. */
+  z.object({ type: z.literal("furni_reset") }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -302,6 +312,16 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   }),
   /** A ghost leaves the floor by the elevator (it was let go) or comes back through it (its replacement). */
   z.object({ type: z.literal("agent_presence"), agentId: StaffIdSchema, present: z.boolean() }),
+  /**
+   * The furniture of the user's floor was rearranged: its new pieces and anchors (anchors that follow a piece moved with
+   * it). The client replaces what it draws; panels and job state stay, there is no new `welcome`.
+   */
+  z.object({
+    type: z.literal("room_layout"),
+    roomId: z.string().min(1).max(100),
+    furni: z.array(PlacedFurniSchema).max(200),
+    anchors: z.array(AnchorSchema).max(100),
+  }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

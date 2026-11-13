@@ -131,6 +131,7 @@ export function themeCss(): string {
 .al-btn:hover:not(:disabled) { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; }
 .al-btn:active:not(:disabled) { background: ${UI_COLOURS.border}; color: ${UI_COLOURS.text}; transform: translateY(1px); }
 .al-btn:disabled { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.muted}; border-style: dashed; cursor: default; }
+.al-btn[aria-pressed="true"] { border-color: var(--al-accent); background: ${UI_COLOURS.border}; }
 .al-input, .al-shell select { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; border: 1px solid var(--al-control); border-radius: var(--al-radius); font: inherit; }
 .al-input:hover, .al-shell select:hover { border-color: var(--al-accent); }
 .al-shell option { background: ${UI_COLOURS.inputBg}; color: ${UI_COLOURS.text}; }

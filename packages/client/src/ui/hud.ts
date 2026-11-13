@@ -16,6 +16,8 @@ const CSS = `
 .al-shell[data-compact="true"] .al-floor-label { display: none; }
 .al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
+.al-arrange-open { position: absolute; z-index: 11; top: var(--al-s2); right: var(--al-s2); }
+.al-arrange-open[hidden] { display: none; }
 `;
 
 /** Text size controls (A− / A+). */
@@ -47,6 +49,8 @@ export interface Hud {
   setElevatorLabel(label: string, title?: string): void;
   /** The view in use; the button offers the other one. */
   setView(view: ViewMode): void;
+  /** The Arrange button, in the corner of the stage: shown on project floors of the live hotel only; pressed while arranging. */
+  setArrange(available: boolean, active: boolean): void;
 }
 
 /** Top bar controls and stage messages: zoom button, text size, help, connection status, notice and toast. */
@@ -59,6 +63,7 @@ export function createHud(
   onElevator: () => void = () => {},
   onView: () => void = () => {},
   onPalette: () => void = () => {},
+  onArrange: () => void = () => {},
 ): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -79,6 +84,13 @@ export function createHud(
   const elevator = button("Elevator", "Take the elevator to another floor");
   elevator.addEventListener("click", onElevator);
   mounts.right.appendChild(elevator);
+  const arrangeButton = button("Arrange", "Move and turn the furniture of this floor");
+  arrangeButton.classList.add("al-arrange-open");
+  arrangeButton.hidden = true;
+  arrangeButton.setAttribute("aria-pressed", "false");
+  arrangeButton.addEventListener("click", onArrange);
+  // On the stage, not in the top bar: the bar has no room for one more button without taking the labels from the stepper.
+  mounts.stage.appendChild(arrangeButton);
   const viewButton = button("List");
   viewButton.addEventListener("click", onView);
   mounts.right.appendChild(viewButton);
@@ -179,6 +191,11 @@ export function createHud(
       const text = next === "list" ? "Show the list of projects (L)" : "Show the hotel (L)";
       viewButton.title = text;
       viewButton.setAttribute("aria-label", text);
+    },
+    setArrange(available, active) {
+      arrangeButton.hidden = !available;
+      arrangeButton.setAttribute("aria-pressed", String(active));
+      arrangeButton.dataset["active"] = String(active);
     },
     toast(text, ms = 2500) {
       toast.textContent = text;

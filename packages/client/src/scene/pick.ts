@@ -6,13 +6,14 @@ import type { PlacedFurni, RoomDef } from "@agentlife/shared";
  * A tall item covers screen area above its footprint, so the point is tested against the
  * footprint at several heights. Walkable items without an interaction (chair, cobweb) are not
  * pickable: clicking them is a plain move. When several items match, the front-most wins.
+ * Arrange mode passes `{ includeWalkable: true }`: a chair or a cobweb can be moved too.
  */
-export function pickFurni(room: RoomDef, sx: number, sy: number): PlacedFurni | undefined {
+export function pickFurni(room: RoomDef, sx: number, sy: number, opts: { includeWalkable?: boolean } = {}): PlacedFurni | undefined {
   let best: PlacedFurni | undefined;
   let bestDepth = -Infinity;
   for (const p of room.furni) {
     const def = FURNI_CATALOG[p.defId];
-    if (!def || (def.walkable && !def.interaction)) continue;
+    if (!def || (def.walkable && !def.interaction && !opts.includeWalkable)) continue;
     const tiles = footprintTiles(p, def);
     let hit = false;
     for (let z = 0; z <= def.height && !hit; z += 0.5) {

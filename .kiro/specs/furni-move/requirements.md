@@ -15,7 +15,7 @@ The user asked for this on 2026-11-12, on the DiscordIA floor ("everything is cr
 
 ### Requirement 2: Arrange mode
 #### Acceptance Criteria
-1. An "Arrange" button in the top bar (project floors only, live mode only) SHALL switch the floor into arrange mode; Esc or "Done" leaves it. While arranging, clicking furniture does not open its panel.
+1. An "Arrange" button (project floors only, live mode only) SHALL switch the floor into arrange mode; Esc or "Done" leaves it. While arranging, clicking furniture does not open its panel. The button sits in the top right corner of the stage, not in the top bar: the bar has no room for one more button without taking the labels from the job stepper (measured: 599 px free at 1366 px wide, 657 px needed).
 2. In arrange mode the user SHALL pick a piece with a click, move it by dragging or with the arrow keys, rotate it with R (or a button), and see the target tiles in green when the move is allowed and red when it is not, with the reason ("blocks the path to the mailbox", "tile taken", "outside the room").
 3. "Undo" SHALL revert the last move and "Reset layout" SHALL restore the template layout after a confirmation.
 4. The elevator and the room's door SHALL not move. Agents keep working while the user arranges; a desk that moves takes its agent's seat with it.
@@ -24,7 +24,7 @@ The user asked for this on 2026-11-12, on the DiscordIA floor ("everything is cr
 #### Acceptance Criteria
 1. A move SHALL be a client message (`furni_move { itemId, x, y, dir }`, `furni_reset`) that the world-server validates against the room (bounds, heightmap, overlap, wall items on walls, floor items on the floor) and against reachability of every interactive piece, desk anchor and standing spot from the elevator. A refused move is answered with an error carrying the reason, and the room does not change.
 2. THE world-server SHALL store the layout per project in `data/layouts.json` (git-ignored, atomic write, an unreadable file is moved aside and never overwritten) and apply it when the floor is built, so a restart keeps it. A saved position that no longer fits (template changed) falls back to the template position for that piece.
-3. Anchors the agents use (`desk`, `computer`, `mailbox`, `board`, standing spots) SHALL follow their furniture; the agent-engine does not change (it still speaks semantic anchors).
+3. Anchors the agents use (`desk`, `computer`, `mailbox`, `board`) SHALL follow their furniture, and the standing spots (`home_*`) SHALL stay on their tiles, which no solid piece may cover (see design.md); the agent-engine does not change (it still speaks semantic anchors).
 4. The lobby, the HR office and the demo (replay) SHALL not be editable.
 
 ### Requirement 4: Tests

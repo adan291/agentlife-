@@ -3,6 +3,7 @@ import { FakeEngineLink } from "./fake-engine.ts";
 import type { EngineLink } from "./engine-link.ts";
 import { startGateway } from "./gateway.ts";
 import { HttpEngineLink } from "./http-engine.ts";
+import { LayoutStore, defaultLayoutsFile } from "./layout-store.ts";
 import { ROOMS_DIR, loadHotelRooms } from "./load-room.ts";
 import { parseAllowedOrigins } from "./origin.ts";
 
@@ -20,7 +21,9 @@ function loadRooms() {
   }
 }
 
-const hotel = new Hotel({ ...loadRooms(), clock: Date.now });
+const hotelRooms = loadRooms();
+const layouts = new LayoutStore({ file: defaultLayoutsFile(), onLog: (m) => console.warn(m) });
+const hotel = new Hotel({ ...hotelRooms, clock: Date.now, layoutOf: (projectId) => layouts.get(projectId) });
 const port = Number(process.env["PORT"] ?? 8787);
 const host = process.env["HOST"] ?? "127.0.0.1";
 const allowedOrigins = parseAllowedOrigins(process.env["WORLD_ALLOWED_ORIGINS"]);
@@ -41,5 +44,5 @@ if (engineKind === "fake") {
   console.error(`ENGINE=${engineKind} is not valid; use ENGINE=fake or ENGINE=http`);
   process.exit(1);
 }
-const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins });
+const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins, layouts });
 console.log(`world-server listening on ws://${host}:${gateway.port} (allowed origins: ${allowedOrigins.join(", ")})`);

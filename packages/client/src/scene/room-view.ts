@@ -4,6 +4,7 @@ import type { Heightmap, RoomDef, Tile } from "@agentlife/shared";
 import { PALETTE, shade } from "../palette.ts";
 import { P, WALL_UNITS, fillPoly, strokePoly } from "./iso-draw.ts";
 import type { Pt } from "./iso-draw.ts";
+import type { ArrangeOverlay } from "../ui/arrange.ts";
 
 export interface Bounds {
   minX: number;
@@ -56,9 +57,13 @@ export class RoomView {
   readonly heightmap: Heightmap;
   readonly bounds: Bounds;
   private readonly hover = new Graphics();
+  private readonly arrange = new Graphics();
   private hoverKey = "";
+  private arrangeKey = "";
+  private current: RoomDef;
 
-  constructor(readonly room: RoomDef) {
+  constructor(room: RoomDef) {
+    this.current = room;
     this.heightmap = parseHeightmap(room.heightmap);
     this.bounds = roomBounds(this.heightmap.w, this.heightmap.l);
     const floor = new Graphics();
@@ -67,11 +72,58 @@ export class RoomView {
     this.drawWalls(walls);
     this.drawFloor(floor);
     this.drawMoonlight(moonlight);
-    this.container.addChild(walls, floor, moonlight, this.hover);
+    this.container.addChild(walls, floor, moonlight, this.hover, this.arrange);
+  }
+
+  /** The room as it is now (the furniture of a project floor can move; the floor and the walls cannot). */
+  get room(): RoomDef {
+    return this.current;
+  }
+
+  /** Same floor, new furniture and anchors (arrange mode). */
+  setRoom(room: RoomDef): void {
+    this.current = room;
   }
 
   isFloor(t: Tile): boolean {
     return this.heightmap.height(t.x, t.y) !== null;
+  }
+
+  /** Arrange mode: the team's spots, the selected piece and where it would go (green) or may not go (red, crossed). Null clears. */
+  setArrange(overlay: ArrangeOverlay | null): void {
+    const key = overlay ? JSON.stringify(overlay) : "";
+    if (key === this.arrangeKey) return;
+    this.arrangeKey = key;
+    this.arrange.clear();
+    if (!overlay) return;
+    for (const t of overlay.spots) {
+      const z = this.heightmap.height(t.x, t.y);
+      if (z === null) continue;
+      const c = P(t.x, t.y, z);
+      this.arrange.circle(c[0], c[1], 4).fill({ color: PALETTE.arrangeSpot, alpha: 0.55 });
+    }
+    for (const t of overlay.selected) this.outlineTile(t, PALETTE.lilac, 0.12, 0.9);
+    if (!overlay.preview) return;
+    const colour = overlay.preview.ok ? PALETTE.arrangeOk : PALETTE.arrangeBad;
+    for (const t of overlay.preview.tiles) {
+      this.outlineTile(t, colour, 0.4, 1);
+      // A cross as well as the colour: red and green must not be the only difference.
+      if (!overlay.preview.ok) this.crossTile(t, colour);
+    }
+  }
+
+  private crossTile(t: Tile, colour: number): void {
+    const z = this.heightmap.height(t.x, t.y) ?? 0;
+    const centre = P(t.x, t.y, z);
+    const [a, b, c, d] = diamond(t.x, t.y, z).map((p): Pt => [centre[0] + (p[0] - centre[0]) * 0.5, centre[1] + (p[1] - centre[1]) * 0.5]);
+    this.arrange.moveTo(a![0], a![1]).lineTo(c![0], c![1]).moveTo(b![0], b![1]).lineTo(d![0], d![1]).stroke({ color: colour, width: 2, alpha: 0.95 });
+  }
+
+  private outlineTile(t: Tile, colour: number, fill: number, line: number): void {
+    // Tiles outside the floor (a refused move) are drawn flat at height 0 so the user sees what was tried.
+    const d = diamond(t.x, t.y, this.heightmap.height(t.x, t.y) ?? 0);
+    fillPoly(this.arrange, d, colour, fill);
+    strokePoly(this.arrange, d, colour, 2, line);
   }
 
   /** Highlight tiles (empty or undefined clears). */

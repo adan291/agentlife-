@@ -21,6 +21,8 @@ import { createListView } from "./ui/list-view.ts";
 import { loadView, otherView, saveView } from "./ui/view-mode.ts";
 import type { ViewMode } from "./ui/view-mode.ts";
 import { createGuide } from "./ui/guide.ts";
+import { ArrangeModel, arrangeKey } from "./ui/arrange.ts";
+import { createArrangeBar } from "./ui/arrange-bar.ts";
 import { MailboxState } from "./ui/mailbox-state.ts";
 import { createTerminal } from "./ui/terminal.ts";
 import { createTheme } from "./ui/theme.ts";
@@ -143,9 +145,13 @@ const hud = createHud(
   },
   () => toggleView(),
   () => openPalette(),
+  () => toggleArrange(),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
-  onError: (code, message) => hud.toast(code === "no_path" ? "Can't get there." : message),
+  // A refused move is explained in the arrange bar, with the red tiles; a toast on top would say it twice.
+  onError: (code, message) => {
+    if (code !== "layout_error") hud.toast(code === "no_path" ? "Can't get there." : message);
+  },
   tooltip: createTooltip(stageEl),
   onZoomChange: (z) => hud.setZoomLabel(z),
 });
@@ -254,7 +260,10 @@ function setView(next: ViewMode): void {
   saveView(viewStorage, next);
   hud.setView(next);
   listView.setVisible(next === "list");
-  if (next === "list") panels.close();
+  if (next === "list") {
+    panels.close();
+    arrange.leave();
+  }
 }
 function toggleView(): void {
   setView(otherView(view));
@@ -264,6 +273,59 @@ function openPalette(): void {
     buildCommands({ floors: overviewFloors, hotelFloors: floorList, live: live !== undefined, actions: listActions, toggleView }),
   );
 }
+
+// ---- arrange mode (furni-move): move and turn the furniture of a project floor ----
+
+const arrange = new ArrangeModel((msg) => transport.send(msg));
+const arrangeBar = createArrangeBar(document, stageEl, {
+  rotate: () => arrange.rotate(),
+  undo: () => arrange.undo(),
+  reset: () => arrange.resetLayout(),
+  done: () => arrange.leave(),
+});
+/** Whether the scene and the panels were last told that the user is arranging. */
+let arranging = false;
+
+/** The model changed: redraw the bar and the overlay, and switch the panels and the pointer when arranging starts or stops. */
+function syncArrange(): void {
+  const state = arrange.view();
+  arrangeBar.update(state);
+  world.showArrange(arrange.overlay());
+  // Only the live hotel can arrange; the recorded demo has no world-server to save a layout.
+  hud.setArrange(live !== undefined && arrange.available, state.active);
+  if (state.active === arranging) return;
+  arranging = state.active;
+  panels.lock(arranging);
+  world.setArrangeInput(
+    arranging ? { down: (itemId, tile) => arrange.pointerDown(itemId, tile), move: (tile) => arrange.pointerMove(tile), up: () => arrange.pointerUp() } : null,
+  );
+}
+arrange.subscribe(syncArrange);
+
+function toggleArrange(): void {
+  if (arrange.isActive) {
+    arrange.leave();
+    return;
+  }
+  if (live === undefined || !arrange.available) {
+    hud.toast("You can arrange the furniture of a project floor.");
+    return;
+  }
+  if (view === "list") setView("hotel");
+  arrange.enter();
+}
+
+window.addEventListener("keydown", (e) => {
+  if (!arrange.isActive) return;
+  const key = arrangeKey(e);
+  if (!key) return;
+  e.preventDefault();
+  if (key.kind === "step") arrange.step(key.dx, key.dy);
+  else if (key.kind === "rotate") arrange.rotate();
+  else if (key.kind === "undo") arrange.undo();
+  else arrange.leave();
+});
+// The remembered view is applied only now: switching to the list leaves arrange mode, which must exist by then.
 setView(view);
 
 /** A new `welcome`: the user is in a (possibly other) room. */
@@ -271,6 +333,8 @@ function enteredRoom(msg: Extract<ServerMsg, { type: "welcome" }>): void {
   const previous = currentRoom;
   currentRoom = msg.roomId ?? msg.room.id;
   currentRoomName = msg.room.name;
+  // A new room (or the same one after a reconnect): arrange mode stops, and the model learns the room's pieces.
+  arrange.setRoom(msg.room);
   elevatorItemId = msg.room.furni.find((p) => FURNI_CATALOG[p.defId]?.interaction === "elevator")?.itemId;
   hud.setFloor(currentRoomName);
   refreshElevator();
@@ -322,7 +386,9 @@ transport.onMessage((msg) => {
   // Before the mailbox state sees it: a report that arrives now is news, a re-sent one is not.
   const delivered = msg.type === "report" && mailbox.isFresh(msg);
   world.handle(msg);
-  if (mailbox.apply(msg, panels.state.open)) {
+  // Arranging: a panel the server opens stays shut, so the mailbox must not count it as seen either.
+  const blocked = arranging && msg.type === "open_panel";
+  if (!blocked && mailbox.apply(msg, panels.state.open)) {
     world.setMailboxBadge(mailbox.pendingCount, mailbox.unseenReport);
   }
   panels.handle(msg);
@@ -348,6 +414,10 @@ transport.onMessage((msg) => {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {
     stepper.update(msg.job);
+  } else if (msg.type === "error" && msg.code === "layout_error") {
+    arrange.onRefused(msg.message);
+  } else if (msg.type === "room_layout") {
+    if (msg.roomId === currentRoom) arrange.onLayout(msg.furni, msg.anchors);
   } else if (msg.type === "error" && msg.code === "bad_message") {
     // A refused floor change (not at the elevator, floor gone): the doors open again on the same floor.
     transition.abort();

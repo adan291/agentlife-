@@ -1,7 +1,7 @@
 import { Container } from "pixi.js";
 import type { Application, FederatedPointerEvent } from "pixi.js";
-import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, isGuestId, screenToTile, tileToScreen } from "@agentlife/shared";
-import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, ServerMsg, StaffId, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
+import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, isGuestId, isPinned, screenToTile, tileToScreen } from "@agentlife/shared";
+import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, RoomDef, ServerMsg, StaffId, Tile, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
 import { FloorPeople } from "./floor-people.ts";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
@@ -25,9 +25,18 @@ import type { Point } from "./camera.ts";
 import { prefersReducedMotion } from "./glow.ts";
 import { MailboxBadge } from "./mailbox-badge.ts";
 import type { HoverSink } from "../ui/tooltip.ts";
+import type { ArrangeOverlay } from "../ui/arrange.ts";
 
 /** Free space kept around the room when choosing the zoom (per side). */
 const FIT_MARGIN_PX = 16;
+
+/** What the scene tells arrange mode about the pointer (the model decides what it means). */
+export interface ArrangeInput {
+  /** The pointer went down on `itemId` (null: on empty floor or wall) at the floor tile `tile`. */
+  down(itemId: string | null, tile: Tile): void;
+  move(tile: Tile): void;
+  up(): void;
+}
 
 /** What the Architect says when a report arrives. */
 export const REPORT_DELIVERED_TEXT = "Report delivered";
@@ -59,7 +68,14 @@ export class WorldView {
   private readonly objects = new Container();
   private readonly overlays = new Container();
   private room: RoomView | null = null;
+  /** Id of the room on screen (from `welcome`); a `room_layout` for another room is ignored. */
+  private roomId: string | null = null;
   private furni: FurniView[] = [];
+  /** Display objects of the furniture, its glow, flames, monitors and candles: what a new layout replaces. */
+  private furniObjects: Container[] = [];
+  /** Set while the user arranges the floor: the pointer then moves furniture instead of using it. */
+  private arrangeInput: ArrangeInput | null = null;
+  private dragging = false;
   private readonly avatars = new Map<AvatarId, AvatarEntry>();
   private zoomLevel: Zoom = 1;
   private zoomChosen = false;
@@ -109,6 +125,9 @@ export class WorldView {
     app.stage.hitArea = app.screen;
     app.stage.on("pointermove", (e) => this.onPointerMove(e));
     app.stage.on("pointertap", (e) => this.onPointerTap(e));
+    app.stage.on("pointerdown", (e) => this.onPointerDown(e));
+    app.stage.on("pointerup", () => this.onPointerUp());
+    app.stage.on("pointerupoutside", () => this.onPointerUp());
     app.stage.on("pointerleave", () => this.clearHover());
     app.renderer.on("resize", () => this.relayout());
   }
@@ -224,6 +243,9 @@ export class WorldView {
       case "hr_suggestion":
         this.setHrThinking(false);
         break;
+      case "room_layout":
+        this.applyRoomLayout(msg);
+        break;
       case "error":
         if (msg.code === "hr_error" || msg.code === "engine_unavailable") this.setHrThinking(false);
         this.hooks.onError?.(msg.code, msg.message);
@@ -275,35 +297,8 @@ export class WorldView {
     this.root.addChildAt(room.container, 0);
     this.motes = new MoteLayer(room.bounds);
     this.root.addChildAt(this.motes.container, 2);
-
-    for (const placed of msg.room.furni) {
-      const z = room.heightmap.height(placed.x, placed.y) ?? 0;
-      const fv = new FurniView(placed, this.sprites, z);
-      this.furni.push(fv);
-      this.objects.addChild(fv.sprite);
-      if (fv.glow) this.objects.addChild(fv.glow);
-      if (isFlameItem(placed.defId)) {
-        const flame = new FlameFx(placed, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
-        this.objects.addChild(flame.container);
-        this.flames.push(flame);
-      }
-      const desk = /^desk_(architect|developer|qa|builder)$/.exec(placed.itemId);
-      if (desk) {
-        // The monitor of an agent's desk lights up while the agent works; it sits just above the desk sprite.
-        const mfx = new MonitorFx(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
-        this.objects.addChild(mfx.container);
-        this.monitors.set(desk[1] as AgentId, mfx);
-        const candle = new DeskCandle(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.3);
-        this.objects.addChild(candle.container);
-        this.candles.set(desk[1] as AgentId, candle);
-      }
-      if (fv.def.interaction === "mailbox") {
-        const p = tileToScreen({ x: placed.x, y: placed.y, z });
-        this.badge = new MailboxBadge(p.sx, p.sy - fv.def.height * HEIGHT_UNIT - 16);
-        this.overlays.addChild(this.badge.container);
-        this.badge.set(this.badgeCount, this.badgeDot);
-      }
-    }
+    this.roomId = msg.roomId ?? msg.room.id;
+    this.buildFurni(msg.room, room);
 
     this.models = msg.models ?? {};
     this.seatNames.clear();
@@ -335,6 +330,82 @@ export class WorldView {
   private setAvatarVisible(entry: AvatarEntry, visible: boolean): void {
     entry.view.sprite.visible = visible;
     entry.overlay.container.visible = visible;
+  }
+
+  /** Every piece of furniture of `def`, with its glow, flames, desk monitor and candle, and the mailbox badge. */
+  private buildFurni(def: RoomDef, room: RoomView): void {
+    const add = (o: Container): void => {
+      this.objects.addChild(o);
+      this.furniObjects.push(o);
+    };
+    for (const placed of def.furni) {
+      const z = room.heightmap.height(placed.x, placed.y) ?? 0;
+      const fv = new FurniView(placed, this.sprites, z);
+      this.furni.push(fv);
+      add(fv.sprite);
+      if (fv.glow) add(fv.glow);
+      if (isFlameItem(placed.defId)) {
+        const flame = new FlameFx(placed, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
+        add(flame.container);
+        this.flames.push(flame);
+      }
+      const desk = /^desk_(architect|developer|qa|builder)$/.exec(placed.itemId);
+      if (desk) {
+        // The monitor of an agent's desk lights up while the agent works; it sits just above the desk sprite.
+        const mfx = new MonitorFx(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.25);
+        add(mfx.container);
+        this.monitors.set(desk[1] as AgentId, mfx);
+        const candle = new DeskCandle(placed, fv.def, { x: fv.sprite.x, y: fv.sprite.y }, fv.sprite.zIndex + 0.3);
+        add(candle.container);
+        this.candles.set(desk[1] as AgentId, candle);
+      }
+      if (fv.def.interaction === "mailbox") {
+        const p = tileToScreen({ x: placed.x, y: placed.y, z });
+        this.badge = new MailboxBadge(p.sx, p.sy - fv.def.height * HEIGHT_UNIT - 16);
+        this.overlays.addChild(this.badge.container);
+        this.badge.set(this.badgeCount, this.badgeDot);
+      }
+    }
+  }
+
+  /** Takes the furniture (and what hangs on it) out of the scene; the room, the signs and the avatars stay. */
+  private clearFurni(): void {
+    this.badge?.destroy();
+    this.badge = null;
+    this.hoveredItem = null;
+    for (const o of this.furniObjects) o.destroy({ children: true });
+    this.furniObjects = [];
+    this.furni = [];
+    this.monitors.clear();
+    this.candles.clear();
+    this.flames = [];
+  }
+
+  /** The user moved furniture (`room_layout`): the pieces and the anchors are new, the avatars and the panels stay as they are. */
+  private applyRoomLayout(msg: Extract<ServerMsg, { type: "room_layout" }>): void {
+    if (!this.room || msg.roomId !== this.roomId) return;
+    const next: RoomDef = { ...this.room.room, furni: msg.furni, anchors: msg.anchors };
+    this.room.setRoom(next);
+    this.hooks.tooltip?.hide();
+    this.clearFurni();
+    this.buildFurni(next, this.room);
+    for (const [id, monitor] of this.monitors) monitor.setActive(this.agentStatus.get(id)?.state === "working");
+    this.refreshCandles();
+  }
+
+  // ---- arrange mode (furni-move) ----
+
+  /** Pointer input goes to `input` instead of the room's normal clicks while arranging; null returns to normal. */
+  setArrangeInput(input: ArrangeInput | null): void {
+    this.arrangeInput = input;
+    this.dragging = false;
+    this.clearHover();
+    if (!input) this.room?.setArrange(null);
+  }
+
+  /** Draw (or clear) the arrange overlay. */
+  showArrange(overlay: ArrangeOverlay | null): void {
+    this.room?.setArrange(overlay);
   }
 
   /** Names and models of the team members at the desks and at the standing spots (`team_view`). */
@@ -392,6 +463,7 @@ export class WorldView {
     this.hrGhost = null;
     for (const c of this.objects.removeChildren()) c.destroy();
     this.furni = [];
+    this.furniObjects = [];
     this.monitors.clear();
     this.candles.clear();
     this.flames = []; // their containers were destroyed with the objects layer
@@ -424,6 +496,15 @@ export class WorldView {
   private onPointerMove(e: FederatedPointerEvent): void {
     const h = this.hit(e);
     if (!h) return;
+    if (this.arrangeInput) {
+      this.arrangeInput.move(h.tile);
+      if (!this.dragging) {
+        const piece = pickFurni(h.room.room, ...this.localPoint(e), { includeWalkable: true });
+        const def = piece ? FURNI_CATALOG[piece.defId] : undefined;
+        this.app.canvas.style.cursor = piece && !isPinned(def) ? "grab" : "default";
+      }
+      return;
+    }
     this.hoveredItem = null;
     if (this.hrGhost?.view.sprite.getBounds().containsPoint(e.global.x, e.global.y)) {
       this.app.canvas.style.cursor = "default";
@@ -483,8 +564,31 @@ export class WorldView {
     this.app.canvas.style.cursor = "default";
   }
 
+  private localPoint(e: FederatedPointerEvent): [number, number] {
+    const p = this.root.toLocal(e.global);
+    return [p.x, p.y];
+  }
+
+  private onPointerDown(e: FederatedPointerEvent): void {
+    if (!this.arrangeInput || !this.room) return;
+    const [x, y] = this.localPoint(e);
+    const piece = pickFurni(this.room.room, x, y, { includeWalkable: true });
+    this.dragging = piece !== undefined && !isPinned(FURNI_CATALOG[piece.defId]);
+    if (this.dragging) this.app.canvas.style.cursor = "grabbing";
+    this.arrangeInput.down(piece?.itemId ?? null, screenToTile(x, y));
+  }
+
+  private onPointerUp(): void {
+    if (!this.arrangeInput) return;
+    this.dragging = false;
+    this.app.canvas.style.cursor = "default";
+    this.arrangeInput.up();
+  }
+
   private onPointerTap(e: FederatedPointerEvent): void {
     this.hooks.tooltip?.hide();
+    // Arranging: a click selects (on pointer down) and never uses the furniture or walks the avatar.
+    if (this.arrangeInput) return;
     const h = this.hit(e);
     if (!h) return;
     if (h.item) {
