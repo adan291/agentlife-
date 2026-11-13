@@ -1,11 +1,11 @@
 # Status
 
-Updated: 2026-11-13 (team-progress tasks 1-2 done on branch feat/team-progress, not merged; furni-shop is merged into main; main 37 commits ahead of origin)
+Updated: 2026-11-13 (waiting-fun tasks 1-2 done on branch feat/waiting-fun, not merged; team-progress is merged into main; main 49 commits ahead of origin)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13.
 
 ## Phase
-All TASKMAP rows 1-11 are merged into main (project-registry, hotel-floors, build-board, job-types, night-shift, hr-desk, project-memory, list-mode, pipeline-editor, furni-move, furni-shop). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 12 team-progress is built on `feat/team-progress` and waits for review and merge. Next rows: 13 waiting-fun (the game layer), then 14 final-demo with the user.
+All TASKMAP rows 1-12 are merged into main (project-registry, hotel-floors, build-board, job-types, night-shift, hr-desk, project-memory, list-mode, pipeline-editor, furni-move, furni-shop, team-progress). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 13 waiting-fun is built on `feat/waiting-fun` and waits for review and merge. Next row: 14 final-demo with the user.
 
 ## Run the hotel
 Real engine (PowerShell, from the repo root; Docker running for tests):
@@ -21,9 +21,10 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-13 (IDE): user asked to move furniture like in classic hotel sims: spec furni-move, done by the conductor (S27, S28), PASS and merged. User then described the goal: housing plus a light RPG / sims game layer, fun while waiting for the agents. Specs written: furni-shop (Ecto earned only from verified work, shop, inventory), team-progress (XP and levels from real stats, badges, daily quests), waiting-fun (wisp catching, sit and emotes, visual ghost mood); TASKMAP rows 11-13, sessions S29-S32. The user liked the plan.
 - 2026-11-13 (IDE): the steering warned that workflow.md's reference to this file was cut (75 000 characters, budget 50 000). This file was split: the full old text is in docs/STATUS-history.md; workflow.md now asks sessions to keep it short. Conductor relaunched on rows 11-13.
 - 2026-11-13 (IDE): asked for team-progress tasks 1 and 2 with design.md first, reusing the furni-shop grant code. Done on `feat/team-progress` (design commit, one commit per task). Decisions for the user to check: level n needs 25·n·(n+1) XP, so a new member is level 0 until 50 XP; XP amounts in `config/progress.json`, quest pool in `config/quests.json`, badges in `config/badges.json`; XP goes to the members who finished a step of the job, not to everybody on the team. Pending: look at it in a browser (HUMAN-CHECKS), merge.
+- 2026-11-13 (IDE): asked for waiting-fun tasks 1 and 2 with design.md first. Done on `feat/waiting-fun` (design commit, one commit per task). Decisions for the user to check: wisps only exist when the hotel has an economy (so not with the plain scripted engine), 1 Ecto each, 10 per job and 50 per day counted from the wallet; the coffee machine (shop, Tables, 40 Ecto) is the one sold piece with an interaction (`SHOP_INTERACTIONS`, changes a furni-shop rule), it serves the most tired desk agent; mood thresholds 20 min busy and 60 min tired of work today, kept in memory only; keys 1 to 4 and a bar at the bottom right of the stage. Pending: look at it in a browser, merge.
 
 ## Next
-1. Conductor: team-progress is done (review and merge next), then waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
+1. Conductor: waiting-fun is done (review and merge next), then final-demo. Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md (25 open), including the furni-move arrange mode and new default layout.
 3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
 4. Push main when the user agrees (last push fbe1ceb).
@@ -45,8 +46,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | pipeline-editor | 3 / 3 | main | Researcher and second review not run live |
 | furni-move | 3 / 3 | main | Arrange button in the stage corner (requirement 2.1 reworded), D14; not looked at by the user |
 | furni-shop | 3 / 3 | main | Row 11. Wallet, grants, 25-item catalogue, shop, buy, inventory tray in arrange mode (design.md). Balance chip is in the stage corner. Not looked at by the user |
-| team-progress | 2 / 2 | feat/team-progress | Row 12. XP and levels from real events (`progress.json`, same keyed idempotence as grants), stats, 18 badges, 3 seeded daily quests that pay Ecto once, Profile panel (level chip next to the Ecto chip), level-up effect, level lines in team bar, tooltips and HR cards. Needs `AGENTLIFE_PROGRESS_FILE` or the real engine. Playwright: 2 new tests on a second test server (8796/5198); all e2e pass with Edge. Not looked at by the user |
-| waiting-fun | 0 / 2 | — | Row 13 |
+| team-progress | 2 / 2 | main | Row 12. XP and levels from real events (`progress.json`, same keyed idempotence as grants), stats, 18 badges, 3 seeded daily quests that pay Ecto once, Profile panel (level chip next to the Ecto chip), level-up effect, level lines in team bar, tooltips and HR cards. Needs `AGENTLIFE_PROGRESS_FILE` or the real engine. Playwright: second test server (8796/5198). Not looked at by the user |
+| waiting-fun | 2 / 2 | feat/waiting-fun | Row 13. Wisps (server decides, 1 Ecto, DOM button over the canvas), sit on seats (click, key 4), emotes (keys 1-3), ghosts cheer or look glum on a delivered job, mood face on the desk ghosts' tags, coffee machine in the shop (design.md). Playwright: third test server (8797/5197, `AGENTLIFE_WISP_MS`). All 66 e2e pass with Edge. Not looked at by the user |
 
 ## Open problems
 - Playwright's own Chromium is not installed on this machine (`pnpm --filter @agentlife/client e2e` fails to launch it). Run `$env:E2E_CHANNEL='msedge'` first to use the installed Edge. Not installed by a session (global tool).
@@ -58,7 +59,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - team-progress: the pass/fail of a job comes from the engine's `verdict:` reason and the failed state (same as Ecto); XP of a replayed step goes to whoever holds the desk now, not who held it then (only for events that arrived while the world-server was off). The recorded demo shows no levels (the server sends none).
 - DiscordIA: one of its own tests failed once in four sandbox runs (not identified).
 - The demo replay and `run-001.json` predate floors, kinds and the game layer: re-record in final-demo.
-- Scratch files outside git that a session could not delete: `data/tmp-pipeline-old.txt`, `data/tmp-demo-dist`, `data/tmp-check.txt` (all git-ignored).
+- Scratch files outside git that a session could not delete: `data/tmp-pipeline-old.txt`, `data/tmp-demo-dist`, `data/tmp-check.txt`, `data/tmp-shots` (screenshots of the poses; all git-ignored).
+- waiting-fun: stop the three test servers (ports 8795 to 8797) before an e2e run; a reused fun server keeps its wallet in memory, and after 10 catches for the same scripted task id (the fake engine reuses ids) no wisp pays. Mood is not kept across a restart. The poses and the sitter's depth were checked in screenshots of the lobby only.
 
 ## Security
 - History rewritten twice with git filter-repo (noreply identity `14869836+adan291@users.noreply.github.com`, no personal emails, no key-shaped literals); backups in `data/backup/` (git-ignored). Local git config uses the noreply address. `pnpm security:scan` clean on 2026-11-13.
