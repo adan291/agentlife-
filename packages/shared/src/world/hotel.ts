@@ -1,9 +1,9 @@
 import { FURNI_CATALOG } from "../furni.ts";
 import { sanitize } from "../sanitize.ts";
-import { applyLayout, checkMove, layoutOf } from "../layout.ts";
+import { applyLayout, checkMove, layoutOf, layoutProblem } from "../layout.ts";
 import type { Layout, MoveCode, Placement } from "../layout.ts";
 import { footprintTiles, useTile, validateRoom } from "../room.ts";
-import type { RoomDef } from "../room.ts";
+import type { PlacedFurni, RoomDef } from "../room.ts";
 import type { FloorKind } from "../floors.ts";
 import type { WelcomeMsg } from "../protocol.ts";
 import { WorldSim } from "./sim.ts";
@@ -49,15 +49,33 @@ export function baseRoomForProject(template: RoomDef, project: ProjectInfo): Roo
 }
 
 /** The floor of a project: its base room with the saved layout applied (a piece that no longer fits stays where the template has it). */
-export function roomForProject(template: RoomDef, project: ProjectInfo, layout?: Layout): RoomDef {
+export function roomForProject(template: RoomDef, project: ProjectInfo, layout?: Layout, extras: readonly PlacedFurni[] = []): RoomDef {
   const base = baseRoomForProject(template, project);
-  if (!layout) return base;
-  const { room } = applyLayout(base, layout);
-  try {
-    return validateRoom(room);
-  } catch {
-    return base;
+  let room = base;
+  if (layout) {
+    room = applyLayout(base, layout).room;
+    try {
+      room = validateRoom(room);
+    } catch {
+      room = base;
+    }
   }
+  return addExtras(room, extras);
+}
+
+/**
+ * Stands the bought pieces on a floor one at a time, in order, each through the same checks as a move. A piece that no
+ * longer fits (the template or the catalogue changed) is left out; the caller can see which by the room's item ids.
+ */
+export function addExtras(room: RoomDef, extras: readonly PlacedFurni[]): RoomDef {
+  let out = room;
+  for (const piece of extras) {
+    if (out.furni.some((p) => p.itemId === piece.itemId) || !FURNI_CATALOG[piece.defId]) continue;
+    const candidate: RoomDef = { ...out, furni: [...out.furni, piece] };
+    const r = checkMove(candidate, piece.itemId, { x: piece.x, y: piece.y, dir: piece.dir });
+    if (r.ok) out = r.room;
+  }
+  return out;
 }
 
 export interface HotelOptions {
@@ -71,6 +89,8 @@ export interface HotelOptions {
   sim?: WorldSimOptions;
   /** The saved layout of a project, read when its floor is built. */
   layoutOf?: (projectId: string) => Layout | undefined;
+  /** The bought pieces standing on a project floor, read when its floor is built (furni-shop). */
+  extrasOf?: (projectId: string) => readonly PlacedFurni[];
 }
 
 export interface FloorInfo {
@@ -79,7 +99,7 @@ export interface FloorInfo {
   kind: FloorKind;
 }
 
-export type ArrangeCode = MoveCode | "not_editable" | "save_failed";
+export type ArrangeCode = MoveCode | "not_editable" | "save_failed" | "duplicate" | "not_removable" | "no_stock";
 
 export type ArrangeResult =
   | { ok: true; room: RoomDef; layout: Layout }
@@ -101,6 +121,7 @@ export class Hotel {
   private readonly simOptions: WorldSimOptions;
   private readonly startRoom: RoomId;
   private readonly savedLayout: ((projectId: string) => Layout | undefined) | undefined;
+  private readonly savedExtras: ((projectId: string) => readonly PlacedFurni[]) | undefined;
 
   constructor(opts: HotelOptions) {
     this.template = opts.template;
@@ -108,6 +129,7 @@ export class Hotel {
     this.simOptions = opts.sim ?? {};
     this.startRoom = opts.startRoom ?? LOBBY_ROOM;
     this.savedLayout = opts.layoutOf;
+    this.savedExtras = opts.extrasOf;
     this.sims.set(LOBBY_ROOM, new WorldSim({ ...opts.lobby, id: LOBBY_ROOM, kind: "lobby" }, opts.clock, this.simOptions));
     this.sims.set(HR_ROOM, new WorldSim({ ...opts.hr, id: HR_ROOM, kind: "hr" }, opts.clock, this.simOptions));
   }
@@ -139,7 +161,7 @@ export class Hotel {
     if (!this.sims.has(roomId)) {
       const base = baseRoomForProject(this.template, project);
       this.bases.set(roomId, base);
-      const room = roomForProject(this.template, project, this.savedLayout?.(project.id));
+      const room = roomForProject(this.template, project, this.savedLayout?.(project.id), this.savedExtras?.(project.id));
       this.sims.set(roomId, new WorldSim(room, this.clock, this.simOptions));
     }
     return roomId;
@@ -157,7 +179,7 @@ export class Hotel {
     return r.ok ? this.commit(sim, base, r.room, save) : r;
   }
 
-  /** Puts every piece of a project floor back where the template has it. Refused while someone stands where a piece goes back to. */
+  /** Puts every piece of the template back where it was. Bought pieces stay where they are, so a piece of the template that would land on one is refused: pick it up first. Refused while someone stands where a piece goes back to. */
   resetLayout(roomId: string, save?: (layout: Layout) => void): ArrangeResult {
     const sim = this.sims.get(roomId as RoomId);
     const base = this.bases.get(roomId as RoomId);
@@ -169,7 +191,53 @@ export class Hotel {
       if (!def || def.walkable || (now && now.x === p.x && now.y === p.y && now.dir === p.dir)) continue;
       if (footprintTiles(p, def).some((t) => inUse.has(`${t.x},${t.y}`))) return { ok: false, code: "occupied", reason: "Someone is standing there." };
     }
-    return this.commit(sim, base, base, save);
+    const extras = this.extrasOf(sim, base);
+    const target: RoomDef = extras.length === 0 ? base : { ...base, furni: [...base.furni, ...extras] };
+    const problem = extras.length === 0 ? undefined : layoutProblem(target);
+    // The template alone is always valid, so the problem comes from a piece that was placed.
+    if (problem) return { ok: false, code: problem.code, reason: "A piece you placed is in the way. Pick it up first." };
+    return this.commit(sim, base, target, save);
+  }
+
+  /** The bought pieces of a floor: everything in the room that the template does not have. */
+  private extrasOf(sim: WorldSim, base: RoomDef): PlacedFurni[] {
+    const ids = new Set(base.furni.map((p) => p.itemId));
+    return sim.room.furni.filter((p) => !ids.has(p.itemId));
+  }
+
+  /** True when the piece is on the floor and is a bought one (the template does not have it). */
+  isExtra(roomId: string, itemId: string): boolean {
+    const sim = this.sims.get(roomId as RoomId);
+    const base = this.bases.get(roomId as RoomId);
+    if (!sim || !base) return false;
+    return sim.room.furni.some((p) => p.itemId === itemId) && !base.furni.some((p) => p.itemId === itemId);
+  }
+
+  /**
+   * Stands a new piece (a bought one) on a project floor, through the same checks as a move: floor, wall, overlaps,
+   * standing spots, people, paths. Only pieces without a use of their own can be placed. `save` runs after the checks
+   * and before the change, as for a move.
+   */
+  placeFurniture(roomId: string, piece: PlacedFurni, save?: (layout: Layout) => void): ArrangeResult {
+    const sim = this.sims.get(roomId as RoomId);
+    const base = this.bases.get(roomId as RoomId);
+    if (!sim || !base) return NOT_EDITABLE;
+    const def = FURNI_CATALOG[piece.defId];
+    if (!def || def.interaction !== undefined || def.id === "agent_desk") return { ok: false, code: "unknown_item", reason: "That piece cannot be placed." };
+    if (sim.room.furni.some((p) => p.itemId === piece.itemId)) return { ok: false, code: "duplicate", reason: "That piece is already on the floor." };
+    const candidate: RoomDef = { ...sim.room, furni: [...sim.room.furni, piece] };
+    const r = checkMove(candidate, piece.itemId, { x: piece.x, y: piece.y, dir: piece.dir }, { occupied: sim.tilesInUse() });
+    return r.ok ? this.commit(sim, base, r.room, save) : r;
+  }
+
+  /** Takes a bought piece off the floor. The pieces of the template (desks, computer, mailbox, board, elevator...) are never picked up. */
+  pickUpFurniture(roomId: string, itemId: string, save?: (layout: Layout) => void): ArrangeResult {
+    const sim = this.sims.get(roomId as RoomId);
+    const base = this.bases.get(roomId as RoomId);
+    if (!sim || !base) return NOT_EDITABLE;
+    if (base.furni.some((p) => p.itemId === itemId)) return { ok: false, code: "not_removable", reason: "That piece belongs to the room. You can move it, not pick it up." };
+    if (!sim.room.furni.some((p) => p.itemId === itemId)) return { ok: false, code: "unknown_item", reason: "That piece is not in this room." };
+    return this.commit(sim, base, { ...sim.room, furni: sim.room.furni.filter((p) => p.itemId !== itemId) }, save);
   }
 
   private commit(sim: WorldSim, base: RoomDef, room: RoomDef, save?: (layout: Layout) => void): ArrangeResult {

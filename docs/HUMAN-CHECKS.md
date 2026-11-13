@@ -41,3 +41,9 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Requirement 2.4c: start a job on a floor with the real engine, move a desk and other pieces during the job, and confirm the agents keep walking and working; confirm the next walk of a moved desk's agent goes to the new seat.
 - [ ] Open the recorded demo and confirm there is no Arrange button (`pnpm --filter @agentlife/client e2e:demo` was not run in this verification).
 - [ ] Not run live: a real engine with a real registered project (only the scripted engine was used by the e2e).
+
+## furni-shop task 3: placing (on feat/furni-shop, not merged)
+- [ ] In a real browser with the real engine: earn some Ecto (a delivered job), buy two or three pieces at the lobby counter, go to a project floor, press Arrange, and drag items from the tray onto the floor with the mouse. Look at the green and red preview, the tray (picture, count, width next to the room under about 900 px), and that the tray does not cover the Arrange button.
+- [ ] Place a wall piece (clock, poster, mirror, banner) on the north and the west wall, turn it with R, and check that it is refused in the middle of the floor.
+- [ ] Pick a piece up, restart the world-server, and check that placed pieces and the stock are still there; remove a project in the Reception and check that its pieces are back in the tray of another floor.
+- [ ] Touch screen: tap an item in the tray, then tap the floor (dragging from the tray is for a mouse).

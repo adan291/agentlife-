@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const InteractionSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr"]);
+export const InteractionSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop"]);
 export type Interaction = z.infer<typeof InteractionSchema>;
 
 export const FurniDefSchema = z.object({
@@ -60,6 +60,7 @@ const DEFS: FurniDef[] = [
   def("library_shelf", "Library shelf", 1, 1, 4, false, "library", "Have the team document a topic or path", "wall"),
   def("night_board", "Night board", 1, 1, 4, false, "night", "Schedule jobs for the night shift"),
   def("hr_desk", "HR desk", 2, 1, 2, false, "hr", "Hire, rename and fire agents, and import new ones"),
+  def("shop_counter", "Shop counter", 2, 1, 2.5, false, "shop", "Spend your Ecto on furniture"),
   def("door", "Door", 1, 1, 5, false, "door", "Go through the door"),
   def("agent_desk", "Agent desk", 2, 1, 2, false),
   def("chair", "Chair", 1, 1, 2, true),
@@ -68,6 +69,38 @@ const DEFS: FurniDef[] = [
   def("sofa", "Sofa", 2, 1, 2, false),
   def("jack_o_lantern_lamp", "Jack-o'-lantern lamp", 1, 1, 2, false),
   def("cobweb", "Cobweb", 1, 1, 0, true),
+  // Sold in the shop (furni-shop): decorative only, no interaction, no hint. The names are our own.
+  // Seating
+  def("armchair", "Velvet armchair", 1, 1, 2.4, false),
+  def("bench", "Crypt bench", 2, 1, 1.6, false),
+  def("beanbag", "Beanbag", 1, 1, 1.2, false),
+  def("throne", "Bone throne", 1, 1, 4.4, false),
+  // Tables
+  def("side_table", "Side table", 1, 1, 1.6, false),
+  def("coffee_table", "Coffee table", 2, 1, 1.2, false),
+  def("round_table", "Round table", 2, 2, 1.8, false),
+  def("potion_bar", "Potion bar", 3, 1, 2.2, false),
+  // Lights
+  def("candelabra", "Candelabra", 1, 1, 3.6, false),
+  def("floor_torch", "Floor torch", 1, 1, 5, false),
+  def("lava_lamp", "Lava lamp", 1, 1, 2.4, false),
+  def("crystal_ball", "Crystal ball", 1, 1, 2.2, false),
+  // Plants
+  def("fern", "Fern", 1, 1, 3.2, false),
+  def("palm", "Palm", 1, 1, 5.5, false),
+  def("cactus", "Cactus", 1, 1, 3, false),
+  def("bonsai", "Bonsai", 1, 1, 2.2, false),
+  // Spooky
+  def("gravestone", "Gravestone", 1, 1, 3, false),
+  def("coffin", "Coffin", 2, 1, 2, false),
+  def("cauldron", "Cauldron", 1, 1, 2.4, false),
+  def("skeleton", "Standing skeleton", 1, 1, 4.6, false),
+  def("rune_rug", "Rune rug", 2, 2, 0.1, true),
+  // Walls
+  def("wall_clock", "Wall clock", 1, 1, 4, false, undefined, undefined, "wall"),
+  def("moon_poster", "Moon poster", 1, 1, 4, false, undefined, undefined, "wall"),
+  def("tall_mirror", "Tall mirror", 1, 1, 4.6, false, undefined, undefined, "wall"),
+  def("banner", "Hanging banner", 1, 1, 5, false, undefined, undefined, "wall"),
 ];
 
 export const FURNI_CATALOG: Readonly<Record<string, FurniDef>> = Object.freeze(

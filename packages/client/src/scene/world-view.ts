@@ -36,6 +36,8 @@ export interface ArrangeInput {
   down(itemId: string | null, tile: Tile): void;
   move(tile: Tile): void;
   up(): void;
+  /** The pointer left the canvas. */
+  leave?(): void;
 }
 
 /** What the Architect says when a report arrives. */
@@ -128,7 +130,10 @@ export class WorldView {
     app.stage.on("pointerdown", (e) => this.onPointerDown(e));
     app.stage.on("pointerup", () => this.onPointerUp());
     app.stage.on("pointerupoutside", () => this.onPointerUp());
-    app.stage.on("pointerleave", () => this.clearHover());
+    app.stage.on("pointerleave", () => {
+      this.clearHover();
+      this.arrangeInput?.leave?.();
+    });
     app.renderer.on("resize", () => this.relayout());
   }
 

@@ -12,6 +12,7 @@ import { renderFloorList } from "./elevator.ts";
 import { BUILD_EVENT_REFRESH_MS, BUILD_REFRESH_MS, isBuilderMessage, renderBuildBoard, renderBuildReport } from "./build-board.ts";
 import { createNightPanel } from "./night-board.ts";
 import { createPipelineEditor } from "./pipeline-editor.ts";
+import { createShopPanel } from "./shop.ts";
 import { createHrPanel } from "./hr.ts";
 import { PanelState } from "./panel-state.ts";
 import { createReceptionPanel } from "./reception.ts";
@@ -124,6 +125,13 @@ const CSS = `
 .al-pipe-who, .al-pipe-model { margin: var(--al-s1) 0; }
 .al-pipe-problem { margin: var(--al-s1) 0 0; }
 .al-pipe-errors { margin: var(--al-s2) 0; padding-left: var(--al-s5); }
+.al-shop-head { margin: 0 0 var(--al-s2); font-weight: bold; color: ${UI_COLOURS.accentText}; }
+.al-shop-list { list-style: none; margin: var(--al-s2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--al-s2); }
+.al-shop-item { display: flex; flex-direction: column; gap: var(--al-s1); padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); }
+.al-shop-item p { margin: 0; }
+.al-shop-preview { display: flex; align-items: center; justify-content: center; height: 112px; background: ${UI_COLOURS.inputBg}; border-radius: var(--al-radius); overflow: hidden; }
+.al-shop-preview img { max-width: 100%; max-height: 100%; image-rendering: pixelated; transform: scale(1.5); }
+.al-shop-price { font-weight: bold; color: ${UI_COLOURS.accentText}; }
 `;
 
 const TITLES: Record<PanelName, string> = {
@@ -140,7 +148,11 @@ const TITLES: Record<PanelName, string> = {
   library: "Library",
   night: "Night shift",
   hr: "HR desk",
+  shop: "Shop",
 };
+
+/** The shop needs the real hotel: the recorded demo shows this instead of the catalogue. */
+const SHOP_LOCKED = "The shop is off in the recorded demo. Run AGENT LIFE on your computer: real, verified work earns Ecto to spend on furniture.";
 
 /** The HR desk needs the real engine: the recorded demo shows this instead of the desk. */
 const HR_LOCKED = "The HR desk is off in the recorded demo. Run AGENT LIFE on your computer to hire, rename and fire agents.";
@@ -195,6 +207,8 @@ export interface PanelHooks {
   goTo?(roomId: string): void;
   /** The user asked the HR agent for a proposal: the HR ghost starts thinking (it stops when the answer or an error arrives). */
   hrThinking?(): void;
+  /** A picture of a piece of furniture drawn by the room's own renderer (a data URL), for the shop. */
+  shopPreview?(defId: string): string | undefined;
 }
 
 /**
@@ -267,6 +281,17 @@ export function createPanels(
       send({ type: "pipeline_reset" });
     },
   });
+
+  const shopPanel = createShopPanel(
+    document,
+    {
+      buy: (itemId) => {
+        state.shopError = null;
+        send({ type: "shop_buy", itemId });
+      },
+    },
+    hooks.shopPreview ? { preview: hooks.shopPreview } : {},
+  );
 
   const hrAct = (act: HrAction): void => {
     state.hrError = null;
@@ -426,7 +451,7 @@ export function createPanels(
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
-    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || state.open === "hr" || (state.open === "mailbox" && state.viewing !== null));
+    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || state.open === "hr" || state.open === "shop" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
@@ -468,6 +493,8 @@ export function createPanels(
                       )
                     : state.open === "hr"
                       ? hrPanel({ hr: state.hr, error: state.hrError, suggestion: state.suggestion, busy: state.hrBusy, ...(locked ? { locked: HR_LOCKED } : {}) }, render)
+                      : state.open === "shop"
+                        ? shopPanel({ shop: state.shop, error: state.shopError, ...(locked ? { locked: SHOP_LOCKED } : {}) }, render)
                     : state.open === "door"
                   ? { body: doorNote(document) }
                   : { body: boardBody() };

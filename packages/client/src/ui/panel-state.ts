@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, RegisterProjectResult, Repo, Report, ServerMsg, TeamSuggestion } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -48,6 +48,9 @@ export class PanelState {
   /** The pipeline of the project on the user's floor (board panel), and why it could not be read or saved. */
   pipeline: PipelineResponse | null = null;
   pipelineError: string | null = null;
+  /** The shop (catalogue, balance, stock) and why the last purchase was refused. The error is cleared when the panel opens. */
+  shop: ShopState | null = null;
+  shopError: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -87,6 +90,7 @@ export class PanelState {
         if (msg.panel === "night") this.nightError = null;
         if (msg.panel === "library") this.memoryError = null;
         if (msg.panel === "board") this.pipelineError = null;
+        if (msg.panel === "shop") this.shopError = null;
         if (msg.panel === "hr") {
           this.hrError = null;
           this.suggestion = null;
@@ -100,6 +104,15 @@ export class PanelState {
         this.night = msg.state;
         return !same && this.open === "night";
       }
+      case "shop":
+        this.shop = msg.state;
+        this.shopError = null;
+        return this.open === "shop";
+      case "wallet":
+        // A grant or a purchase changes the balance; the shop's header and its Buy buttons follow it.
+        if (!this.shop || this.shop.balance === msg.balance) return false;
+        this.shop = { ...this.shop, balance: msg.balance };
+        return this.open === "shop";
       case "hr":
         // After a change the desk sends its new state; a refused change keeps its error on screen until the next action.
         this.hr = msg.state;
@@ -180,6 +193,10 @@ export class PanelState {
         if (msg.code === "pipeline_error") {
           this.pipelineError = msg.message;
           return this.open === "board";
+        }
+        if (msg.code === "shop_error") {
+          this.shopError = msg.message;
+          return this.open === "shop";
         }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;

@@ -28,6 +28,7 @@ import type {
   ErrorCode,
   FloorStatus,
   GuestId,
+  GrantReason,
   Hotel,
   HrAction,
   Layout,
@@ -37,6 +38,7 @@ import type {
   JobState,
   MorningSummary,
   NightState,
+  Placement,
   Project,
   RegisterProjectBody,
   Report,
@@ -52,6 +54,8 @@ import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import type { LayoutStore } from "./layout-store.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
+import type { Economy } from "./economy-store.ts";
+import { GrantTracker } from "./grants.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -84,6 +88,14 @@ export interface GatewayOptions {
   clock?: () => number;
   /** Where arrangements of project floors are saved. Without it a move still works but is not kept across restarts. */
   layouts?: Pick<LayoutStore, "set">;
+  /**
+   * The user's Ecto (furni-shop). Without it the hotel has no economy: no `wallet` message is sent and nothing is
+   * granted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
+   */
+  economy?: Pick<
+    Economy,
+    "balance" | "grant" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
+  >;
 }
 
 export interface Gateway {
@@ -209,6 +221,38 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     outbox = outbox.then(task).catch(() => undefined);
   };
 
+  // ---- Ecto: grants from verified events (furni-shop) ----
+
+  const economy = options.economy;
+  const grantTracker = new GrantTracker();
+  /**
+   * Counts a grant once (the wallet remembers each `reason` and `ref`) and, when it paid, tells the user who is connected
+   * so the top bar and the toast follow. A grant while nobody is connected is in the balance the next time.
+   */
+  const grantEcto = (reason: GrantReason, ref: string, ts: number): void => {
+    if (!economy) return;
+    const entry = economy.grant(reason, ref, ts);
+    if (entry && current) send(current.ws, { type: "wallet", balance: economy.balance, grant: { amount: entry.amount, reason } });
+  };
+
+  const SHOP_CLOSED = "The shop is closed: it needs the real engine.";
+
+  /** The catalogue, the balance and the stock. Without an economy the shop is closed. */
+  const sendShop = (ws: WebSocket): void => {
+    if (!economy) return sendError(ws, "shop_error", SHOP_CLOSED);
+    send(ws, { type: "shop", state: economy.shop() });
+  };
+
+  /** One purchase at the shop counter in the lobby. A refusal says why and changes nothing; a purchase answers with the new balance and shop. */
+  const buyItem = (ws: WebSocket, itemId: string): void => {
+    if (!economy) return sendError(ws, "shop_error", SHOP_CLOSED);
+    if (userRoom() !== LOBBY_ROOM) return sendError(ws, "shop_error", "The shop counter is in the lobby.");
+    const result = economy.buy(itemId);
+    if (!result.ok) return sendError(ws, "shop_error", result.reason);
+    send(ws, { type: "wallet", balance: economy.balance });
+    send(ws, { type: "shop", state: economy.shop() });
+  };
+
   const sendJobUpdate = async (roomId: string) => {
     const taskId = floors.get(roomId)?.currentTaskId;
     if (!engine || !taskId) return;
@@ -278,6 +322,16 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
     const wanted = new Set(projects.map((p) => projectRoomId(p.id)));
     for (const p of projects) hotel.addProject({ id: p.id, name: p.name });
+    // Bought pieces of a removed project come back to the inventory, also those of a project that was removed while the
+    // world-server was off. A piece the floor could not take (the template changed) comes back too.
+    let stockChanged = false;
+    if (economy) {
+      stockChanged = economy.returnAbsentFloors(new Set(projects.map((p) => p.id)));
+      for (const p of projects) {
+        const visible = new Set(hotel.sim(projectRoomId(p.id))?.room.furni.map((f) => f.itemId));
+        if (economy.returnHiddenPieces(p.id, visible)) stockChanged = true;
+      }
+    }
     for (const info of hotel.floors()) {
       if (info.kind !== "project" || wanted.has(info.roomId)) continue;
       const moved = hotel.removeProject(projectIdOfRoom(info.roomId)!);
@@ -286,6 +340,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         for (const m of moved) if (m.userId === current.userId) sendWelcome(current.ws, LOBBY_ROOM, m.welcome);
       }
     }
+    if (stockChanged && economy && current) send(current.ws, { type: "shop", state: economy.shop() });
     pushFloors();
   };
 
@@ -342,6 +397,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
     const lobby = floorOf(LOBBY_ROOM);
     const news: Report[] = [];
+    // A night in which at least one job finished pays once, whenever the summary is first seen.
+    for (const s of list) if (s.counts.done >= 1) grantEcto("night_summary", s.nightKey, s.writtenAt);
     for (const s of [...list].reverse()) {
       const id = morningReportId(s.nightKey);
       const report: Report = { reportId: id, taskId: id, title: morningTitle(s.nightKey), markdown: s.markdown, ts: s.writtenAt, kind: "night" };
@@ -470,6 +527,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       await sendNight(ws);
     } else if (panel === "hr") {
       await sendHr(ws);
+    } else if (panel === "shop") {
+      sendShop(ws);
     }
   };
 
@@ -482,6 +541,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     });
     const lines = f?.activity ?? [];
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
+    if (economy) send(ws, { type: "wallet", balance: economy.balance });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of f?.approvals.values() ?? []) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     // A morning summary nobody opened yet is announced again to a client that just arrived in the lobby.
@@ -799,9 +859,20 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         case "delete":
           await memory.remove(projectId, act.entryId);
           break;
-        case "accept":
+        case "accept": {
+          // The proposal's job pays once, however many of its proposals are accepted. Read it before the engine moves it.
+          let source: string | undefined;
+          if (economy) {
+            try {
+              source = (await memory.state(projectId)).proposals.find((p) => p.id === act.proposalId)?.sourceTaskId;
+            } catch {
+              source = undefined;
+            }
+          }
           await memory.accept(projectId, act.proposalId, { ...(act.kind ? { kind: act.kind } : {}), ...(act.text === undefined ? {} : { text: act.text }) });
+          if (source) grantEcto("memory_accepted", source, Date.now());
           break;
+        }
         case "dismiss":
           await memory.dismiss(projectId, act.proposalId);
           break;
@@ -872,6 +943,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   const onEngineEvent = (ev: AgentEvent) => {
     enqueue(async () => {
+      // Before any room lookup: a job on a floor that has no room yet still earns.
+      if (economy) for (const c of grantTracker.observe(ev)) grantEcto(c.reason, c.ref, c.ts);
       const roomId = roomOfEvent(ev);
       if (!roomId) return;
       // A project registered after the gateway started has no floor yet.
@@ -1176,17 +1249,46 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   /**
    * Arrange mode: one change of the furniture of the user's project floor. The rules are the shared ones (`checkMove`);
    * a refusal names the rule and changes nothing. The new pieces and anchors go to the user after the walks already
-   * queued, so the avatars do not jump.
+   * queued, so the avatars do not jump. `stock` also sends the shop (the inventory tray shows the stock).
    */
-  const arrange = (ws: WebSocket, change: (roomId: string, save: (layout: Layout) => void) => ArrangeResult): void => {
+  const arrange = (ws: WebSocket, change: (roomId: string, projectId: string, save: (layout: Layout) => void) => ArrangeResult, stock = false): void => {
     const roomId = userRoom();
     const projectId = roomId === undefined ? undefined : projectIdOfRoom(roomId);
     if (roomId === undefined || projectId === undefined) return sendError(ws, "layout_error", "Only project floors can be arranged.");
-    const result = change(roomId, (layout) => options.layouts?.set(projectId, layout));
+    const result = change(roomId, projectId, (layout) => options.layouts?.set(projectId, layout));
     if (!result.ok) return sendError(ws, "layout_error", result.reason);
     const { furni, anchors } = result.room;
-    enqueue(() => toUser(roomId, { type: "room_layout", roomId, furni, anchors }));
+    enqueue(() => {
+      toUser(roomId, { type: "room_layout", roomId, furni, anchors });
+      if (stock && economy) toUser(roomId, { type: "shop", state: economy.shop() });
+    });
   };
+
+  const NO_SHOP_TO_PLACE: ArrangeResult = { ok: false, code: "no_stock", reason: "You have nothing to place: the shop is closed." };
+
+  /** A move of a piece. A bought piece is kept in the inventory file, a piece of the template in the layout file. */
+  const moveItem = (roomId: string, projectId: string, itemId: string, to: Placement, save: (layout: Layout) => void): ArrangeResult => {
+    if (!hotel.isExtra(roomId, itemId)) return hotel.moveFurniture(roomId, itemId, to, save);
+    const plan = economy?.planMove(projectId, itemId, to);
+    if (!plan?.ok) return { ok: false, code: "unknown_item", reason: plan?.reason ?? "That piece is not in this room." };
+    return hotel.moveFurniture(roomId, itemId, to, () => plan.commit());
+  };
+
+  /** Stands a bought item on the floor. The inventory file is written only after the hotel accepted the spot. */
+  const placeItem = (roomId: string, projectId: string, itemId: string, to: Placement): ArrangeResult => {
+    if (!economy) return NO_SHOP_TO_PLACE;
+    const plan = economy.planPlace(projectId, itemId, to);
+    if (!plan.ok) return { ok: false, code: "no_stock", reason: plan.reason };
+    return hotel.placeFurniture(roomId, plan.piece, () => plan.commit());
+  };
+
+  /** Takes a bought piece back into the inventory. Pieces of the template are refused by the hotel. */
+  const pickUpItem = (roomId: string, projectId: string, itemId: string): ArrangeResult =>
+    hotel.pickUpFurniture(roomId, itemId, () => {
+      const plan = economy?.planPickUp(projectId, itemId);
+      if (!plan?.ok) throw new Error(plan?.reason ?? "not one of yours");
+      plan.commit();
+    });
 
   const watchOverview = (on: boolean) => {
     if (!current) return;
@@ -1318,9 +1420,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void pipelineAct(ws, { reset: true });
       } else if (msg.type === "furni_move") {
         const { itemId, x, y, dir } = msg;
-        arrange(ws, (roomId, save) => hotel.moveFurniture(roomId, itemId, { x, y, dir }, save));
+        arrange(ws, (roomId, projectId, save) => moveItem(roomId, projectId, itemId, { x, y, dir }, save));
+      } else if (msg.type === "furni_place") {
+        const { itemId, x, y, dir } = msg;
+        arrange(ws, (roomId, projectId) => placeItem(roomId, projectId, itemId, { x, y, dir }), true);
+      } else if (msg.type === "furni_pickup") {
+        const { itemId } = msg;
+        arrange(ws, (roomId, projectId) => pickUpItem(roomId, projectId, itemId), true);
       } else if (msg.type === "furni_reset") {
-        arrange(ws, (roomId, save) => hotel.resetLayout(roomId, save));
+        arrange(ws, (roomId, _projectId, save) => hotel.resetLayout(roomId, save));
+      } else if (msg.type === "shop_state") {
+        sendShop(ws);
+      } else if (msg.type === "shop_buy") {
+        buyItem(ws, msg.itemId);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

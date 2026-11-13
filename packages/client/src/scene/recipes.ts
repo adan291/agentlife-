@@ -1,6 +1,6 @@
-import type { Graphics } from "pixi.js";
-import { FURNI_COLOURS as C, shade } from "../palette.ts";
-import { P, WALL_UNITS, drawBoxes, fillPoly } from "./iso-draw.ts";
+﻿import type { Graphics } from "pixi.js";
+import { FURNI_COLOURS as C, PALETTE, shade } from "../palette.ts";
+import { P, WALL_UNITS, drawBoxes, fillPoly, strokePoly } from "./iso-draw.ts";
 import type { BoxPiece, Pt } from "./iso-draw.ts";
 
 /**
@@ -396,6 +396,355 @@ const cobweb: Recipe = (g) => {
   g.circle(spider[0], spider[1], 2.5).fill(0x0b0a12);
 };
 
+// ---- Furniture of the shop (furni-shop). All drawn here, in code; nothing is loaded from a file. ----
+
+/** A flat ellipse at tile coordinates (x, y) and height z; rx and ry are screen pixels. */
+function disc(g: Graphics, x: number, y: number, z: number, rx: number, ry: number, colour: number, alpha = 1): void {
+  const [sx, sy] = P(x, y, z);
+  g.ellipse(sx, sy, rx, ry).fill({ color: colour, alpha });
+}
+
+function centreOf(r: Rect): { x: number; y: number } {
+  return { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 };
+}
+
+/** The two slabs at the sides of a seat (perpendicular to its facing). */
+function armsOf(c: RecipeCtx, f: Rect, thick: number): [Rect, Rect] {
+  return c.dir === 4 || c.dir === 0
+    ? [{ ...f, x1: f.x0 + thick }, { ...f, x0: f.x1 - thick }]
+    : [{ ...f, y1: f.y0 + thick }, { ...f, y0: f.y1 - thick }];
+}
+
+/** The two ends of a long piece along its long axis. */
+function endsOf(f: Rect, thick: number): [Rect, Rect] {
+  return f.x1 - f.x0 >= f.y1 - f.y0
+    ? [{ ...f, x1: f.x0 + thick }, { ...f, x0: f.x1 - thick }]
+    : [{ ...f, y1: f.y0 + thick }, { ...f, y0: f.y1 - thick }];
+}
+
+/** The point at fraction t along the long axis of a rect, on its centre line. */
+function alongOf(f: Rect, t: number): { x: number; y: number } {
+  const m = centreOf(f);
+  return f.x1 - f.x0 >= f.y1 - f.y0 ? { x: f.x0 + t * (f.x1 - f.x0), y: m.y } : { x: m.x, y: f.y0 + t * (f.y1 - f.y0) };
+}
+
+function around(x: number, y: number, r: number): Rect {
+  return { x0: x - r, y0: y - r, x1: x + r, y1: y + r };
+}
+
+const armchair: Recipe = (g, c) => {
+  const f = full(c, 0.1);
+  const [a, b] = armsOf(c, f, 0.18);
+  drawBoxes(g, [
+    piece(f, 0, 0.9, C.velvet),
+    piece(backRect(c, 0.24, 0.1), 0.9, 2.4, C.velvetLight),
+    piece(a, 0.9, 1.5, C.velvet),
+    piece(b, 0.9, 1.5, C.velvet),
+  ]);
+};
+
+const bench: Recipe = (g, c) => {
+  const f = full(c, 0.08);
+  const [a, b] = endsOf(f, 0.2);
+  drawBoxes(g, [piece(a, 0, 1.0, C.stoneDark), piece(b, 0, 1.0, C.stoneDark), piece(f, 1.0, 1.4, C.stone)]);
+};
+
+const beanbag: Recipe = (g, c) => {
+  const m = centreOf(full(c));
+  disc(g, m.x, m.y, 0, 24, 12, PALETTE.shadow, 0.35);
+  disc(g, m.x, m.y, 0.45, 23, 13, shade(C.cloth, 0.8));
+  disc(g, m.x, m.y, 0.75, 20, 11, C.cloth);
+  disc(g, m.x - 0.05, m.y - 0.05, 1.0, 11, 5, shade(C.cloth, 1.25));
+};
+
+const throne: Recipe = (g, c) => {
+  const f = full(c, 0.1);
+  const [a, b] = armsOf(c, f, 0.16);
+  const back = backRect(c, 0.2, 0.1);
+  drawBoxes(g, [piece(f, 0, 1.0, C.bone), piece(back, 1.0, 4.4, C.bone), piece(a, 1.0, 1.8, C.bone), piece(b, 1.0, 1.8, C.bone)]);
+  // A skull on the top of the backrest.
+  const m = centreOf(back);
+  const [sx, sy] = P(m.x, m.y, 4.4);
+  g.circle(sx, sy - 7, 7).fill(shade(C.bone, 1.1));
+  g.circle(sx - 2.6, sy - 7, 1.6).fill(C.ink);
+  g.circle(sx + 2.6, sy - 7, 1.6).fill(C.ink);
+};
+
+const sideTable: Recipe = (g, c) => {
+  drawBoxes(g, [piece(around(0, 0, 0.07), 0, 1.4, C.woodDark), piece(full(c, 0.14), 1.4, 1.6, C.wood)]);
+};
+
+const coffeeTable: Recipe = (g, c) => {
+  const f = full(c, 0.08);
+  const leg = (x: number, y: number): BoxPiece => piece({ x0: x, y0: y, x1: x + 0.1, y1: y + 0.1 }, 0, 0.9, C.woodDark);
+  drawBoxes(g, [leg(f.x0, f.y0), leg(f.x1 - 0.1, f.y0), leg(f.x0, f.y1 - 0.1), leg(f.x1 - 0.1, f.y1 - 0.1), piece(f, 0.9, 1.2, C.wood)]);
+};
+
+const roundTable: Recipe = (g, c) => {
+  const m = centreOf(full(c));
+  disc(g, m.x, m.y, 0, 34, 17, PALETTE.shadow, 0.3);
+  drawBoxes(g, [piece(around(m.x, m.y, 0.14), 0, 1.6, C.woodDark)]);
+  disc(g, m.x, m.y, 1.6, 54, 27, shade(C.wood, 0.7));
+  disc(g, m.x, m.y, 1.8, 54, 27, C.wood);
+  disc(g, m.x, m.y, 1.82, 34, 17, C.velvet);
+  disc(g, m.x, m.y, 1.84, 14, 7, C.brass);
+};
+
+const potionBar: Recipe = (g, c) => {
+  const f = full(c, 0.05);
+  const top = full(c, 0.02);
+  const bottle = (t: number, h: number, colour: number): BoxPiece => {
+    const p = alongOf(top, t);
+    return piece(around(p.x, p.y, 0.07), 1.8, 1.8 + h, colour);
+  };
+  drawBoxes(g, [
+    piece(f, 0, 1.6, C.woodDark),
+    piece(top, 1.6, 1.8, C.wood),
+    bottle(0.18, 0.7, C.potion),
+    bottle(0.38, 0.5, C.lava),
+    bottle(0.58, 0.8, C.glass),
+    bottle(0.8, 0.55, C.note3),
+  ]);
+  const g1 = alongOf(top, 0.5);
+  disc(g, g1.x, g1.y, 2.1, 46, 16, C.potion, 0.08);
+};
+
+const candelabra: Recipe = (g) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.2), 0, 0.2, C.stoneDark),
+    piece(around(0, 0, 0.04), 0.2, 2.5, C.brass),
+    piece({ x0: -0.3, y0: -0.04, x1: 0.3, y1: 0.04 }, 2.4, 2.5, C.brass),
+    piece(around(-0.27, 0, 0.05), 2.5, 3.1, C.bone),
+    piece(around(0, 0, 0.05), 2.5, 3.3, C.bone),
+    piece(around(0.27, 0, 0.05), 2.5, 3.1, C.bone),
+  ]);
+  for (const [x, z] of [[-0.27, 3.1], [0, 3.3], [0.27, 3.1]] as const) {
+    const [fx, fy] = P(x, 0, z);
+    g.ellipse(fx, fy - 4, 2.6, 4.6).fill(C.pumpkin);
+    g.ellipse(fx, fy - 3, 1.2, 2.6).fill(C.pumpkinFace);
+  }
+  disc(g, 0, 0, 3.4, 34, 24, C.lampGlow, 0.1);
+};
+
+const floorTorch: Recipe = (g) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.2), 0, 0.2, C.stoneDark),
+    piece(around(0, 0, 0.05), 0.2, 3.7, C.woodDark),
+    piece(around(0, 0, 0.2), 3.7, 4.3, C.metal),
+  ]);
+  const [fx, fy] = P(0, 0, 4.3);
+  g.poly([fx - 8, fy, fx - 2, fy - 18, fx, fy - 26, fx + 3, fy - 16, fx + 8, fy]).fill(C.pumpkin);
+  g.poly([fx - 4, fy, fx, fy - 15, fx + 4, fy]).fill(C.pumpkinFace);
+  disc(g, 0, 0, 4.9, 38, 28, C.pumpkin, 0.1);
+};
+
+const lavaLamp: Recipe = (g) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.2), 0, 0.5, C.metal),
+    piece(around(0, 0, 0.13), 0.5, 2.0, C.lavaGlass),
+    piece(around(0, 0, 0.09), 2.0, 2.4, C.metal),
+  ]);
+  const [bx, by] = P(0, 0, 1.0);
+  g.ellipse(bx - 1, by, 4.5, 6).fill(C.lava);
+  const [cx, cy] = P(0, 0, 1.6);
+  g.ellipse(cx + 1, cy, 3, 4).fill(C.lava);
+  disc(g, 0, 0, 1.4, 22, 16, C.lava, 0.08);
+};
+
+const crystalBall: Recipe = (g) => {
+  drawBoxes(g, [piece(around(0, 0, 0.22), 0, 0.5, C.stoneDark), piece(around(0, 0, 0.14), 0.5, 0.8, C.brass)]);
+  const [bx, by] = P(0, 0, 1.6);
+  g.circle(bx, by, 12).fill(shade(C.glass, 0.55));
+  g.circle(bx, by, 10).fill(C.glassDark);
+  g.circle(bx - 3, by - 3, 4).fill({ color: C.glass, alpha: 0.7 });
+  g.circle(bx + 3, by + 3, 2).fill({ color: C.rune, alpha: 0.9 });
+  disc(g, 0, 0, 1.6, 30, 22, C.rune, 0.1);
+};
+
+const fern: Recipe = (g) => {
+  drawBoxes(g, [piece(around(0, 0, 0.22), 0, 0.9, C.pot)]);
+  const [bx, by] = P(0, 0, 0.9);
+  const fronds: [number, number, number, number, number][] = [
+    [-14, -10, 12, 6, C.leafDark],
+    [14, -10, 12, 6, C.leafDark],
+    [0, -26, 6, 16, C.leafDark],
+    [-8, -22, 5, 12, C.leafLight],
+    [9, -21, 5, 12, C.leafLight],
+    [-16, -20, 8, 5, C.leafLight],
+    [16, -19, 8, 5, C.leafLight],
+  ];
+  for (const [dx, dy, rx, ry, colour] of fronds) g.ellipse(bx + dx, by + dy, rx, ry).fill(colour);
+};
+
+const palm: Recipe = (g) => {
+  drawBoxes(g, [piece(around(0, 0, 0.24), 0, 0.9, C.pot), piece(around(0, 0, 0.05), 0.9, 4.6, C.woodDark)]);
+  const [tx, ty] = P(0, 0, 4.6);
+  const leaf = (dx: number, dy: number, colour: number) => g.poly([tx, ty, tx + dx * 0.5, ty + dy - 8, tx + dx, ty + dy, tx + dx * 0.45, ty + dy * 0.2 + 4]).fill(colour);
+  leaf(-34, 4, C.leafDark);
+  leaf(34, 4, C.leafDark);
+  leaf(-22, -14, C.leafLight);
+  leaf(22, -14, C.leafLight);
+  leaf(-10, 14, C.leafDark);
+  leaf(10, 14, C.leafDark);
+  g.ellipse(tx, ty - 4, 7, 9).fill(C.leafLight);
+};
+
+const cactus: Recipe = (g) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.2), 0, 0.8, C.pot),
+    piece(around(0, 0, 0.14), 0.8, 2.8, C.cactus),
+    piece({ x0: -0.34, y0: -0.06, x1: -0.1, y1: 0.06 }, 1.5, 1.75, C.cactus),
+    piece({ x0: -0.34, y0: -0.06, x1: -0.22, y1: 0.06 }, 1.75, 2.4, C.cactus),
+    piece({ x0: 0.1, y0: -0.06, x1: 0.32, y1: 0.06 }, 1.9, 2.15, C.cactus),
+    piece({ x0: 0.2, y0: -0.06, x1: 0.32, y1: 0.06 }, 2.15, 2.7, C.cactus),
+  ]);
+  const [fx, fy] = P(0, 0, 2.8);
+  g.circle(fx, fy - 2, 3.5).fill(C.lava);
+};
+
+const bonsai: Recipe = (g, c) => {
+  drawBoxes(g, [piece(full(c, 0.22), 0, 0.35, C.stone), piece(around(0, 0, 0.05), 0.35, 1.2, C.woodDark)]);
+  const [bx, by] = P(0, 0, 1.4);
+  g.ellipse(bx - 8, by + 2, 11, 7).fill(C.leafDark);
+  g.ellipse(bx + 8, by, 11, 7).fill(C.leafDark);
+  g.ellipse(bx, by - 7, 12, 8).fill(C.leafLight);
+  g.ellipse(bx - 3, by - 9, 6, 4).fill(shade(C.leafLight, 1.2));
+};
+
+const gravestone: Recipe = (g) => {
+  drawBoxes(g, [piece({ x0: -0.34, y0: -0.16, x1: 0.34, y1: 0.16 }, 0, 0.3, C.stoneDark), piece({ x0: -0.26, y0: -0.07, x1: 0.26, y1: 0.07 }, 0.3, 2.6, C.stone)]);
+  const [tx, ty] = P(0, 0, 2.6);
+  g.ellipse(tx, ty, 17, 5).fill(C.stone);
+  // A cross carved into the south face.
+  const bar = (x0: number, x1: number, z0: number, z1: number) => fillPoly(g, [P(x0, 0.07, z0), P(x1, 0.07, z0), P(x1, 0.07, z1), P(x0, 0.07, z1)], C.stoneDark);
+  bar(-0.03, 0.03, 0.8, 2.1);
+  bar(-0.13, 0.13, 1.6, 1.74);
+};
+
+const coffin: Recipe = (g, c) => {
+  const f = full(c, 0.1);
+  const lid = full(c, 0.18);
+  const stripe = shrinkLong(full(c, 0.4), 0.25);
+  drawBoxes(g, [piece(f, 0, 1.4, C.woodDark), piece(lid, 1.4, 1.7, C.wood), piece(stripe, 1.7, 1.75, C.brass)]);
+};
+
+const cauldron: Recipe = (g) => {
+  disc(g, 0, 0, 0, 26, 13, PALETTE.shadow, 0.35);
+  drawBoxes(g, [piece(around(0, 0, 0.3), 0.2, 1.5, C.stoneDark)]);
+  disc(g, 0, 0, 1.55, 25, 13, C.metal);
+  disc(g, 0, 0, 1.5, 20, 10, C.potion);
+  disc(g, -0.1, 0, 1.52, 6, 3, shade(C.potion, 1.3));
+  const [bx, by] = P(0.12, 0.05, 1.7);
+  g.circle(bx, by, 2.5).fill({ color: shade(C.potion, 1.4), alpha: 0.9 });
+  g.circle(bx - 12, by - 6, 1.8).fill({ color: shade(C.potion, 1.4), alpha: 0.7 });
+  disc(g, 0, 0, 2.0, 30, 18, C.potion, 0.1);
+};
+
+const skeleton: Recipe = (g) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.26), 0, 0.2, C.stoneDark),
+    piece({ x0: -0.14, y0: -0.04, x1: -0.06, y1: 0.04 }, 0.2, 1.7, C.bone),
+    piece({ x0: 0.06, y0: -0.04, x1: 0.14, y1: 0.04 }, 0.2, 1.7, C.bone),
+    piece(around(0, 0, 0.035), 1.7, 3.5, C.bone),
+    piece({ x0: -0.17, y0: -0.04, x1: 0.17, y1: 0.04 }, 2.2, 2.3, C.bone),
+    piece({ x0: -0.2, y0: -0.04, x1: 0.2, y1: 0.04 }, 2.6, 2.7, C.bone),
+    piece({ x0: -0.23, y0: -0.04, x1: 0.23, y1: 0.04 }, 3.0, 3.1, C.bone),
+  ]);
+  const [sx, sy] = P(0, 0, 3.5);
+  g.circle(sx, sy - 7, 7.5).fill(shade(C.bone, 1.1));
+  g.rect(sx - 4, sy - 2, 8, 4).fill(shade(C.bone, 0.9));
+  g.circle(sx - 2.8, sy - 8, 1.8).fill(C.ink);
+  g.circle(sx + 2.8, sy - 8, 1.8).fill(C.ink);
+};
+
+/** A flat rug with a border and a rune circle. Walkable: avatars stand on it. */
+const runeRug: Recipe = (g, c) => {
+  const f = full(c, 0.06);
+  const quad = (r: Rect): Pt[] => [P(r.x0, r.y0, 0.05), P(r.x1, r.y0, 0.05), P(r.x1, r.y1, 0.05), P(r.x0, r.y1, 0.05)];
+  fillPoly(g, quad(f), C.cloth);
+  fillPoly(g, quad(full(c, 0.2)), C.ink);
+  strokePoly(g, quad(full(c, 0.2)), C.rune, 1);
+  const m = centreOf(f);
+  const [sx, sy] = P(m.x, m.y, 0.05);
+  g.ellipse(sx, sy, 30, 15).stroke({ color: C.rune, width: 2, alpha: 0.9 });
+  g.ellipse(sx, sy, 14, 7).stroke({ color: C.rune, width: 1, alpha: 0.8 });
+  g.poly([sx, sy - 7, sx + 5, sy, sx, sy + 7, sx - 5, sy]).fill({ color: C.rune, alpha: 0.9 });
+};
+
+/** A plaque on the wall, drawn only when it faces the camera (south or east). */
+function plaque(c: RecipeCtx, depth = 0.1): Rect {
+  return backRect(c, depth, 0.04);
+}
+
+const wallClock: Recipe = (g, c) => {
+  const slab = shrinkLong(plaque(c), 0.12);
+  drawBoxes(g, [piece(slab, 1.4, 3.6, C.woodDark)]);
+  const face = frontFace(c, slab, 0.1, 0.9, 1.6, 3.4);
+  if (face) fillPoly(g, face, C.parchment);
+  for (const [u0, u1, z0, z1] of [
+    [0.46, 0.54, 2.5, 3.15],
+    [0.5, 0.74, 2.46, 2.56],
+    [0.44, 0.56, 1.7, 1.8],
+    [0.44, 0.56, 3.2, 3.3],
+  ] as const) {
+    const hand = frontFace(c, slab, u0, u1, z0, z1);
+    if (hand) fillPoly(g, hand, C.ink);
+  }
+};
+
+const moonPoster: Recipe = (g, c) => {
+  const slab = plaque(c, 0.08);
+  drawBoxes(g, [piece(slab, 1.2, 3.9, C.woodDark)]);
+  const paper = frontFace(c, slab, 0.08, 0.92, 1.4, 3.7);
+  if (paper) fillPoly(g, paper, C.ink);
+  const moon = frontFace(c, slab, 0.3, 0.7, 2.1, 3.2);
+  if (moon) fillPoly(g, moon, C.lampGlow);
+  for (const [u, z] of [[0.16, 3.3], [0.8, 3.2], [0.2, 1.7], [0.76, 1.8]] as const) {
+    const star = frontFace(c, slab, u, u + 0.06, z, z + 0.14);
+    if (star) fillPoly(g, star, C.screen);
+  }
+};
+
+const tallMirror: Recipe = (g, c) => {
+  const slab = shrinkLong(plaque(c), 0.1);
+  drawBoxes(g, [piece(slab, 0.6, 4.6, C.brass)]);
+  const glass = frontFace(c, slab, 0.12, 0.88, 0.9, 4.3);
+  if (glass) fillPoly(g, glass, C.glassDark);
+  const shine = frontFace(c, slab, 0.2, 0.34, 2.6, 4.0);
+  if (shine) fillPoly(g, shine, C.glass, 0.55);
+};
+
+const banner: Recipe = (g, c) => {
+  const slab = shrinkLong(plaque(c, 0.08), 0.14);
+  drawBoxes(g, [piece(plaque(c, 0.1), 4.7, 4.9, C.brass), piece(slab, 1.4, 4.7, C.velvet)]);
+  const emblem = frontFace(c, slab, 0.28, 0.72, 2.7, 3.7);
+  if (emblem) fillPoly(g, emblem, C.pumpkin);
+  const stripe = frontFace(c, slab, 0.1, 0.9, 1.7, 1.9);
+  if (stripe) fillPoly(g, stripe, C.brass);
+};
+
+/** The shop counter in the lobby: a wooden counter with a till, a stack of coins and a striped awning. */
+const shopCounter: Recipe = (g, c) => {
+  const body = full(c, 0.05);
+  const top = full(c, 0.02);
+  const back = backRect(c, 0.5, 0.05);
+  const [a, b] = endsOf(back, 0.1);
+  const [s0, s1] = endsOf(shrinkLong(back, 0), 0.5);
+  const till = alongOf(top, 0.22);
+  const coins = alongOf(top, 0.72);
+  drawBoxes(g, [
+    piece(body, 0, 1.5, C.wood),
+    piece(top, 1.5, 1.7, C.woodDark),
+    piece(around(till.x, till.y, 0.16), 1.7, 2.0, C.metal),
+    piece(around(coins.x, coins.y, 0.1), 1.7, 2.0, C.brass),
+    piece(around(coins.x, coins.y, 0.1), 2.0, 2.05, C.pumpkin),
+    piece(a, 1.7, 2.3, C.woodDark),
+    piece(b, 1.7, 2.3, C.woodDark),
+    piece(s0, 2.3, 2.45, C.pumpkin),
+    piece(s1, 2.3, 2.45, C.web),
+  ]);
+};
+
 export const RECIPES: Readonly<Record<string, Recipe>> = {
   computer_desk: desk(C.deskArchitect),
   agent_desk: desk(C.wood),
@@ -417,4 +766,30 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   sofa,
   jack_o_lantern_lamp: jackOLanternLamp,
   cobweb,
+  shop_counter: shopCounter,
+  armchair,
+  bench,
+  beanbag,
+  throne,
+  side_table: sideTable,
+  coffee_table: coffeeTable,
+  round_table: roundTable,
+  potion_bar: potionBar,
+  candelabra,
+  floor_torch: floorTorch,
+  lava_lamp: lavaLamp,
+  crystal_ball: crystalBall,
+  fern,
+  palm,
+  cactus,
+  bonsai,
+  gravestone,
+  coffin,
+  cauldron,
+  skeleton,
+  rune_rug: runeRug,
+  wall_clock: wallClock,
+  moon_poster: moonPoster,
+  tall_mirror: tallMirror,
+  banner,
 };

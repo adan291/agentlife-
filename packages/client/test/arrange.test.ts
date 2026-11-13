@@ -449,6 +449,7 @@ describe("the arrange bar", () => {
     const b = createArrangeBar(doc as unknown as Document, host as unknown as HTMLElement, {
       rotate: () => calls.push("rotate"),
       undo: () => calls.push("undo"),
+      pickUp: () => calls.push("pickUp"),
       reset: () => calls.push("reset"),
       done: () => calls.push("done"),
     });

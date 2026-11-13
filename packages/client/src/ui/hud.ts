@@ -1,6 +1,7 @@
 import type { ConnectionStatus } from "../transport.ts";
 import { UI_COLOURS } from "./theme.ts";
 import { inTextField, isPaletteKey, isViewKey, otherView } from "./view-mode.ts";
+import { balanceText } from "./wallet.ts";
 import type { ViewMode } from "./view-mode.ts";
 
 const CSS = `
@@ -14,6 +15,8 @@ const CSS = `
 .al-floor-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${UI_COLOURS.accentText}; font-weight: bold; }
 .al-floor-label[hidden] { display: none; }
 .al-shell[data-compact="true"] .al-floor-label { display: none; }
+.al-balance { position: absolute; z-index: 11; top: var(--al-s2); left: var(--al-s2); padding: var(--al-s1) var(--al-s3); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); pointer-events: none; }
+.al-balance[hidden] { display: none; }
 .al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
 .al-arrange-open { position: absolute; z-index: 11; top: var(--al-s2); right: var(--al-s2); }
@@ -40,6 +43,8 @@ export interface HudMounts {
 export interface Hud {
   setStatus(status: ConnectionStatus): void;
   setZoomLabel(zoom: number): void;
+  /** The Ecto balance, in the top left corner of the stage. `null` hides it (no economy: the recorded demo, the scripted engine). */
+  setBalance(balance: number | null): void;
   toast(text: string, ms?: number): void;
   /** Persistent line at the top of the stage (null hides it). */
   setNotice(text: string | null): void;
@@ -134,6 +139,17 @@ export function createHud(
   floor.hidden = true;
   mounts.left.appendChild(floor);
 
+  const balance = document.createElement("span");
+  balance.className = "al-hud al-balance";
+  balance.hidden = true;
+  balance.setAttribute("role", "status");
+  const balanceNum = document.createElement("span");
+  const balanceWord = document.createElement("span");
+  balanceWord.textContent = " Ecto";
+  balance.append(balanceNum, balanceWord);
+  // On the stage, not in the top bar: the bar has no room for one more chip without taking the labels from the stepper.
+  mounts.stage.appendChild(balance);
+
   const notice = document.createElement("div");
   notice.className = "al-hud al-notice";
   notice.setAttribute("role", "status");
@@ -196,6 +212,14 @@ export function createHud(
       arrangeButton.hidden = !available;
       arrangeButton.setAttribute("aria-pressed", String(active));
       arrangeButton.dataset["active"] = String(active);
+    },
+    setBalance(value) {
+      balance.hidden = value === null;
+      if (value === null) return;
+      const text = balanceText(value);
+      balanceNum.textContent = String(value);
+      balance.title = text;
+      balance.setAttribute("aria-label", text);
     },
     toast(text, ms = 2500) {
       toast.textContent = text;

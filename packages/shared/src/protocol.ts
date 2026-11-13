@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ACTIVITY_TEXT_MAX, AgentStateSchema, AgentWorkSchema, ApprovalDecisionSchema, JobStateSchema, StepNameSchema } from "./events.ts";
 import { BranchesResponseSchema, JobDetailsSchema, VerdictSchema } from "./engine-api.ts";
 import { BuildBoardSchema, BuildReportSchema, SpecNameSchema } from "./build.ts";
+import { BALANCE_MAX, GRANT_AMOUNT_MAX, GrantReasonSchema } from "./economy.ts";
 import { FloorStatusSchema } from "./floors.ts";
 import { HrActionSchema, HrStateSchema, TeamSuggestionSchema, TeamViewGuestSchema, TeamViewMemberSchema } from "./hr.ts";
 import { JOB_TARGET_MAX_CHARS, JobKindSchema, targetProblem } from "./job-kinds.ts";
@@ -11,6 +12,7 @@ import { MemoryActionSchema, MemoryStateSchema } from "./memory.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { OverviewFloorSchema, ShowablePanelSchema } from "./overview.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
+import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, AnchorSchema, GuestIdSchema, PlacedFurniSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
 
@@ -27,7 +29,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent and guest ids are strings, so they never collide. */
@@ -140,6 +142,7 @@ export const ErrorCodeSchema = z.enum([
   "memory_error",
   "pipeline_error",
   "layout_error",
+  "shop_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -229,6 +232,17 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("furni_move"), itemId: z.string().min(1).max(100), ...PlacementSchema.shape }),
   /** Arrange mode: every piece back where the template has it. Answered like `furni_move`. */
   z.object({ type: z.literal("furni_reset") }),
+  /**
+   * Arrange mode: stand one bought item of the inventory on the floor you stand on (furni-shop). The same checks as a move.
+   * Answered with `room_layout` and `shop` (the stock), or `error` `layout_error` with the reason (nothing changes).
+   */
+  z.object({ type: z.literal("furni_place"), itemId: CatalogueItemIdSchema, ...PlacementSchema.shape }),
+  /** Arrange mode: take a bought piece off the floor back into the inventory. Answered like `furni_place`. The pieces of the template cannot be picked up. */
+  z.object({ type: z.literal("furni_pickup"), itemId: z.string().min(1).max(100) }),
+  /** Shop: ask for the catalogue, the balance and the stock. Answered with `shop` (on any floor: the inventory tray needs it too). */
+  z.object({ type: z.literal("shop_state") }),
+  /** Shop counter (lobby): buy one item. Answered with `wallet` and `shop`, or `error` `shop_error` with the reason (nothing changes). */
+  z.object({ type: z.literal("shop_buy"), itemId: CatalogueItemIdSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -322,6 +336,17 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     furni: z.array(PlacedFurniSchema).max(200),
     anchors: z.array(AnchorSchema).max(100),
   }),
+  /**
+   * The Ecto balance of the user. Sent after every `welcome` and after a grant (`grant` says what was earned, for the
+   * toast) or a purchase (no `grant`). Never sent when the hotel has no economy (fake engine).
+   */
+  z.object({
+    type: z.literal("wallet"),
+    balance: z.number().int().min(0).max(BALANCE_MAX),
+    grant: z.object({ amount: z.number().int().min(1).max(GRANT_AMOUNT_MAX), reason: GrantReasonSchema }).optional(),
+  }),
+  /** The shop: catalogue, balance and stock. */
+  z.object({ type: z.literal("shop"), state: ShopStateSchema }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
