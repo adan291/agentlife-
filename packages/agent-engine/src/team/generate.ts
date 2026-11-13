@@ -115,11 +115,11 @@ export async function writeAgentFile(file: AgentFile, opts: WriteAgentOptions): 
 
 /** A file of a team change that the check refused; `name` says which member it belongs to. */
 export class AgentFileRefusedError extends Error {
-  constructor(
-    readonly agentName: string,
-    cause: unknown,
-  ) {
+  readonly agentName: string;
+  // No parameter properties: the engine runs with --experimental-strip-types, which refuses them.
+  constructor(agentName: string, cause: unknown) {
     super(cause instanceof Error ? cause.message : String(cause));
+    this.agentName = agentName;
   }
 }
 
