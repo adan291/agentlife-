@@ -159,6 +159,9 @@ function newFloor(): Floor {
   };
 }
 
+/** Reports kept in a floor's mailbox; older ones remain in the engine and in the run folder. */
+export const MAILBOX_REPORTS_MAX = 10;
+
 export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const { hotel } = options;
   const clock = options.clock ?? Date.now;
@@ -885,7 +888,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           f.currentTaskId = ev.taskId;
           f.jobActive = true;
           f.approvals.clear();
-          f.reports.clear();
+          // Reports of earlier jobs stay in the mailbox (the newest MAILBOX_REPORTS_MAX); approvals belong to one job.
           f.works.clear();
           f.currentStep = undefined;
           f.verdicts.clear();
@@ -976,6 +979,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
             }
           }
           f.reports.set(r.reportId, r);
+          while (f.reports.size > MAILBOX_REPORTS_MAX) f.reports.delete(f.reports.keys().next().value!);
           // Unread until the user opens the mailbox on this floor; a report that arrives while the user reads it counts as read.
           f.unread = r.verdict === "fail" ? "failed" : "report_ready";
           toUser(roomId, { type: "report", report: r });
