@@ -11,12 +11,12 @@ import {
   type TierId,
   type UpdateMemberBody,
 } from "@agentlife/shared";
-import { agentName } from "../agents.ts";
+import { agentName, type AgentFile } from "../agents.ts";
 import { ConflictError, NotFoundError } from "../errors.ts";
 import { BadRequestError } from "../http/server.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import type { Catalogue } from "./catalogue.ts";
-import { AGENT_NAME_RE, agentFileFor, ROLE_INSTRUCTIONS, writeAgentFile, type AgentValidator } from "./generate.ts";
+import { AGENT_NAME_RE, AgentFileRefusedError, agentFileFor, ROLE_INSTRUCTIONS, writeAgentFile, writeAgentFiles, type AgentValidator } from "./generate.ts";
 import { INTERN_FALLBACK_MODEL } from "./intern.ts";
 import type { ModelDirectory } from "./models.ts";
 import type { TeamStore } from "./store.ts";
@@ -218,14 +218,11 @@ export class TeamService implements TeamResolver {
     return template.runtime === "ollama" ? INTERN_FALLBACK_MODEL : member.model;
   }
 
-  private async fileFor(projectId: string, member: TeamMember): Promise<void> {
-    const agents = this.o.agents;
-    if (!agents) return;
+  private fileFor(projectId: string, member: TeamMember): AgentFile {
     const template = this.o.catalogue.get(member.templateId);
     if (!template) throw new NotFoundError("unknown template");
     const spec = { agentName: `${projectId}-${member.id}`, model: this.fileModel(template, member) };
-    const file = agentFileFor(spec, template, this.o.tiers[tierForRole(member.role)]);
-    await writeAgentFile(file, { kiroHome: agents.kiroHome, ...(agents.validate ? { validate: agents.validate } : {}) });
+    return agentFileFor(spec, template, this.o.tiers[tierForRole(member.role)]);
   }
 
   /** Writes the agent files of the whole team, then stores it. A file that is refused stops the change. */
@@ -236,13 +233,17 @@ export class TeamService implements TeamResolver {
         throw new ConflictError("project_id_reserved", "This project's id cannot be used for a custom team.");
       }
     }
-    for (const m of members) {
+    const agents = this.o.agents;
+    if (agents) {
+      // Every file is checked before any is moved, so a refused file leaves the whole team's agents as they were.
+      const files = members.map((m) => this.fileFor(projectId, m));
       try {
-        await this.fileFor(projectId, m);
+        await writeAgentFiles(files, { kiroHome: agents.kiroHome, ...(agents.validate ? { validate: agents.validate } : {}) });
       } catch (e) {
-        if (e instanceof NotFoundError || e instanceof ConflictError) throw e;
-        this.log.warn("agent file refused", { projectId, member: m.id, error: e instanceof Error ? e.message : String(e) });
-        throw new ConflictError("agent_file_refused", `The agent file for ${m.displayName} was refused: ${e instanceof Error ? e.message : "unknown error"}`);
+        const who = e instanceof AgentFileRefusedError ? members.find((m) => `${projectId}-${m.id}` === e.agentName) : undefined;
+        const error = e instanceof Error ? e.message : String(e);
+        this.log.warn("agent file refused", { projectId, member: who?.id, error });
+        throw new ConflictError("agent_file_refused", `The agent file for ${who?.displayName ?? "a team member"} was refused: ${error || "unknown error"}`);
       }
     }
     this.o.store.set(projectId, members);
@@ -368,7 +369,7 @@ export class TeamService implements TeamResolver {
       if (!f.endsWith(".json")) continue;
       const base = f.slice(0, -".json".length);
       if (expected.has(base)) continue;
-      const stale = projects.some((p) => new RegExp(`^${p}-(architect|developer|qa|reviewer|researcher)(-[0-9a-f]+)?$`).test(base));
+      const stale = projects.some((p) => new RegExp(`^${escapeRegExp(p)}-(architect|developer|qa|reviewer|researcher)(-[0-9a-f]+)?$`).test(base));
       if (stale) {
         rmSync(path.join(dir, f), { force: true });
         removed += 1;
@@ -376,4 +377,9 @@ export class TeamService implements TeamResolver {
     }
     return { written, removed };
   }
+}
+
+/** A project id as literal text inside a regular expression (ids are checked elsewhere; this keeps the match literal anyway). */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

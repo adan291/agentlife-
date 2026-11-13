@@ -159,7 +159,7 @@ export class PanelState {
       case "job_update":
         if (this.data.job && this.data.job.taskId !== msg.job.taskId) {
           this.data.approvals = [];
-          this.data.reports = [];
+          // Reports of earlier jobs on this floor stay in the mailbox; the server keeps the newest ten.
           this.data.details = null;
           this.viewing = null;
         }

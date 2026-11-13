@@ -218,7 +218,25 @@ describe("gateway with the fake engine", () => {
     expect(again.resend).toBe(true);
   });
 
-  it("answers job_details with the steps and the artifact contents", async () => {
+  it("keeps the reports of earlier jobs in the mailbox when a new job starts", async () => {
+    const c = await setup();
+    const run = async (goal: string) => {
+      c.send({ type: "start_job", repoId: "haunted-todo", goal });
+      const a = await c.next((m) => m.type === "approval" && m.approval.status === "pending");
+      if (a.type !== "approval") throw new Error("unreachable");
+      c.send({ type: "approve", approvalId: a.approval.approvalId, decision: "approve" });
+      await c.next((m) => m.type === "report" && m.report.taskId === a.approval.taskId);
+      await c.next((m) => m.type === "job_update" && m.job.taskId === a.approval.taskId && m.job.state === "delivered");
+      return a.approval.taskId;
+    };
+    const first = await run("first job");
+    const second = await run("second job");
+    c.received.length = 0;
+    c.send({ type: "use", itemId: "mailbox_1" });
+    await c.next((m) => m.type === "open_panel" && m.panel === "mailbox", 4000);
+    const ids = c.received.filter((m) => m.type === "report").map((m) => (m.type === "report" ? m.report.taskId : ""));
+    expect(ids).toEqual(expect.arrayContaining([first, second]));
+  });  it("answers job_details with the steps and the artifact contents", async () => {
     const c = await setup();
     c.send({ type: "start_job", repoId: "haunted-todo", goal: "fix it" });
     const approval = await c.next((m) => m.type === "approval" && m.approval.status === "pending");

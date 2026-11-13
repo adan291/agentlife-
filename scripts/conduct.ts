@@ -11,7 +11,8 @@
 // Specs marked `live` get their human checks queued in docs/HUMAN-CHECKS.md and the conductor carries on.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -132,6 +133,23 @@ function fixSession(spec: string, round: number): void {
   if (r.code !== 0) stop(`fix session for ${spec} failed`);
 }
 
+/** Standard output of a git command only (a missing stage gives an empty text, not the error). */
+function gitOut(a: string[]): string {
+  return spawnSync("git", a, { cwd: ROOT, encoding: "utf8", env: GIT_ENV, windowsHide: true, maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
+}
+/** Rewrites a conflicted docs/STATUS.md as the union of both sides (`git merge-file --union` over the three stages). */
+function unionStatus(): void {
+  const dir = mkdtempSync(join(tmpdir(), "al-status-"));
+  const stage = (n: number) => {
+    const file = join(dir, `s${n}.md`);
+    writeFileSync(file, gitOut(["show", `:${n}:docs/STATUS.md`]));
+    return file;
+  };
+  const [base, ours, theirs] = [stage(1), stage(2), stage(3)];
+  const merged = gitOut(["merge-file", "-p", "--union", ours, base, theirs]);
+  writeFileSync(join(ROOT, "docs", "STATUS.md"), merged);
+  rmSync(dir, { recursive: true, force: true });
+}
 function merge(spec: string): void {
   const branch = branchOf(spec);
   reportPhase("merge");
@@ -139,9 +157,10 @@ function merge(spec: string): void {
   const m = sh("git", ["merge", "--no-ff", branch, "-m", `merge: ${spec}`]);
   if (m.code !== 0) {
     const conflicts = sh("git", ["diff", "--name-only", "--diff-filter=U"]).out.trim().split("\n").filter(Boolean);
-    // STATUS.md is the only file both sides edit routinely: keep the branch's notes.
+    // STATUS.md is the only file both sides edit routinely: keep the lines of both (main's chat notes and the branch's
+    // session notes). A union merge can repeat a heading line; the next session tidies the file.
     if (conflicts.length === 1 && conflicts[0] === "docs/STATUS.md") {
-      sh("git", ["checkout", "--theirs", "docs/STATUS.md"]);
+      unionStatus();
       sh("git", ["add", "docs/STATUS.md"]);
       sh("git", ["commit", "-q", "--no-edit"]);
     } else {
