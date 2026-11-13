@@ -87,3 +87,9 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Actions button at the bottom left of the stage: closed by default, opens upwards with Wave, Dance, Cheer and Sit down and their keys. Keys 1 to 4 still work with it closed. After sitting it reads Stand up and Dance is greyed. Look at it with the dock open and closed.
 - [ ] Builder after a dead build session: stop the conductor in the middle of a session and wait 10 minutes; the Builder ghost and its row should go back to idle (also after reloading the page or restarting the world-server).
 - [ ] The HR agent stands on a spot no piece can cover (the dots in edit mode); the lobby Builder's desk takes its seat when moved.
+
+## ui-tidy (merged 2026-11-13)
+- [ ] Look at the top bar, Menu, Edit room banner and Actions menu in a real browser (not only Edge under Playwright) at about 360, 800 and 1366 px. Check that nothing looks cramped or cut. The tests check bounds and overflow, not appearance.
+- [ ] Try Edit room in the lobby and the HR office by hand: move, turn with R, reset, reload. Confirm refusal messages read clearly and the elevator and doors cannot move.
+- [ ] With the real engine, stop a `pnpm session` mid-run and confirm the Builder ghost and its team row go idle after 10 minutes. Tests use short timeouts.
+- [ ] Confirm the HR ghost still stands at the HR desk after the `home_hr` anchor change (design says tile 7,1).
