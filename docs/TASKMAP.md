@@ -18,13 +18,16 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 8 | `list-mode` | S26 | no | done | List view and command palette for daily use |
 | 9 | `pipeline-editor` | S19 | no | done | Choose and order roles per project with fixed safety rules |
 | 10 | `furni-move` | S27 S28 | yes | todo | Better default floor layout; move and rotate furniture on a project floor, saved and checked by the server |
-| 11 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
+| 11 | `furni-shop` | S29 S30 | yes | todo | Housing: Ecto earned from real work, shop in the lobby, inventory, place bought furniture |
+| 12 | `team-progress` | S31 | yes | todo | RPG: XP and levels from real stats, badges, daily quests |
+| 13 | `waiting-fun` | S32 | yes | todo | While you wait: catch wisps, sit and emotes, ghost mood with a coffee machine |
+| 14 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
 
-Dependencies: 2 needs 1; 3 needs 2; 4, 5, 6, 7 need 2; 5 needs 4; 8 needs 4 and 5; 9 needs 6. The order above respects them.
+Dependencies: 2 needs 1; 3 needs 2; 4, 5, 6, 7 need 2; 5 needs 4; 8 needs 4 and 5; 9 needs 6; 10 needs 2; 11 needs 10; 12 needs 11 and 6; 13 needs 12. Rows 11-13 are the game layer (user, 2026-11-13): rewards come only from verified engine events, granted by the world-server; the game never changes what agents do or their permissions. The order above respects them.
 
-Cut order if late (freeze 2026-12-01): 9, then 8, then 7. Never cut 1, 2, 4, 5 or 10.
+Cut order if late (freeze 2026-12-01): 13, then 12, then 9, then 8, then 7. Never cut 1, 2, 4, 5 or 10.
 
 ## Agents
 

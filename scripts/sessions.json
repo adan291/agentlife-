@@ -245,6 +245,34 @@
       "model": "claude-sonnet-5.5",
       "effort": "high",
       "prompt": "Implement task 3 of the furni-move spec (.kiro/specs/furni-move), following its design.md. Follow workflow.md."
+    },
+    {
+      "id": "S29",
+      "spec": "furni-shop",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement tasks 1 and 2 of the furni-shop spec (.kiro/specs/furni-shop). Write its design.md first (wallet and grant rules, idempotency, catalogue format, message shapes). All art is drawn in code like the existing furniture; nothing from Habbo. Follow workflow.md."
+    },
+    {
+      "id": "S30",
+      "spec": "furni-shop",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 3 of the furni-shop spec (.kiro/specs/furni-shop), following its design.md. Follow workflow.md."
+    },
+    {
+      "id": "S31",
+      "spec": "team-progress",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement tasks 1 and 2 of the team-progress spec (.kiro/specs/team-progress). Write its design.md first. Reuse the furni-shop idempotent grant code. Follow workflow.md."
+    },
+    {
+      "id": "S32",
+      "spec": "waiting-fun",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement tasks 1 and 2 of the waiting-fun spec (.kiro/specs/waiting-fun). Write its design.md first. Follow workflow.md."
     }
   ]
 }
