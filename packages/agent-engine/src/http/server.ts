@@ -128,7 +128,7 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
       method: "GET",
       pattern: /^\/health$/,
       handle: ({ res }) =>
-        sendJson(res, 200, HealthResponseSchema, { ok: true, protocol: PROTOCOL_VERSION, lastSeq: store.lastSeq() }),
+        sendJson(res, 200, HealthResponseSchema, { ok: true, protocol: PROTOCOL_VERSION, lastSeq: store.lastSeq(), restoreSeq: store.restoreSeq() }),
     },
     {
       method: "GET",

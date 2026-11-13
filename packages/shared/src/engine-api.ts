@@ -202,6 +202,11 @@ export const HealthResponseSchema = z.object({
   protocol: z.number().int().positive(),
   /** Highest event seq stored; clients that only want new events start `GET /events?since=` here. */
   lastSeq: z.number().int().nonnegative(),
+  /**
+   * A gateway that starts fresh replays from here to rebuild the mailboxes: the seq just before the `task.created` of
+   * the latest jobs of each project. Optional, so an older engine still works (the gateway then starts at `lastSeq`).
+   */
+  restoreSeq: z.number().int().nonnegative().optional(),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
