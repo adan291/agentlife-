@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-13 (furni-move merged; game layer specs furni-shop, team-progress, waiting-fun are next in the TASKMAP; main 26 commits ahead of origin)
+Updated: 2026-11-13 (furni-shop tasks 1 and 2 done on branch feat/furni-shop, not merged; task 3 is next; main 27 commits ahead of origin)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13.
 
@@ -22,7 +22,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-13 (IDE): the steering warned that workflow.md's reference to this file was cut (75 000 characters, budget 50 000). This file was split: the full old text is in docs/STATUS-history.md; workflow.md now asks sessions to keep it short. Conductor relaunched on rows 11-13.
 
 ## Next
-1. Conductor: furni-shop (S29, S30), team-progress (S31), waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
+1. Conductor: furni-shop task 3 (placing bought furniture, Playwright buy-place-reload), then team-progress (S31), waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md (25 open), including the furni-move arrange mode and new default layout.
 3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
 4. Push main when the user agrees (last push fbe1ceb).
@@ -43,11 +43,12 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | list-mode | 3 / 3 | main | Used once by the user (Deliver button) |
 | pipeline-editor | 3 / 3 | main | Researcher and second review not run live |
 | furni-move | 3 / 3 | main | Arrange button in the stage corner (requirement 2.1 reworded), D14; not looked at by the user |
-| furni-shop | 0 / 3 | — | Row 11 |
+| furni-shop | 2 / 3 | feat/furni-shop | Row 11. Wallet, grants, 25-item catalogue, shop counter and panel, buy. Chip with the balance is on the stage, not in the top bar (design.md). Browser tests of the shop pass (58 e2e). Not looked at by the user |
 | team-progress | 0 / 2 | — | Row 12 |
 | waiting-fun | 0 / 2 | — | Row 13 |
 
 ## Open problems
+- Playwright's own Chromium is not installed on this machine (`pnpm --filter @agentlife/client e2e` fails to launch it). Run `$env:E2E_CHANNEL='msedge'` first to use the installed Edge. Not installed by a session (global tool).
 - hr-desk D10 (docs/risks-and-decisions.md): import review by the read-only `agentlife-import-review` instead of `agentlife-security`. Explained to the user twice; waiting for a yes.
 - hr-desk review suggestions not done: escape project ids in the regex in `team/service.ts` (~336); stage all agent files before moving them in `commit`; show import flags as a warning on the approve button.
 - Mailbox shows only the latest report of a floor after a restart; older reports of the floor are not kept. Not investigated.

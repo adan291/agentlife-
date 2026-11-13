@@ -4,7 +4,7 @@
   - Shared schemas (wallet, ledger, catalogue item, messages); `config/economy.json`; world-server wallet store and idempotent grants from engine events; balance in the top bar and grant toast; property test
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.1_
 
-- [ ] 2. Catalogue, shop and inventory
+- [x] 2. Catalogue, shop and inventory
   - 24+ items with own art in the client renderer and `FURNI_CATALOG`; lobby `shop_counter` and Shop panel with pages and previews; buy message; inventory store; tests
   - _Requirements: 2.1, 2.2, 2.3, 4.2_
 

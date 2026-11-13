@@ -83,7 +83,10 @@ test.describe("the shop counter", () => {
     const shotDir = process.env["E2E_SHOT_DIR"];
     let items = 0;
     for (const name of ["Seating", "Tables", "Lights", "Plants", "Spooky", "Walls"]) {
-      await panel.getByRole("tab", { name }).click();
+      // The open page's tab is disabled (as in the HR and Library panels): click only the others.
+      const tab = panel.getByRole("tab", { name });
+      if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
       const cards = panel.locator(".al-shop-item");
       const count = await cards.count();
       expect(count, name).toBeGreaterThanOrEqual(4);
@@ -102,6 +105,7 @@ test.describe("the shop counter", () => {
 
     // A button the user cannot pay is disabled and says how much is missing (the wallet of this run may hold some Ecto: the dearest item is out of reach).
     await panel.getByRole("tab", { name: "Seating" }).click();
+    await expect(panel.getByRole("tab", { name: "Seating" })).toHaveAttribute("aria-selected", "true");
     const throne = panel.locator('.al-shop-item[data-item="throne"]').getByRole("button", { name: /^Buy Bone throne/ });
     await expect(throne).toBeVisible();
     await panel.getByRole("button", { name: "Close panel" }).click();
