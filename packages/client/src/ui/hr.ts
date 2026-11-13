@@ -1,6 +1,7 @@
 import { MemberNameSchema, SEATED_ROLES } from "@agentlife/shared";
-import type { CatalogueEntry, HrState, HrTeam, ImportView, TeamMember, TeamPick, TeamRole, TeamSuggestion } from "@agentlife/shared";
+import type { CatalogueEntry, EntityView, HrState, HrTeam, ImportView, TeamMember, TeamPick, TeamRole, TeamSuggestion } from "@agentlife/shared";
 import type { PanelContent } from "./computer.ts";
+import { levelLine, progressLines, statsLine } from "./progress.ts";
 
 /** The HR desk's actions, as the panel sends them (panels.ts turns them into `hr_do` messages). */
 export interface HrActions {
@@ -125,7 +126,7 @@ interface HireForm {
  * the imports waiting for the user's approval. The panel only sends what the user chose; the engine applies its rules
  * and answers with the new state. Form values and the open tab survive re-renders.
  */
-export function createHrPanel(doc: Document, actions: HrActions) {
+export function createHrPanel(doc: Document, actions: HrActions, progressOf?: (projectId: string, memberId: string) => EntityView | undefined) {
   let tab: HrTab = "teams";
   const forms = new Map<string, HireForm>();
   const renames = new Map<string, string>();
@@ -149,6 +150,13 @@ export function createHrPanel(doc: Document, actions: HrActions) {
     row.appendChild(head);
     const template = state.catalogue.find((c) => c.id === m.templateId);
     row.appendChild(el(doc, "p", "al-muted", `${template?.name ?? m.templateId} · ${m.model}`));
+    // Level and stats come from the real work this member did (team-progress); a member with no work yet is level 0.
+    const lv = progressOf?.(team.projectId, m.id);
+    if (lv) {
+      const line = el(doc, "p", "al-hr-level", `${levelLine(lv)} · ${statsLine(lv)}`);
+      line.title = progressLines(lv).join("\n");
+      row.appendChild(line);
+    }
 
     const key = `${team.projectId}/${m.id}`;
     const controls = el(doc, "div", "al-row al-wrap");

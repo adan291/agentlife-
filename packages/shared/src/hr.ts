@@ -103,6 +103,8 @@ export const TeamViewMemberSchema = z.object({
   agentId: SeatedRoleSchema,
   name: z.string().min(1).max(60),
   model: z.string().max(100).optional(),
+  /** The member's id (the role name for a desk nobody was hired for), so the client can look up its level. */
+  memberId: z.string().regex(MEMBER_ID_RE).optional(),
 });
 export type TeamViewMember = z.infer<typeof TeamViewMemberSchema>;
 
@@ -112,5 +114,6 @@ export const TeamViewGuestSchema = z.object({
   name: z.string().min(1).max(60),
   role: TeamRoleSchema,
   model: z.string().max(100).optional(),
+  memberId: z.string().regex(MEMBER_ID_RE).optional(),
 });
 export type TeamViewGuest = z.infer<typeof TeamViewGuestSchema>;

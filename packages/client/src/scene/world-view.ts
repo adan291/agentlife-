@@ -3,6 +3,7 @@ import type { Application, FederatedPointerEvent } from "pixi.js";
 import { FURNI_CATALOG, HEIGHT_UNIT, footprintTiles, isGuestId, isPinned, screenToTile, tileToScreen } from "@agentlife/shared";
 import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, RoomDef, ServerMsg, StaffId, Tile, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
 import { FloorPeople } from "./floor-people.ts";
+import { LevelUpFx } from "./levelup-fx.ts";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
 import { AvatarView } from "./avatar-view.ts";
@@ -44,6 +45,8 @@ export interface ArrangeInput {
 export const REPORT_DELIVERED_TEXT = "Report delivered";
 
 export interface WorldViewHooks {
+  /** Level and stats lines of the member who stands at a spot, for its tooltip. Absent or empty: none (no progress in the hotel). */
+  progressLines?(slot: StaffId): string[];
   /** Server `error` messages (no_path, rate_limited, ...). */
   onError?(code: ErrorCode, message: string): void;
   /** Receives hover targets for tooltips. */
@@ -109,6 +112,8 @@ export class WorldView {
   private readonly people = new FloorPeople();
   /** The HR agent behind its desk in the HR office; decorative, not part of the simulation. */
   private hrGhost: AvatarEntry | null = null;
+  /** Level-up effects that are playing, each over the ghost it was started for. */
+  private levelUps: { fx: LevelUpFx; slot: StaffId }[] = [];
   /** Slow wisps drifting through the room. */
   private motes: MoteLayer | null = null;
 
@@ -180,14 +185,25 @@ export class WorldView {
   }
 
   private agentTip(agent: StaffId) {
+    const extra = this.hooks.progressLines?.(agent) ?? [];
     if (isGuestId(agent)) {
       const g = this.people.guest(agent);
-      return guestTooltip(g?.name ?? "Team member", g ? roleLabel(g.role) : "Team member", g?.model);
+      return guestTooltip(g?.name ?? "Team member", g ? roleLabel(g.role) : "Team member", g?.model, extra);
     }
     const s = this.agentStatus.get(agent);
-    const tip = agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent));
+    const tip = agentTooltip(agent, s?.state, s?.text, this.models[agent], this.work.get(agent), Date.now(), extra);
     const name = this.seatNames.get(agent);
     return name && name !== tip.title ? { ...tip, title: `${name} (${tip.title})` } : tip;
+  }
+
+  /** Plays the level-up effect over the ghost at `slot`. Returns false when that ghost is not in the room. */
+  levelUp(slot: StaffId, now = Date.now()): boolean {
+    if (!this.avatars.has(slot)) return false;
+    const fx = new LevelUpFx(now);
+    fx.container.zIndex = 1e6;
+    this.overlays.addChild(fx.container);
+    this.levelUps.push({ fx, slot });
+    return true;
   }
 
   /** The HR agent thinks while it works out a proposal (the HR desk asked it). */
@@ -279,6 +295,12 @@ export class WorldView {
     for (const c of this.candles.values()) c.update(now, this.reducedMotion);
     for (const f of this.flames) f.update(now, this.reducedMotion);
     this.motes?.update(now, this.reducedMotion);
+    this.levelUps = this.levelUps.filter(({ fx, slot }) => {
+      const view = this.avatars.get(slot)?.view;
+      const alive = view ? fx.update(now, view.feetX, view.feetY, this.reducedMotion) : false;
+      if (!alive) fx.destroy();
+      return alive;
+    });
     for (const [id, entry] of this.avatars) {
       const { view, overlay } = entry;
       view.update(now);
@@ -462,6 +484,8 @@ export class WorldView {
     this.badge?.destroy();
     this.badge = null;
     this.hoveredItem = null;
+    for (const l of this.levelUps) l.fx.destroy();
+    this.levelUps = [];
     for (const { overlay } of this.avatars.values()) overlay.destroy();
     this.avatars.clear();
     this.hrGhost?.overlay.destroy();

@@ -108,6 +108,9 @@ export class PanelState {
         this.shop = msg.state;
         this.shopError = null;
         return this.open === "shop";
+      case "progress":
+        // The HR cards show levels; they are read through a hook, so the panel only needs to draw again.
+        return this.open === "hr";
       case "wallet":
         // A grant or a purchase changes the balance; the shop's header and its Buy buttons follow it.
         if (!this.shop || this.shop.balance === msg.balance) return false;

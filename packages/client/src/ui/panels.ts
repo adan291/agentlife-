@@ -1,4 +1,4 @@
-import type { ClientMsg, HrAction, MemoryAction, PanelName, ServerMsg } from "@agentlife/shared";
+import type { ClientMsg, EntityView, HrAction, MemoryAction, PanelName, ServerMsg } from "@agentlife/shared";
 import { approveMessage, deliverMessage, startJobMessage } from "./actions.ts";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
@@ -209,6 +209,8 @@ export interface PanelHooks {
   hrThinking?(): void;
   /** A picture of a piece of furniture drawn by the room's own renderer (a data URL), for the shop. */
   shopPreview?(defId: string): string | undefined;
+  /** Level and stats of a team member (team-progress), for the HR card; undefined when the hotel has no progress. */
+  memberProgress?(projectId: string, memberId: string): EntityView | undefined;
 }
 
 /**
@@ -316,7 +318,7 @@ export function createPanels(
       state.suggestion = null;
       hrAct({ action: "apply", projectId, picks });
     },
-  });
+  }, hooks.memberProgress);
 
   const root = document.createElement("div");
   root.className = "al-panel";

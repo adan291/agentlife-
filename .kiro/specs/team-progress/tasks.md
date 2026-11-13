@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. XP, levels and stats
+- [x] 1. XP, levels and stats
   - Shared schemas; `config/progress.json`; progress store and idempotent XP from engine events; level curve; team bar, tooltip and HR panel show level and stats; level-up effect; property test
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.1_
 

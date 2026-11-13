@@ -11,6 +11,7 @@ import { GOAL_MAX_CHARS } from "./limits.ts";
 import { MemoryActionSchema, MemoryStateSchema } from "./memory.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { OverviewFloorSchema, ShowablePanelSchema } from "./overview.ts";
+import { LevelUpMsgSchema, ProgressViewSchema } from "./progress.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
@@ -347,6 +348,13 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   }),
   /** The shop: catalogue, balance and stock. */
   z.object({ type: z.literal("shop"), state: ShopStateSchema }),
+  /**
+   * XP, levels and stats of the user and of the team members (team-progress). Sent after every `welcome` and after every
+   * fact that changed something. Never sent when the hotel has no progress (fake engine).
+   */
+  z.object({ type: z.literal("progress"), state: ProgressViewSchema }),
+  /** Somebody reached a new level: `slot` is the ghost on the user's floor to play the effect over, when there is one. */
+  LevelUpMsgSchema,
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

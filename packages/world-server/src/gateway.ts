@@ -12,6 +12,7 @@ import {
   PROTOCOL_VERSION,
   SEATED_ROLES,
   ServerMsgSchema,
+  memberKey,
   morningReportId,
   morningTitle,
   projectIdOfRoom,
@@ -32,6 +33,7 @@ import type {
   Hotel,
   HrAction,
   Layout,
+  LevelUp,
   MemoryAction,
   PipelineStep,
   JobKind,
@@ -40,6 +42,7 @@ import type {
   NightState,
   Placement,
   Project,
+  ProjectRole,
   RegisterProjectBody,
   Report,
   SeatedRole,
@@ -56,6 +59,9 @@ import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
 import type { Economy } from "./economy-store.ts";
 import { GrantTracker } from "./grants.ts";
+import { ProgressTracker } from "./progress-tracker.ts";
+import type { TrackedFact } from "./progress-tracker.ts";
+import type { ProgressStore } from "./progress-store.ts";
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
   analyzing: "analyze",
@@ -96,6 +102,11 @@ export interface GatewayOptions {
     Economy,
     "balance" | "grant" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
   >;
+  /**
+   * XP, levels and stats (team-progress). Without it the hotel has no progress: no `progress` message is sent and nothing
+   * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
+   */
+  progress?: Pick<ProgressStore, "record" | "view">;
 }
 
 export interface Gateway {
@@ -224,6 +235,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   // ---- Ecto: grants from verified events (furni-shop) ----
 
   const economy = options.economy;
+  const progress = options.progress;
   const grantTracker = new GrantTracker();
   /**
    * Counts a grant once (the wallet remembers each `reason` and `ref`) and, when it paid, tells the user who is connected
@@ -542,6 +554,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const lines = f?.activity ?? [];
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
     if (economy) send(ws, { type: "wallet", balance: economy.balance });
+    if (progress) send(ws, { type: "progress", state: progress.view() });
     // A reload must still show the mailbox badge and the HUD line for a plan that waits.
     for (const a of f?.approvals.values() ?? []) if (a.status === "pending") send(ws, { type: "approval", approval: a });
     // A morning summary nobody opened yet is announced again to a client that just arrived in the lobby.
@@ -659,11 +672,11 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       roomId: projectRoomId(projectId),
       members: SEATED_ROLES.map((role) => {
         const s = shown.get(role)!;
-        return { agentId: role, name: s.name, ...(s.model ? { model: s.model } : {}) };
+        return { agentId: role, name: s.name, ...(s.model ? { model: s.model } : {}), memberId: s.memberId || role };
       }),
       guests: GUEST_IDS.flatMap((guestId) => {
         const s = shown.get(guestId);
-        return s ? [{ guestId, name: s.name, role: s.role, ...(s.model ? { model: s.model } : {}) }] : [];
+        return s ? [{ guestId, name: s.name, role: s.role, ...(s.model ? { model: s.model } : {}), memberId: s.memberId }] : [];
       }),
     };
   };
@@ -917,6 +930,53 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
   };
 
+  // ---- XP, levels and stats (team-progress) ----
+
+  const progressTracker = new ProgressTracker();
+
+  /** Who holds a role's desk in a project: the member's id (the role name when nobody was hired) and name. Never throws. */
+  const seatOfRole = async (projectId: string, role: ProjectRole): Promise<{ id: string; name: string }> => {
+    let seats = seatsNow.get(projectId);
+    if (!seats && engine?.hr) {
+      try {
+        seats = seatsOf((await engine.hr.team(projectId)).members); // read once, not shown in the room
+      } catch {
+        seats = undefined;
+      }
+    }
+    const seat = seats?.get(role);
+    return { id: seat?.memberId || role, name: seat?.name ?? DEFAULT_SEAT_NAME[role as SeatedRole] };
+  };
+
+  /** The ghost a member stands as on the floor the user is on, so the level-up effect can play over it. */
+  const slotOfMember = (projectId: string, memberId: string): SlotId | undefined => {
+    if (userRoom() !== projectRoomId(projectId)) return undefined;
+    for (const [slot, seat] of seatsShown.get(projectId) ?? []) if ((seat.memberId || seat.role) === memberId) return slot;
+    return undefined;
+  };
+
+  /** Counts a fact once, then tells the user: the new numbers, and a level-up for each level that went up. */
+  const recordFact = async (tracked: TrackedFact): Promise<void> => {
+    if (!progress) return;
+    const { projectId } = tracked;
+    const seats = projectId === undefined ? [] : await Promise.all(tracked.roles.map((role) => seatOfRole(projectId, role)));
+    const named = new Map<string, { projectId: string; memberId: string; name: string }>();
+    if (projectId !== undefined) for (const s of seats) named.set(memberKey(projectId, s.id), { projectId, memberId: s.id, name: s.name });
+    const result = progress.record(tracked.fact, [...named.keys()]);
+    if (!result.changed || !current) return;
+    send(current.ws, { type: "progress", state: progress.view() });
+    for (const up of result.levelUps) announceLevelUp(up, named);
+  };
+
+  const announceLevelUp = (up: LevelUp, named: ReadonlyMap<string, { projectId: string; memberId: string; name: string }>): void => {
+    if (!current) return;
+    if (up.who === "user") return void send(current.ws, { type: "level_up", who: "user", name: "You", level: up.to });
+    const who = named.get(up.who.member);
+    if (!who) return;
+    const slot = slotOfMember(who.projectId, who.memberId);
+    send(current.ws, { type: "level_up", who: "member", name: who.name, level: up.to, ...(slot ? { slot } : {}) });
+  };
+
   // ---- engine events ----
 
   /** A finished, failed or cancelled job can no longer be approved; keep its resolved approvals
@@ -943,8 +1003,12 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
   const onEngineEvent = (ev: AgentEvent) => {
     enqueue(async () => {
-      // Before any room lookup: a job on a floor that has no room yet still earns.
-      if (economy) for (const c of grantTracker.observe(ev)) grantEcto(c.reason, c.ref, c.ts);
+      // Before any room lookup: a job on a floor that has no room yet still earns and still counts.
+      if (economy || progress) {
+        const candidates = grantTracker.observe(ev);
+        if (economy) for (const c of candidates) grantEcto(c.reason, c.ref, c.ts);
+        if (progress) for (const tracked of progressTracker.observe(ev, grantTracker)) await recordFact(tracked);
+      }
       const roomId = roomOfEvent(ev);
       if (!roomId) return;
       // A project registered after the gateway started has no floor yet.
