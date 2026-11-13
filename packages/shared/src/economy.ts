@@ -14,7 +14,7 @@ export const GRANTED_KEYS_MAX = 2000;
 export const BALANCE_MAX = 1_000_000;
 export const GRANT_AMOUNT_MAX = 1000;
 
-export const GRANT_REASONS = ["job_passed", "branch_delivered", "review_finished", "memory_accepted", "night_summary"] as const;
+export const GRANT_REASONS = ["job_passed", "branch_delivered", "review_finished", "memory_accepted", "night_summary", "quest_done"] as const;
 export const GrantReasonSchema = z.enum(GRANT_REASONS);
 export type GrantReason = z.infer<typeof GrantReasonSchema>;
 
@@ -25,6 +25,7 @@ export const GRANT_LABELS: Readonly<Record<GrantReason, string>> = {
   review_finished: "branch review finished",
   memory_accepted: "note kept in the Library",
   night_summary: "night shift report",
+  quest_done: "daily quest done",
 };
 
 /** "+20 Ecto: branch delivered". */

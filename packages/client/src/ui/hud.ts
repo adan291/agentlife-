@@ -15,8 +15,11 @@ const CSS = `
 .al-floor-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${UI_COLOURS.accentText}; font-weight: bold; }
 .al-floor-label[hidden] { display: none; }
 .al-shell[data-compact="true"] .al-floor-label { display: none; }
-.al-balance { position: absolute; z-index: 11; top: var(--al-s2); left: var(--al-s2); padding: var(--al-s1) var(--al-s3); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); pointer-events: none; }
-.al-balance[hidden] { display: none; }
+.al-corner { position: absolute; z-index: 11; top: var(--al-s2); left: var(--al-s2); display: flex; align-items: center; gap: var(--al-s2); pointer-events: none; }
+.al-balance { padding: var(--al-s1) var(--al-s3); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); pointer-events: none; }
+.al-level { padding: var(--al-s1) var(--al-s3); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-border); border-radius: var(--al-radius); font: inherit; font-weight: bold; white-space: nowrap; color: ${UI_COLOURS.accentText}; box-shadow: var(--al-shadow); pointer-events: auto; cursor: pointer; }
+.al-level:hover, .al-level:focus-visible { border-color: var(--al-accent); }
+.al-balance[hidden], .al-level[hidden] { display: none; }
 .al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
 .al-arrange-open { position: absolute; z-index: 11; top: var(--al-s2); right: var(--al-s2); }
@@ -45,6 +48,8 @@ export interface Hud {
   setZoomLabel(zoom: number): void;
   /** The Ecto balance, in the top left corner of the stage. `null` hides it (no economy: the recorded demo, the scripted engine). */
   setBalance(balance: number | null): void;
+  /** The user's level, next to the balance ("Lv 3"); a button that opens the Profile panel. `null` hides it (no progress: the recorded demo, the scripted engine). */
+  setLevel(text: string | null, title?: string): void;
   toast(text: string, ms?: number): void;
   /** Persistent line at the top of the stage (null hides it). */
   setNotice(text: string | null): void;
@@ -69,6 +74,7 @@ export function createHud(
   onView: () => void = () => {},
   onPalette: () => void = () => {},
   onArrange: () => void = () => {},
+  onProfile: () => void = () => {},
 ): Hud {
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -148,7 +154,16 @@ export function createHud(
   balanceWord.textContent = " Ecto";
   balance.append(balanceNum, balanceWord);
   // On the stage, not in the top bar: the bar has no room for one more chip without taking the labels from the stepper.
-  mounts.stage.appendChild(balance);
+  // The balance and the level of the user share one corner container, side by side.
+  const level = document.createElement("button");
+  level.type = "button";
+  level.className = "al-hud al-level";
+  level.hidden = true;
+  level.addEventListener("click", onProfile);
+  const corner = document.createElement("div");
+  corner.className = "al-corner";
+  corner.append(balance, level);
+  mounts.stage.appendChild(corner);
 
   const notice = document.createElement("div");
   notice.className = "al-hud al-notice";
@@ -220,6 +235,13 @@ export function createHud(
       balanceNum.textContent = String(value);
       balance.title = text;
       balance.setAttribute("aria-label", text);
+    },
+    setLevel(text, title) {
+      level.hidden = text === null;
+      if (text === null) return;
+      level.textContent = text;
+      level.title = title ?? text;
+      level.setAttribute("aria-label", `Open your profile. ${title ?? text}`);
     },
     toast(text, ms = 2500) {
       toast.textContent = text;

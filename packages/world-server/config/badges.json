@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "badges": [
+    { "id": "first_delivery", "name": "First delivery", "description": "Fetch the first branch of a job into your own repository.", "scope": "user", "rule": { "counter": "branch_delivered", "atLeast": 1 }, "icon": { "shape": "branch", "colour": "#7fd1ae" } },
+    { "id": "ten_deliveries", "name": "Ten deliveries", "description": "Fetch ten branches into your repositories.", "scope": "user", "rule": { "counter": "branch_delivered", "atLeast": 10 }, "icon": { "shape": "crown", "colour": "#ffd75e" } },
+    { "id": "first_review", "name": "First branch review", "description": "Have the team review one of your branches.", "scope": "user", "rule": { "counter": "review_finished", "atLeast": 1 }, "icon": { "shape": "book", "colour": "#9aa5ff" } },
+    { "id": "review_regular", "name": "Review regular", "description": "Have the team review five branches.", "scope": "user", "rule": { "counter": "review_finished", "atLeast": 5 }, "icon": { "shape": "medal", "colour": "#9aa5ff" } },
+    { "id": "librarian", "name": "Librarian", "description": "Keep your first note in the Library.", "scope": "user", "rule": { "counter": "memory_accepted", "atLeast": 1 }, "icon": { "shape": "book", "colour": "#c9a0ff" } },
+    { "id": "archivist", "name": "Archivist", "description": "Keep ten notes in the Library.", "scope": "user", "rule": { "counter": "memory_accepted", "atLeast": 10 }, "icon": { "shape": "crown", "colour": "#c9a0ff" } },
+    { "id": "night_shift", "name": "Night shift", "description": "Wake up to a morning report in which a night job finished.", "scope": "user", "rule": { "counter": "night_summary", "atLeast": 1 }, "icon": { "shape": "moon", "colour": "#8fb8ff" } },
+    { "id": "night_planner", "name": "Night planner", "description": "Schedule your first night job.", "scope": "user", "rule": { "counter": "night_scheduled", "atLeast": 1 }, "icon": { "shape": "clock", "colour": "#8fb8ff" } },
+    { "id": "approver", "name": "Plan approver", "description": "Approve a plan yourself.", "scope": "user", "rule": { "counter": "plan_approved", "atLeast": 1 }, "icon": { "shape": "envelope", "colour": "#7fd1ae" } },
+    { "id": "veteran", "name": "Hotel veteran", "description": "Reach level 5.", "scope": "user", "rule": { "counter": "level", "atLeast": 5 }, "icon": { "shape": "star", "colour": "#ffd75e" } },
+    { "id": "first_pass", "name": "First pass", "description": "Be part of a job that passed review and tests.", "scope": "member", "rule": { "counter": "job_passed", "atLeast": 1 }, "icon": { "shape": "check", "colour": "#7fd1ae" } },
+    { "id": "ten_passes", "name": "Ten passes", "description": "Be part of ten jobs that passed.", "scope": "member", "rule": { "counter": "job_passed", "atLeast": 10 }, "icon": { "shape": "medal", "colour": "#ffd75e" } },
+    { "id": "clean_streak", "name": "Clean streak", "description": "Pass five jobs in a row.", "scope": "member", "rule": { "counter": "best_streak", "atLeast": 5 }, "icon": { "shape": "flame", "colour": "#ff9f6b" } },
+    { "id": "night_owl", "name": "Night owl", "description": "Pass a job between midnight and five in the morning.", "scope": "member", "rule": { "counter": "late_job", "atLeast": 1 }, "icon": { "shape": "moon", "colour": "#8fb8ff" } },
+    { "id": "first_step", "name": "Getting started", "description": "Finish a first step of a job.", "scope": "member", "rule": { "counter": "step_done", "atLeast": 1 }, "icon": { "shape": "bolt", "colour": "#ffe27a" } },
+    { "id": "steady_hands", "name": "Steady hands", "description": "Finish 25 steps.", "scope": "member", "rule": { "counter": "step_done", "atLeast": 25 }, "icon": { "shape": "bolt", "colour": "#ffb347" } },
+    { "id": "sharp_eye", "name": "Sharp eye", "description": "Pass a branch review.", "scope": "member", "rule": { "counter": "review_passed", "atLeast": 1 }, "icon": { "shape": "star", "colour": "#c9a0ff" } },
+    { "id": "rising_star", "name": "Rising star", "description": "Reach level 3.", "scope": "member", "rule": { "counter": "level", "atLeast": 3 }, "icon": { "shape": "ghost", "colour": "#c9a0ff" } }
+  ]
+}

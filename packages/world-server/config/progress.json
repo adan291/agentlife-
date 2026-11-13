@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "xp": {
+    "step_done": { "member": 10 },
+    "job_passed": { "member": 25, "user": 15 },
+    "review_passed": { "member": 20, "user": 10 },
+    "branch_delivered": { "user": 20 },
+    "plan_approved": { "user": 5 }
+  }
+}

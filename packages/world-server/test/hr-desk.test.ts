@@ -234,9 +234,9 @@ describe("people at the desks", () => {
     const last = views.at(-1)!;
     expect(last.roomId).toBe("project:alpha");
     expect(last.members).toEqual([
-      { agentId: "architect", name: "Architect", model: "auto" },
-      { agentId: "developer", name: "Developer", model: "auto" },
-      { agentId: "qa", name: "Wren", model: "auto" },
+      { agentId: "architect", name: "Architect", model: "auto", memberId: "architect" },
+      { agentId: "developer", name: "Developer", model: "auto", memberId: "developer" },
+      { agentId: "qa", name: "Wren", model: "auto", memberId: "qa-1" },
     ]);
     // The new ghost walks in from the elevator after the presence message.
     const msgs = c.received.map((m) => m.type);

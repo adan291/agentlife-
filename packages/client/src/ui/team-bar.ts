@@ -1,7 +1,8 @@
 import { AGENT_IDS, ROLE_INFO } from "@agentlife/shared";
-import type { AgentId, AgentState, AgentWork, ServerMsg } from "@agentlife/shared";
+import type { AgentId, AgentState, AgentWork, EntityView, ServerMsg } from "@agentlife/shared";
 import { ROLE_COLOURS, STATE_COLOURS } from "../palette.ts";
 import { formatDuration } from "./duration.ts";
+import { levelLine, progressLines } from "./progress.ts";
 import { UI_COLOURS, cssHex } from "./theme.ts";
 import type { Shell } from "./shell.ts";
 import { WorkModel, workView, workVisible } from "./work.ts";
@@ -186,6 +187,8 @@ export interface TeamBar {
 interface RowEls {
   button: HTMLButtonElement;
   state: HTMLElement;
+  /** "Lv 3 · 20 XP to Lv 4"; hidden when the hotel has no progress. */
+  level: HTMLElement;
   model: HTMLElement;
   activity: HTMLElement;
   elapsed: HTMLElement;
@@ -201,7 +204,7 @@ interface RowEls {
 export const CONTEXT_HIGH_PCT = 80;
 
 /** Agent list in the side bar with state, model, last activity and time in state. Click a row to focus the agent. */
-export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): TeamBar {
+export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell, levelFor: (id: AgentId) => EntityView | undefined = () => undefined): TeamBar {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -253,6 +256,9 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     top.append(name, elapsed);
     const state = document.createElement("span");
     state.className = "al-team-sub al-team-state";
+    const level = document.createElement("span");
+    level.className = "al-team-sub al-team-level";
+    level.hidden = true;
     const modelEl = document.createElement("span");
     modelEl.className = "al-team-sub";
     const activity = document.createElement("span");
@@ -281,11 +287,11 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     const workFiles = document.createElement("span");
     workFiles.className = "al-team-sub";
     work.append(workTitle, workLine, workCtx, workFiles);
-    text.append(top, state, modelEl, activity, work);
+    text.append(top, level, state, modelEl, activity, work);
     button.append(ghost, text);
     button.addEventListener("click", () => onFocus(id));
     root.appendChild(button);
-    els.set(id, { button, state, model: modelEl, activity, elapsed, work, workTitle, workStep, workCtxText, workMeter, workFiles });
+    els.set(id, { button, state, level, model: modelEl, activity, elapsed, work, workTitle, workStep, workCtxText, workMeter, workFiles });
   }
   shell.side.appendChild(root);
 
@@ -320,6 +326,10 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
     const stateText = row.text ? `${stateLabel(row.state)}: ${row.text}` : stateLabel(row.state);
     e.state.textContent = stateText;
     e.state.title = stateText;
+    const lv = levelFor(row.agentId);
+    e.level.hidden = !lv;
+    e.level.textContent = lv ? levelLine(lv) : "";
+    e.level.title = lv ? progressLines(lv).join("\n") : "";
     e.model.textContent = row.model ?? "";
     e.model.title = row.model ?? "";
     e.model.hidden = !row.model;
@@ -350,7 +360,8 @@ export function createTeamBar(onFocus: (id: AgentId) => void, shell: Shell): Tea
 
   return {
     handle(msg) {
-      if (model.apply(msg)) paintAll();
+      // A level or a seat changed: the rows read them through `levelFor`.
+      if (model.apply(msg) || msg.type === "progress" || msg.type === "team_view") paintAll();
     },
   };
 }

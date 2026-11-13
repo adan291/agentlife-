@@ -1,5 +1,5 @@
 import { Application } from "pixi.js";
-import { FURNI_CATALOG, RunExportSchema, validateRoom } from "@agentlife/shared";
+import { FURNI_CATALOG, RunExportSchema, levelText, validateRoom } from "@agentlife/shared";
 import type { FloorStatus, OverviewFloor, RunExport, ServerMsg } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
 import { DEMO_RUN_PATH, assetUrl, currentMode } from "./mode.ts";
@@ -38,6 +38,7 @@ import { createTransition } from "./ui/transition.ts";
 import { elevatorLabel, floorTag, loadFloor, restoreTarget, saveFloor } from "./ui/floors.ts";
 import { reportVerdict } from "./ui/report-viewer.ts";
 import { GRANT_TOAST_MS, grantToastText } from "./ui/wallet.ts";
+import { ProgressModel, levelUpText, progressLines } from "./ui/progress.ts";
 
 /**
  * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
@@ -111,6 +112,9 @@ const furniPreview = createFurniPreviews(sprites, app.renderer);
 
 // ---- floors: where the user is, the floor list, the elevator and the remembered floor ----
 
+/** Levels and stats of the user and the team (team-progress); empty in the recorded demo and with the scripted engine. */
+const progressModel = new ProgressModel();
+
 /** Room the user is in, from the latest `welcome`. */
 let currentRoom: string | undefined;
 let currentRoomName = "";
@@ -151,8 +155,13 @@ const hud = createHud(
   () => toggleView(),
   () => openPalette(),
   () => toggleArrange(),
+  () => panels.open("profile"),
 );
 const world = new WorldView(app, sprites, (msg) => transport.send(msg), {
+  progressLines: (slot) => {
+    const v = progressModel.ofSlot(slot);
+    return v ? progressLines(v) : [];
+  },
   // A refused move is explained in the arrange bar, with the red tiles; a toast on top would say it twice.
   onError: (code, message) => {
     // The inventory tray asks for the shop too; a closed shop is already said by the empty tray.
@@ -199,6 +208,7 @@ const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl
   goTo,
   hrThinking: () => world.setHrThinking(true),
   shopPreview: furniPreview,
+  memberProgress: (projectId, memberId) => progressModel.memberOrNew(projectId, memberId),
   ...(replay
     ? {
         lockedGoal: replay.recordedGoal,
@@ -214,7 +224,7 @@ const terminal = createTerminal(shell, {
   floorName: (roomId) => floorList.find((f) => f.roomId === roomId)?.name,
 });
 theme.onChange(() => shell.refresh());
-const teamBar = createTeamBar((id) => world.focusAgent(id), shell);
+const teamBar = createTeamBar((id) => world.focusAgent(id), shell, (id) => progressModel.ofSlot(id));
 
 /** Clears the mailbox dot: the user is looking at the mailbox now. */
 function seeMailbox(): void {
@@ -400,6 +410,8 @@ transport.onMessage((msg) => {
   // Before the mailbox state sees it: a report that arrives now is news, a re-sent one is not.
   const delivered = msg.type === "report" && mailbox.isFresh(msg);
   world.handle(msg);
+  // Before the team bar and the panels: they read the levels through the model.
+  progressModel.apply(msg);
   // Arranging: a panel the server opens stays shut, so the mailbox must not count it as seen either.
   const blocked = arranging && msg.type === "open_panel";
   if (!blocked && mailbox.apply(msg, panels.state.open)) {
@@ -427,6 +439,13 @@ transport.onMessage((msg) => {
   } else if (msg.type === "wallet") {
     hud.setBalance(msg.balance);
     if (msg.grant) hud.toast(grantToastText(msg.grant), GRANT_TOAST_MS);
+  } else if (msg.type === "progress") {
+    hud.setLevel(levelText(msg.state.user.level), progressLines(msg.state.user).join(" · "));
+  } else if (msg.type === "level_up") {
+    hud.toast(levelUpText(msg.who, msg.name, msg.level), GRANT_TOAST_MS);
+    if (msg.slot) world.levelUp(msg.slot);
+  } else if (msg.type === "badge_earned") {
+    hud.toast(msg.who === "user" ? `Badge earned: ${msg.badge}` : `${msg.owner} earned a badge: ${msg.badge}`, GRANT_TOAST_MS);
   } else if (msg.type === "activity") {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {

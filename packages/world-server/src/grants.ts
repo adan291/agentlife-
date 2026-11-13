@@ -19,6 +19,8 @@ interface TaskFacts {
   failed: boolean;
 }
 
+export type { TaskFacts };
+
 /**
  * Follows the engine's events and says which of them earn Ecto (furni-shop requirement 1.2):
  * - a job that reached `delivered`, never failed, and whose QA verdict was pass (`job_passed`), except a branch review,
@@ -29,6 +31,11 @@ interface TaskFacts {
  */
 export class GrantTracker {
   private readonly tasks = new Map<string, TaskFacts>();
+
+  /** What was seen of a task (kind, QA verdict, whether it failed), or undefined when its creation was not seen. XP uses the same facts as Ecto. */
+  facts(taskId: string): Readonly<TaskFacts> | undefined {
+    return this.tasks.get(taskId);
+  }
 
   observe(ev: AgentEvent): GrantCandidate[] {
     switch (ev.type) {

@@ -1,11 +1,11 @@
 # Status
 
-Updated: 2026-11-13 (furni-shop tasks 1-3 done on branch feat/furni-shop, not merged; main 27 commits ahead of origin)
+Updated: 2026-11-13 (team-progress tasks 1-2 done on branch feat/team-progress, not merged; furni-shop is merged into main; main 37 commits ahead of origin)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13.
 
 ## Phase
-All TASKMAP rows 1-10 are merged into main (project-registry, hotel-floors, build-board, job-types, night-shift, hr-desk, project-memory, list-mode, pipeline-editor, furni-move). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Next rows: 11 furni-shop, 12 team-progress, 13 waiting-fun (the game layer), then 14 final-demo with the user.
+All TASKMAP rows 1-11 are merged into main (project-registry, hotel-floors, build-board, job-types, night-shift, hr-desk, project-memory, list-mode, pipeline-editor, furni-move, furni-shop). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 12 team-progress is built on `feat/team-progress` and waits for review and merge. Next rows: 13 waiting-fun (the game layer), then 14 final-demo with the user.
 
 ## Run the hotel
 Real engine (PowerShell, from the repo root; Docker running for tests):
@@ -20,11 +20,10 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-13 (IDE): DiscordIA live check done (job, approve, delivery as a branch; the user's `main` untouched). Fixes merged into main from it: new visits start in the lobby, one plaque over the elevator, writable `node_modules` in the test sandbox (vitest cache), review desk offers only branches with a base (`nothing_to_compare`), mailboxes come back after a restart (`/health restoreSeq`), report rows show "Open ›" and "Branch ready".
 - 2026-11-13 (IDE): user asked to move furniture like in classic hotel sims: spec furni-move, done by the conductor (S27, S28), PASS and merged. User then described the goal: housing plus a light RPG / sims game layer, fun while waiting for the agents. Specs written: furni-shop (Ecto earned only from verified work, shop, inventory), team-progress (XP and levels from real stats, badges, daily quests), waiting-fun (wisp catching, sit and emotes, visual ghost mood); TASKMAP rows 11-13, sessions S29-S32. The user liked the plan.
 - 2026-11-13 (IDE): the steering warned that workflow.md's reference to this file was cut (75 000 characters, budget 50 000). This file was split: the full old text is in docs/STATUS-history.md; workflow.md now asks sessions to keep it short. Conductor relaunched on rows 11-13.
-
-- 2026-11-13 (IDE): user: "fix what needs fixing and continue". Done in a separate worktree (data/fix-wt, branch fix/backlog) while the conductor ran, then merged into main (f217cf4): the mailbox keeps the newest 10 reports of a floor across jobs (it was emptied on every new job); hr-desk review suggestions (escaped project id in the stale-file regex, all agent files of a team change checked before any is moved, the import approve button shows its concerns); the conductor keeps both sides of a STATUS.md merge conflict (union) instead of the branch's only (it takes effect from the next conductor start). An S29 session had started outside the conductor at 15:16 and stopped at 15:46; its work was kept as a wip commit and finished by the conductor. furni-shop PASS and merged; conductor on team-progress.
+- 2026-11-13 (IDE): asked for team-progress tasks 1 and 2 with design.md first, reusing the furni-shop grant code. Done on `feat/team-progress` (design commit, one commit per task). Decisions for the user to check: level n needs 25·n·(n+1) XP, so a new member is level 0 until 50 XP; XP amounts in `config/progress.json`, quest pool in `config/quests.json`, badges in `config/badges.json`; XP goes to the members who finished a step of the job, not to everybody on the team. Pending: look at it in a browser (HUMAN-CHECKS), merge.
 
 ## Next
-1. Conductor: furni-shop is done (review and merge next), then team-progress (S31), waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
+1. Conductor: team-progress is done (review and merge next), then waiting-fun (S32). Cut order if late: waiting-fun, then team-progress. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md (25 open), including the furni-move arrange mode and new default layout.
 3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
 4. Push main when the user agrees (last push fbe1ceb).
@@ -45,15 +44,18 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | list-mode | 3 / 3 | main | Used once by the user (Deliver button) |
 | pipeline-editor | 3 / 3 | main | Researcher and second review not run live |
 | furni-move | 3 / 3 | main | Arrange button in the stage corner (requirement 2.1 reworded), D14; not looked at by the user |
-| furni-shop | 3 / 3 | feat/furni-shop | Row 11. Wallet, grants, 25-item catalogue, shop, buy, and (task 3) the inventory tray in arrange mode: drag or click an item onto the floor, pick up, template pieces protected, removed projects give pieces back. Balance chip is on the stage (design.md). Changed from task 2: the 200-item cap limits purchases only (design.md, Task 3). Playwright: 3 new tests, all e2e pass with Edge. Not looked at by the user |
-| team-progress | 0 / 2 | — | Row 12 |
+| furni-shop | 3 / 3 | main | Row 11. Wallet, grants, 25-item catalogue, shop, buy, inventory tray in arrange mode (design.md). Balance chip is in the stage corner. Not looked at by the user |
+| team-progress | 2 / 2 | feat/team-progress | Row 12. XP and levels from real events (`progress.json`, same keyed idempotence as grants), stats, 18 badges, 3 seeded daily quests that pay Ecto once, Profile panel (level chip next to the Ecto chip), level-up effect, level lines in team bar, tooltips and HR cards. Needs `AGENTLIFE_PROGRESS_FILE` or the real engine. Playwright: 2 new tests on a second test server (8796/5198); all e2e pass with Edge. Not looked at by the user |
 | waiting-fun | 0 / 2 | — | Row 13 |
 
 ## Open problems
 - Playwright's own Chromium is not installed on this machine (`pnpm --filter @agentlife/client e2e` fails to launch it). Run `$env:E2E_CHANNEL='msedge'` first to use the installed Edge. Not installed by a session (global tool).
 - hr-desk D10 (docs/risks-and-decisions.md): import review by the read-only `agentlife-import-review` instead of `agentlife-security`. Explained to the user twice; waiting for a yes.
-- Flaky tests seen once each: `pipeline-editor.spec.ts` "board shows the editor above the job card" (e2e timing; it failed once in the full e2e run on 2026-11-13 and passed alone), `pnpm check` under load while the services restart. The report property test flake was fixed (seed -515305606).
-- Playwright config seeds `agentlife-e2e-wallet.json` (500 Ecto) and an empty inventory in the temp folder when the runner loads it. With `reuseExistingServer` an already running test world-server keeps its own in-memory state, so stop it before a run that buys furniture.
+- hr-desk review suggestions not done: escape project ids in the regex in `team/service.ts` (~336); stage all agent files before moving them in `commit`; show import flags as a warning on the approve button.
+- Mailbox shows only the latest report of a floor after a restart; older reports of the floor are not kept. Not investigated.
+- Flaky tests seen once each: `pipeline-editor.spec.ts` "board shows the editor above the job card" (e2e timing; it failed in the full e2e run on 2026-11-13 twice, the second time with the team-progress spec in the run, and passes alone), `pnpm check` under load while the services restart. The report property test flake was fixed (seed -515305606).
+- Playwright config seeds scratch wallets, inventories and quest pools in the temp folder when the runner loads it (`agentlife-e2e-*.json`), and deletes the progress file of the second test server. With `reuseExistingServer` an already running test world-server keeps its own in-memory state, so stop both test servers (ports 8795 and 8796) before a run that buys furniture or checks XP.
+- team-progress: the pass/fail of a job comes from the engine's `verdict:` reason and the failed state (same as Ecto); XP of a replayed step goes to whoever holds the desk now, not who held it then (only for events that arrived while the world-server was off). The recorded demo shows no levels (the server sends none).
 - DiscordIA: one of its own tests failed once in four sandbox runs (not identified).
 - The demo replay and `run-001.json` predate floors, kinds and the game layer: re-record in final-demo.
 - Scratch files outside git that a session could not delete: `data/tmp-pipeline-old.txt`, `data/tmp-demo-dist`, `data/tmp-check.txt` (all git-ignored).

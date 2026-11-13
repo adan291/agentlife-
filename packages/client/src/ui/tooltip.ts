@@ -44,19 +44,22 @@ export function agentTooltip(
   model: string | undefined,
   work?: AgentWork,
   now: number = Date.now(),
+  extra: readonly string[] = [],
 ): TooltipContent {
   const info = ROLE_INFO[id];
   const lines = [info.does];
   if (state) lines.push(`State: ${state.replace("_", " ")}${text ? ` - ${text}` : ""}`);
   if (model) lines.push(`Model: ${model}`);
+  lines.push(...extra);
   if (work && workVisible(state)) lines.push(...workTooltipLines(work, now));
   return { title: info.name, lines };
 }
 
 /** Tooltip of a team member who stands at one of the floor's spots instead of a desk. */
-export function guestTooltip(name: string, roleName: string, model: string | undefined): TooltipContent {
+export function guestTooltip(name: string, roleName: string, model: string | undefined, extra: readonly string[] = []): TooltipContent {
   const lines = [`${roleName} of this project's team. Stands on the floor; a role's desk belongs to its first member.`];
   if (model) lines.push(`Model: ${model}`);
+  lines.push(...extra);
   return { title: `${name} (${roleName})`, lines };
 }
 

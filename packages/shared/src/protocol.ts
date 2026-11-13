@@ -11,6 +11,8 @@ import { GOAL_MAX_CHARS } from "./limits.ts";
 import { MemoryActionSchema, MemoryStateSchema } from "./memory.ts";
 import { NightHhmmSchema, NightJobInputSchema, NightMoveBodySchema, NightStateSchema } from "./night.ts";
 import { OverviewFloorSchema, ShowablePanelSchema } from "./overview.ts";
+import { LevelUpMsgSchema } from "./progress.ts";
+import { ProgressViewSchema } from "./progress-rules.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
@@ -29,7 +31,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop", "profile"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent and guest ids are strings, so they never collide. */
@@ -347,6 +349,20 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   }),
   /** The shop: catalogue, balance and stock. */
   z.object({ type: z.literal("shop"), state: ShopStateSchema }),
+  /**
+   * XP, levels and stats of the user and of the team members (team-progress). Sent after every `welcome` and after every
+   * fact that changed something. Never sent when the hotel has no progress (fake engine).
+   */
+  z.object({ type: z.literal("progress"), state: ProgressViewSchema }),
+  /** Somebody reached a new level: `slot` is the ghost on the user's floor to play the effect over, when there is one. */
+  LevelUpMsgSchema,
+  /** A badge was earned by the user (`owner` is "You") or by a team member (`owner` is their name). */
+  z.object({
+    type: z.literal("badge_earned"),
+    who: z.enum(["user", "member"]),
+    owner: z.string().min(1).max(60),
+    badge: z.string().min(1).max(30),
+  }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

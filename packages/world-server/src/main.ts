@@ -6,6 +6,7 @@ import { startGateway } from "./gateway.ts";
 import { HttpEngineLink } from "./http-engine.ts";
 import { LayoutStore, defaultLayoutsFile } from "./layout-store.ts";
 import { ROOMS_DIR, loadHotelRooms } from "./load-room.ts";
+import { ProgressStore, defaultProgressFile, loadBadges, loadProgressConfig, loadQuests } from "./progress-store.ts";
 import { parseAllowedOrigins } from "./origin.ts";
 
 /** Load and validate the room files; exit with the invalid field path(s) when one is bad. */
@@ -57,6 +58,18 @@ if (engineKind === "http" || process.env["AGENTLIFE_WALLET_FILE"]) {
   }
 }
 
+// XP and levels follow the same rule: only real work counts. A progress file named in the environment (tests, Playwright)
+// turns it on for any engine.
+let progress: ProgressStore | undefined;
+if (engineKind === "http" || process.env["AGENTLIFE_PROGRESS_FILE"]) {
+  try {
+    progress = new ProgressStore({ file: defaultProgressFile(), config: loadProgressConfig(), badges: loadBadges(), quests: loadQuests(), onLog: (m) => console.warn(m) });
+  } catch (e) {
+    console.error(`Cannot start the progress store: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+}
+
 // The floors are built from the template, the saved layout and the bought pieces the user placed.
 const hotel = new Hotel({
   ...hotelRooms,
@@ -65,5 +78,5 @@ const hotel = new Hotel({
   extrasOf: (projectId) => economy?.placedFurni(projectId) ?? [],
 });
 
-const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins, layouts, ...(economy ? { economy } : {}) });
+const gateway = await startGateway({ hotel, host, port, engine, allowedOrigins, layouts, ...(economy ? { economy } : {}), ...(progress ? { progress } : {}) });
 console.log(`world-server listening on ws://${host}:${gateway.port} (allowed origins: ${allowedOrigins.join(", ")})`);
