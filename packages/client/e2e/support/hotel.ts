@@ -92,6 +92,8 @@ export interface HotelSeed {
   placed?: Readonly<Record<string, readonly SeedPiece[]>>;
   /** No wisp during the test (the first one comes after 10 minutes): a screenshot of a running job must not show one. */
   noWisps?: boolean;
+  /** The progress clock fixed at this time (epoch ms): the day that picks the quests is the same on every run. */
+  progressNow?: number;
 }
 
 /**
@@ -135,6 +137,7 @@ export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
       AGENTLIFE_OUTFITS_FILE: file("outfits"),
       AGENTLIFE_PROGRESS_FILE: file("progress"),
       AGENTLIFE_QUESTS_FILE: file("quests"),
+    ...(options.progressNow ? { AGENTLIFE_PROGRESS_NOW: String(options.progressNow) } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,

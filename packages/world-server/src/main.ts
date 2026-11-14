@@ -75,7 +75,17 @@ if (engineKind === "http" || process.env["AGENTLIFE_WALLET_FILE"]) {
 let progress: ProgressStore | undefined;
 if (engineKind === "http" || process.env["AGENTLIFE_PROGRESS_FILE"]) {
   try {
-    progress = new ProgressStore({ file: defaultProgressFile(), config: loadProgressConfig(), badges: loadBadges(), quests: loadQuests(), onLog: (m) => console.warn(m) });
+    // `AGENTLIFE_PROGRESS_NOW` (epoch ms) fixes the progress clock, so the day that picks the quests is the same on every run.
+  // For Playwright's visual comparisons only.
+  const fixedNow = Number(process.env["AGENTLIFE_PROGRESS_NOW"] ?? "");
+  progress = new ProgressStore({
+    file: defaultProgressFile(),
+    config: loadProgressConfig(),
+    badges: loadBadges(),
+    quests: loadQuests(),
+    onLog: (m) => console.warn(m),
+    ...(Number.isFinite(fixedNow) && fixedNow > 0 ? { now: () => fixedNow } : {}),
+  });
   } catch (e) {
     console.error(`Cannot start the progress store: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);

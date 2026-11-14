@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test as hotelTest } from "./support/fixtures.ts";
 import type { Hotel, SeedPiece } from "./support/hotel.ts";
-import { expectLooksLike, freezeForScreenshots, missingBaselines, timeMasks } from "./support/visual.ts";
+import { FROZEN_AT, expectLooksLike, freezeForScreenshots, missingBaselines, timeMasks } from "./support/visual.ts";
 import { COMPUTER, FLOOR_NAME, SIZES, canvasHit, goTo, mailbox, openHotel, runCommand, tilePoint, useFurniture } from "./support/world.ts";
 import type { Size } from "./support/world.ts";
 
@@ -318,6 +318,35 @@ for (const size of SIZES) {
       await expectLooksLike(page, "night-form", size);
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
+    });
+
+    test.describe("a frozen progress clock", () => {
+      // The day that picks the quests comes from the progress clock, fixed here at the page's frozen time.
+      test.use({ hotelSeed: { progressNow: FROZEN_AT.getTime() } });
+
+      test("construction board, its report and the Profile's quests", async ({ page, hotel }) => {
+        await open(page, size);
+        const panel = page.locator(".al-panel");
+        // The scripted engine shows fixed board data (`FAKE_PANELS=1`, `fakeBuildBoard`).
+        if (await openPiece(page, hotel, "lobby", { name: "construction-board", tile: { x: 7, y: 0 } })) {
+          await expect(panel.locator("h3").first()).toHaveText("Construction board");
+          await expect(panel).toContainText("night-shift");
+          await expectLooksLike(page, "construction-board", size);
+          await panel.getByRole("button", { name: "Open the verification report of hotel-floors" }).click();
+          await expect(panel).toContainText("Verification of hotel-floors");
+          await expectLooksLike(page, "construction-board-report", size);
+          await page.keyboard.press("Escape");
+          await expect(panel).toBeHidden();
+        }
+
+        await topOrMenu(page, size, ".al-level", /^Profile/);
+        const profile = page.getByRole("dialog", { name: "Profile" });
+        await expect(profile).toBeVisible();
+        await profile.getByRole("tab", { name: "Quests" }).click();
+        await expect(profile.locator(".al-quest")).toHaveCount(3);
+        await expectLooksLike(page, "profile-quests", size);
+        await page.keyboard.press("Escape");
+      });
     });
 
     test.describe("a floor with a coffee machine", () => {

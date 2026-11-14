@@ -4,6 +4,8 @@ import type {
   ApprovalDecision,
   ArtifactView,
   BranchesResponse,
+  BuildBoard,
+  BuildReport,
   DeliveryInfo,
   JobDetails,
   JobState,
@@ -18,7 +20,7 @@ import type {
 import { EventQueue } from "./engine-link.ts";
 import type { EngineLink, HrLink, MemoryLink, PipelineLink, StartJobOptions } from "./engine-link.ts";
 import { createFakeHr } from "./fake-hr.ts";
-import { fakeBranches, fakeMemory, fakeNight, fakePipeline } from "./fake-panels.ts";
+import { fakeBranches, fakeBuildBoard, fakeBuildReport, fakeMemory, fakeNight, fakePipeline } from "./fake-panels.ts";
 
 /** A change to a panel of the scripted engine: refused. */
 const refusePanel = (): Promise<never> => Promise.reject(new Error("The scripted engine only shows this panel. Start the real engine to change it."));
@@ -120,6 +122,8 @@ export class FakeEngineLink implements EngineLink {
   addNightJob?: () => Promise<never>;
   removeNightJob?: () => Promise<never>;
   moveNightJob?: () => Promise<never>;
+  getBuildBoard?: () => Promise<BuildBoard>;
+  getBuildReport?: (spec: string) => Promise<BuildReport>;
 
   constructor(options: FakeEngineOptions = {}) {
     this.stepMs = options.stepMs ?? 1500;
@@ -134,6 +138,8 @@ export class FakeEngineLink implements EngineLink {
       this.addNightJob = refusePanel;
       this.removeNightJob = refusePanel;
       this.moveNightJob = refusePanel;
+      this.getBuildBoard = () => Promise.resolve(fakeBuildBoard());
+      this.getBuildReport = (spec) => Promise.resolve(fakeBuildReport(spec));
     }
   }
 

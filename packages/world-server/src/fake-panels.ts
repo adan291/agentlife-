@@ -1,5 +1,5 @@
 import { DEFAULT_NIGHT_CONFIG, DEFAULT_PIPELINE } from "@agentlife/shared";
-import type { BranchesResponse, ImportView, MemoryState, NightJob, NightState, PipelineResponse } from "@agentlife/shared";
+import type { BranchesResponse, BuildBoard, BuildReport, ImportView, MemoryState, NightJob, NightState, PipelineResponse } from "@agentlife/shared";
 import type { MemoryLink, PipelineLink } from "./engine-link.ts";
 
 /**
@@ -151,4 +151,30 @@ export function fakeImports(): ImportView[] {
       importedAt: THEN,
     },
   ];
+}
+
+/** The construction board of the lobby with three rows in three states, a running phase and two sessions. */
+export function fakeBuildBoard(): BuildBoard {
+  return {
+    phase: { text: "session S12", spec: "night-shift", at: THEN },
+    rows: [
+      { number: 1, spec: "hotel-floors", sessions: ["S10", "S11"], live: true, status: "merged", purpose: "Lobby, elevator and one floor per project" },
+      { number: 2, spec: "night-shift", sessions: ["S12"], live: true, status: "running", purpose: "Schedule jobs for the night; morning summary in the mailbox" },
+      { number: 3, spec: "final-demo", sessions: [], live: true, status: "waits_for_you", reason: "Record the video with Kiro", purpose: "Re-record the replay, video, Devpost" },
+    ],
+    specs: [
+      { spec: "hotel-floors", tasks: [{ number: "1", title: "Rooms and the elevator", done: true }, { number: "2", title: "Floors per project", done: true }], done: 2, total: 2, verdict: "PASS" },
+      { spec: "night-shift", tasks: [{ number: "1", title: "Schedule and window", done: true }, { number: "2", title: "Morning summary", done: false }], done: 1, total: 2, verdict: "none" },
+      { spec: "final-demo", tasks: [{ number: "1", title: "Re-record the replay", done: false }], done: 0, total: 1, verdict: "none" },
+    ],
+    sessions: [
+      { session: "S11", date: "2029-12-30 21:10", model: "claude-sonnet-5.5", minutes: 24.5, status: "ok" },
+      { session: "S12", date: "2029-12-31 09:40", model: "claude-sonnet-5.5", minutes: 12, status: "running" },
+    ],
+  };
+}
+
+/** The verifier's report of a row, as the board shows it. */
+export function fakeBuildReport(spec: string): BuildReport {
+  return { spec, content: `VERDICT: PASS\n\n# Verification of ${spec}\n\n- 1.1 Rooms: PASS\n- 1.2 Elevator: PASS\n` };
 }

@@ -103,7 +103,7 @@ Playwright also takes screenshots until two in a row are identical, so a repaint
 
 Checked on 2026-11-14 (Windows, Edge): baselines written, then three full runs of 12 tests compared with them with zero differing pixels (no `maxDiffPixels` or threshold was needed; the config keeps Playwright's defaults). Control: with the freeze left out all 12 tests fail ("Failed to take two consecutive stable screenshots"), so the freeze is what makes the run repeatable, and a failure keeps `-expected`, `-actual` and `-diff` images in `test-results/` and in the HTML report (`reporter: [["list"], ["html", { open: "never" }]]`, `playwright-report/`, git-ignored).
 
-Content that is not the same every day is not compared: the quests of the Profile (the date picks three of the pool) are left out; nothing else shown depends on the date (a clean hotel has level 0, no ledger and no reports).
+Content that depends on the date is made fixed: the Profile's quests are picked by the day of the progress clock, which a test hotel can fix (`hotelSeed: { progressNow }`, env `AGENTLIFE_PROGRESS_NOW`, read by world-server `main.ts` only); the visual test fixes it at the page's frozen time. Nothing else shown depends on the date (a clean hotel has level 0, no ledger and no reports).
 
 ### Screens
 
@@ -128,7 +128,7 @@ The scripted engine had no night schedule, Library, branches, pipeline or import
 
 The visual file runs the browser in UTC with the en-US locale (`test.use`), so the dates and times the Library writes are the same text on every machine and need no mask. The `list` screen now says "3 night jobs scheduled", the report screens changed by a few pixels (the Library is now known to the page), and all baselines of this platform were rewritten.
 
-Still not compared: the Profile's Quests tab (the date picks the quests).
+Compared since the second verification (2026-11-14, done in the IDE): the Profile's Quests tab (`profile-quests`, frozen progress clock) and the Construction board with its report view (`construction-board`, `construction-board-report`, fixed data from `fakeBuildBoard` / `fakeBuildReport` under `FAKE_PANELS=1`). At 360x640 the board lies outside the stage and no command opens it, so that size is skipped with an annotation, as for the directory. Two more product fixes came from looking at these images: the Actions button used the browser's serif font (`.al-actions` had no font), and the Profile repeated the level line (its second line is now `<xp> XP · <stats>`). Baselines rewritten: 109 images, three repeat runs with no difference.
 
 ### Baselines per platform
 

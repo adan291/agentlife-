@@ -2,7 +2,7 @@ import type { BadgeDef, ProgressView, QuestView } from "@agentlife/shared";
 import type { PanelContent } from "./computer.ts";
 import { badgeIcon } from "./badge-icons.ts";
 import type { LookTarget } from "./look-picker.ts";
-import { levelLine, progressLines } from "./progress.ts";
+import { levelLine, statsLine } from "./progress.ts";
 import { balanceText } from "./wallet.ts";
 
 export type ProfileTab = "badges" | "quests" | "look";
@@ -137,7 +137,7 @@ export function createProfilePanel(doc: Document, look?: (target: LookTarget) =>
     }
     if (p) {
       const head = el(doc, "div", "al-profile-head");
-      head.append(el(doc, "strong", "al-shop-head", levelLine(p.user)), el(doc, "p", "al-muted", progressLines(p.user).join(" · ")));
+      head.append(el(doc, "strong", "al-shop-head", levelLine(p.user)), el(doc, "p", "al-muted", `${p.user.xp} XP · ${statsLine(p.user)}`));
       root.appendChild(head);
     }
 
