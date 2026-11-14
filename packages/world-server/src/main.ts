@@ -33,7 +33,7 @@ const allowedOrigins = parseAllowedOrigins(process.env["WORLD_ALLOWED_ORIGINS"])
 const engineKind = process.env["ENGINE"] ?? "fake";
 let engine: EngineLink;
 if (engineKind === "fake") {
-  engine = new FakeEngineLink({ hr: process.env["FAKE_HR"] === "1" });
+  engine = new FakeEngineLink({ hr: process.env["FAKE_HR"] === "1", deliver: process.env["FAKE_DELIVER"] === "1" });
 } else if (engineKind === "http") {
   const baseUrl = process.env["ENGINE_URL"] ?? "http://127.0.0.1:8788";
   engine = new HttpEngineLink({

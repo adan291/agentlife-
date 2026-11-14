@@ -281,6 +281,7 @@ const listActions = createListActions({
   send: (msg) => transport.send(msg),
   hasReport: (reportId) => panels.state.data.reports.some((r) => r.reportId === reportId),
   openReport: (reportId) => panels.openReport(reportId),
+  mailboxOpen: () => panels.state.open === "mailbox",
   showHotel: () => setView("hotel"),
 });
 const listView = createListView(document, stageEl, listActions);

@@ -1,11 +1,11 @@
 ﻿# Status
 
-Updated: 2026-11-14 (ghost-skins tasks 1-2 done on branch feat/ghost-skins, not merged; rows 1-14 are in main; main pushed at fcd0fd2)
+Updated: 2026-11-14 (regression-suite task 1 done on branch feat/regression-suite, not merged; ghost-skins and rows 1-15 are in main; main pushed at fcd0fd2)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13, and the 2026-11-13 conversation lines.
 
 ## Phase
-TASKMAP rows 1-14 are merged into main (everything up to ui-tidy). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 15 ghost-skins: both tasks are on `feat/ghost-skins` (parts and shop, then wearing), waiting for review and merge. Then final-demo with the user.
+TASKMAP rows 1-15 are merged into main (everything up to ghost-skins). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 16 regression-suite: task 1 (journeys and interface rules) is on `feat/regression-suite`; tasks 2 (visual comparisons) and 3 (conductor, CI, manual list) are next. Then final-demo with the user.
 
 ## Run the hotel
 Real engine (PowerShell, from the repo root; Docker running for tests):
@@ -26,7 +26,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-14 (IDE): user asked for an automated regression suite "like Selenium" to remove human error. Spec regression-suite (Playwright user journeys, layout and interface rules at 3 sizes, visual comparisons with per-platform baselines, run by the conductor before every merge and by CI on Linux and Windows, HUMAN-CHECKS.md pruned to what needs a human), TASKMAP row 16, sessions S37-S39. Hotel stopped; conductor started (log data/sessions/conduct-run12.txt). The user's manual test round moves after it.
 
 ## Next
-1. Review and merge ghost-skins (both tasks done), then final-demo. Never cut final-demo.
+1. Review and merge regression-suite (task 1 done: journeys and interface rules; next tasks 2 and 3), then final-demo. Never cut final-demo.
 2. With the user: browser checks in docs/HUMAN-CHECKS.md (top bar, Menu, Edit room, the game layer, the Outfits page, the Look pickers).
 3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
 4. Push main when the user agrees (last push fcd0fd2).
@@ -51,7 +51,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | team-progress | 2 / 2 | main | Row 12. XP, levels, stats, 18 badges, daily quests, Profile panel. Needs `AGENTLIFE_PROGRESS_FILE` or the real engine. Playwright: second test server (8796/5198) |
 | waiting-fun | 2 / 2 | main | Row 13. Wisps, sit and emotes, glad or glum ghosts, mood face, coffee machine. Playwright: third test server (8797/5197) |
 | ui-tidy | 3 / 3 | main | Row 14. Top bar, Menu, Edit room in every room, Actions menu, Builder back to idle after 10 min (design.md) |
-| ghost-skins | 2 / 2 | feat/ghost-skins | Row 15. Task 1: 23 parts in `config/outfits.json`, recipes in `scene/outfit-parts.ts`, `data/wardrobe.json` kept by `Economy`, Outfits tab in the shop. Task 2: `data/outfits.json` kept by `WornStore`, `outfit_wear` checked by the shared `applyWear`, one `outfits` message (whole state) after the wardrobe and after each change, `outfit_error`, members dressed in the HR office and the user anywhere, entries pruned in `refreshTeam` when a member is no longer on the team, `OutfitBook` + `WorldView.applyLooks`, user's figure wears parts (`guestAnchors`), shared `look-picker.ts` in the HR card and a Look tab in the Profile, `data-looks` on the canvas for tests. Playwright: fourth test server (8798/5196, `FAKE_HR=1`, a scripted HR link). HR ghost and Builder cannot be dressed (design.md). Not looked at by the user |
+| ghost-skins | 2 / 2 | main | Row 15. Task 1: 23 parts in `config/outfits.json`, recipes in `scene/outfit-parts.ts`, `data/wardrobe.json` kept by `Economy`, Outfits tab in the shop. Task 2: `data/outfits.json` kept by `WornStore`, `outfit_wear` checked by the shared `applyWear`, one `outfits` message (whole state) after the wardrobe and after each change, `outfit_error`, members dressed in the HR office and the user anywhere, entries pruned in `refreshTeam` when a member is no longer on the team, `OutfitBook` + `WorldView.applyLooks`, user's figure wears parts (`guestAnchors`), shared `look-picker.ts` in the HR card and a Look tab in the Profile, `data-looks` on the canvas for tests. Playwright: fourth test server (8798/5196, `FAKE_HR=1`, a scripted HR link). HR ghost and Builder cannot be dressed (design.md). Not looked at by the user |
+| regression-suite | 1 / 3 | feat/regression-suite | Row 16. Task 1: `e2e/support/` (a scratch world-server per test with `FAKE_DELIVER=1`, the WebSocket redirected to it, rules in `rules.ts`, exceptions in `allowlist.ts`), `journeys.spec.ts` (3 journeys x 3 sizes), `rules.spec.ts` (the rules fail on broken pages). 4 real bugs fixed, listed in design.md. Run it with `$env:E2E_CHANNEL='msedge'; pnpm --filter @agentlife/client e2e` (117 tests) |
 
 ## Open problems
 - ui-tidy: a piece that is not selected and stands behind a taller one is picked by pressing on its drawing above the tile (design.md of ui-tidy). `pnpm check` failed once under load in two world-server timing tests (`fun-gateway`, `wisp-gateway`) and passed alone and on the second run.
@@ -65,6 +66,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - Scratch files outside git that a session could not delete: `data/tmp-pipeline-old.txt`, `data/tmp-demo-dist`, `data/tmp-check.txt`, `data/tmp-shots` (all git-ignored).
 - waiting-fun: after 10 catches for the same scripted task id (the fake engine reuses ids) no wisp pays. Mood is not kept across a restart. The poses and the sitter's depth were checked in screenshots of the lobby only.
 - ghost-skins: the parts were checked by tests and in one screenshot (the Developer's cap on a project floor); how every part reads at 1x on every role colour and on the user's taller torso is a human check. Stop the four test servers (ports 8795 to 8798) before an e2e run that buys outfits.
+
+- regression-suite: the journeys start their own world-server on a free port and reach it by redirecting the page's WebSocket; they still need the main test server (ports 8795/5199) for the Vite page. Not run yet: `e2e:demo` after the `.al-top` change (the conductor runs it before the merge). The toast opened with "Open report" does not tell the floor the report was seen, so the overview keeps "Report ready" (design.md of regression-suite, not changed).
 
 ## Security
 - History rewritten twice with git filter-repo (noreply identity `14869836+adan291@users.noreply.github.com`, no personal emails, no key-shaped literals); backups in `data/backup/` (git-ignored). Local git config uses the noreply address. `pnpm security:scan` clean on 2026-11-13.

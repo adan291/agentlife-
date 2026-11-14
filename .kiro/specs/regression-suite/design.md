@@ -1,0 +1,94 @@
+# Design: regression-suite
+
+Tests only. The one change outside `packages/client/e2e/` is a scripted delivery in the fake engine (`FAKE_DELIVER=1`), which the delivery journey needs. Bugs the journeys find are fixed in the smallest way and written down in "Bugs found" below.
+
+## Where things live
+
+```
+packages/client/e2e/support/
+  hotel.ts       starts one scratch world-server per test; scratch files; the WebSocket redirect
+  fixtures.ts    `test` and `expect` with the hotel, the error watcher and the screen check built in
+  rules.ts       layout and interface rules, measured in the page; `screenProblems(page)`
+  allowlist.ts   every accepted exception, each with a reason
+  world.ts       what a user does: tile points, elevator, palette, shop, panels
+packages/client/e2e/journeys.spec.ts     requirement 1, at the three sizes
+packages/client/e2e/rules.spec.ts        the rules checked against deliberately broken pages (a rule that cannot fail proves nothing)
+```
+
+The existing specs are not touched. They keep their own helpers and their shared test servers (ports 8795 to 8798).
+
+## A hotel per test (clean state, requirement 1.2 and 4.3)
+
+The existing specs share one world-server per spec file, so a test depends on what the previous one left. A journey creates its own hotel instead:
+
+1. `startHotel()` makes a temp folder (`mkdtemp`) and writes a wallet with 500 Ecto, an empty inventory and wardrobe, and a quest pool that one scripted job finishes whichever three the date picks (the same pool as the progress server of `playwright.config.ts`). Layouts, outfits and progress start absent.
+2. It starts `node --experimental-strip-types src/main.ts` in `packages/world-server` on a free port (`net` listen on 0, then close and reuse), with `ENGINE=fake`, `FAKE_HR=1`, `FAKE_DELIVER=1`, `AGENTLIFE_WISP_MS=300,500` and every `AGENTLIFE_*_FILE` pointing into the temp folder. It waits for the line `world-server listening`. The process never gets the user's `data/` paths, so a run cannot touch the real hotel (4.3).
+3. The page connects to the Vite server of the main test server (`ws://127.0.0.1:8795` is what the client was built with). `page.routeWebSocket` takes that connection and forwards it frame by frame to the scratch world-server with Node's global `WebSocket`. The client is unchanged and needs no new Vite server. A loopback world-server accepts a client without `Origin`, so no allowed-origin setting is needed.
+4. Teardown kills the process and removes the temp folder, also when the test failed. A crashed run leaves only a folder in the OS temp dir.
+
+Wisps come every 300 to 500 ms during a job, so a journey catches one within seconds. The fake engine's step delay is its default (1.5 s).
+
+## Errors
+
+The fixture records every `pageerror` and every `console.error`. After the test it asserts the list is empty, except what `allowlist.ts` names (a `Failed to load resource` for `/favicon.ico` only: the dev server has none). A failed WebSocket to the real 8795 server cannot occur because the connection is routed, not attempted.
+
+## Screens and rules (requirement 2)
+
+`expectScreen(page, name)` runs after each screen of a journey (the lobby, each panel opened, the list, the palette, the menus) and fails with the screen name and one line per problem. It runs at 1366x768, 800x600 and 360x640, because the journeys run at all three. Everything is measured in the page with `getBoundingClientRect`, `getComputedStyle` and `elementFromPoint`, so there are no pixel comparisons here (those are task 2).
+
+A visible element is one for which `checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })` is true and whose box is at least 1x1 px. Its visible box is its box clipped by every ancestor whose overflow is not `visible`; an element clipped away entirely (scrolled out of a list, behind a closed drawer) is skipped.
+
+| Rule | How it is measured |
+|---|---|
+| `viewport` | A control or a label (a visible element with a text node of its own) whose box is not inside `[0, innerWidth] x [0, innerHeight]` (0.5 px of slack). An element inside a scrolling ancestor (`overflow: auto` or `scroll`) is checked by its visible box. Every `dialog`, `menu` and `listbox` and the four shell regions must be inside the viewport as a whole, so a panel taller than the window cannot hide its buttons inside its own scroll area. |
+| `covered` | For each visible control not marked `pointer-events: none`: `elementFromPoint` at the centre of its visible box must return the control, a descendant of it, or an element in the same `label`. When a modal (`[aria-modal="true"]`) is open, controls outside it are skipped: they are behind it on purpose. A panel (`role="dialog"`) opened over the stage hides the stage's own controls (Actions, wisps) while it is open, and that is accepted; the top bar, the side bar and the dock must never be under one. |
+| `page-scroll` | `documentElement` or `body` has `scrollWidth > clientWidth` or `scrollHeight > clientHeight`. |
+| `text-cut` | A visible element with `overflow-x` or `overflow-y` of `hidden` or `clip` whose `scrollWidth` or `scrollHeight` is more than 1 px bigger than its client box, with text inside, and no `text-overflow: ellipsis` (a cut that shows an ellipsis is a decision, not an accident) and no `-webkit-line-clamp`. |
+| `clickable-role` | An element that reacts to a click is a native `button`, `a[href]`, `input`, `select`, `textarea`, `summary`, or has a role from the list (`button`, `link`, `tab`, `menuitem`, `switch`, `checkbox`, `radio`, `slider`, `separator`, `option`, `combobox`) and is focusable. "Reacts to a click" is read from two sources. An init script wraps `EventTarget.prototype.addEventListener` and remembers the elements that got a `click`, `mousedown`, `pointerdown`, `pointerup` or `touchstart` listener (the canvas, `document`, `window`, `html` and `body` are not elements of the interface). Besides, an element whose computed `cursor` is `pointer` while its parent's is not. A descendant of a control belongs to the control. |
+| `name` | Each control has an accessible name: `aria-labelledby`, `aria-label`, the text of a label, the content text with the `alt` of images and the `aria-label` of descendants, `title`, `placeholder`, in that order, trimmed and not empty. A second net: the `ariaSnapshot` of the page is read, and a line for a button, link, tab, menuitem, checkbox, radio, switch, textbox, combobox or slider without a name in quotes is a problem. Disabled controls are checked too. |
+| `tab` | The page is walked with the Tab key (at most controls + 4 presses). Chromium starts the walk at the last click, so one wrap past the end of the page is allowed; the walk stops when an element repeats. Inside a modal it starts where the focus is. Every enabled control that is visible, not behind a modal and has `tabindex >= 0` must be reached; a control scrolled out of a scrolling list counts (Tab scrolls it into view). A control with `tabindex="-1"` is a problem. An element reached that the scan did not list is a problem too (a focus stop that does nothing, or a modal that lets the focus out). Items of an open `role="menu"` move with the arrow keys and Tab closes the menu, so a screen with a menu open skips the walk and the items are not Tab stops. A separator is a control only when it has a `tabindex` (the activity splitter); otherwise it is a divider line. The focus is put back where it was after the walk. |
+| `focus-ring` | Each element the walk reaches matches `:focus-visible` and shows a ring: `outline-style` other than `none` with a width above 0, or a `box-shadow`. |
+| `cursor` | Each enabled button, link, tab, menuitem, switch, checkbox, radio, option, summary and `[role=button]` has `cursor: pointer`. Text fields, selects, sliders and separators are exempt (their own cursor says what they do). |
+
+The Tab walk is the slow part (one key press and one read per stop). It runs on every screen but stops as soon as an element repeats.
+
+## Sizes and the canvas
+
+The room is not scaled to the window (zoom is 1 or 2), so at 360x640 part of a floor lies outside the stage. `useFurniture(page, piece)` in `world.ts` clicks the piece's tile when that point is inside the stage, not under another control, and otherwise runs the command of the palette that does the same thing ("New change job in haunted-todo", "Approve plan in", "Open report of"). The route taken goes into the test's annotations (`route: computer: canvas`), so a run shows how much of the journey used the canvas at each size. At 360x640 the mailbox lies outside the stage, so that journey takes the palette route there and goes from the report the palette opens back to the list ("Back to the mailbox") to read the row. The Edit room journey and the shop counter need only tiles near the middle of the stage, which are inside at all three sizes.
+
+## Journeys (requirement 1)
+
+Each test starts its own hotel and has no dependency on the others. The first one is short, the second is the whole story.
+
+1. **Lobby**: Edit room; select the plant, move it with an arrow and turn it with `R`, twice in a row, then click it again where it stands (the bug the user found by hand); Done. Open the Menu with the keyboard, move with the arrows, close with Esc. Open the Actions menu and run Wave (the `emote` frame is sent).
+2. **One run through the hotel**: shop counter, buy a fern and the flat cap (the balance falls by 14 and 40, to 446); HR office, put the cap on the Developer (its preview changes); project floor, place the fern from the inventory tray, Done; the computer, start a job; the plan arrives, the mailbox approves it; a wisp is caught (+1 Ecto); the job ends and the mailbox row says "Branch ready"; the row opens the report; Deliver; the viewer shows the branch and the commit; the row no longer says "Branch ready". Profile: level, XP, the `approver` badge and three quests done; reload; the Developer wears the cap (`data-looks`) and the fern is still there.
+3. **List and palette**: list view shows the job started from its row; the plan is approved with `Approve plan` from Ctrl+K; the row ends Done; the report opens from the palette.
+
+`runCommand` repeats the search until the command is listed: the overview behind the palette can lag a moment behind the toast that announced the same thing.
+
+## The rules test themselves
+
+`e2e/rules.spec.ts` builds small pages with one deliberate fault each (a control outside the window, one under another element, a wide page, clipped text with and without an ellipsis, a div with a click listener, an `onclick` and a pointer cursor, a nameless icon button, a skipped Tab stop, a missing focus ring, a default cursor on a button, a modal with and without a Tab trap) and checks that exactly that rule reports it, and that a clean page reports nothing. It needs no hotel.
+
+## Accepted exceptions (`support/allowlist.ts`)
+
+| Rule | Element | Why |
+|---|---|---|
+| `cursor` | `.al-tray-item` | A draggable inventory item shows `grab`. |
+| `clickable-role` | `.al-palette-wrap` | The dim area behind the palette closes it when clicked; Esc and Ctrl+K do it from the keyboard. |
+| `viewport`, `tab` | `.al-wisp` | At small windows a wisp can lie on a tile outside the part of the room the stage shows. It is a bonus. |
+| `text-cut` | `main.al-stage` | The room is wider than the stage at 360 px and the stage clips it on purpose. |
+| console | `Failed to load resource` for `/favicon.ico` | The Vite dev server has no favicon. |
+
+Known limits of the scan: accessible names are computed by a close approximation of the spec plus a second look at Chromium's `ariaSnapshot`, not by the browser for each element; contrast and the order of Tab stops are not checked.
+
+## Bugs found
+
+Each entry: what the test showed, the cause, the smallest fix, the test that now holds it.
+
+1. **The Menu list was cut to its first item.** The viewport rule reported "control cut by an ancestor with overflow hidden" for the items of the Menu, and a screenshot showed only "Commands" under the top bar. `.al-top` had `overflow: hidden` and the list is positioned inside it. Fix: remove `overflow: hidden` from `.al-top` (`ui/shell.ts`); the strip and the middle group clip their own content. Held by: every `menu` screen of the lobby journey, at the three sizes.
+2. **Open report from the palette or the list opened the mailbox on its list, not on the report.** When the client held the report already, the viewer opened at once and the floor's `open_panel` (an answer to the `show_panel` the action sent) came after and reset it. Fix: the action opens the viewer once the mailbox panel is open on this floor (`mailboxOpen` dependency in `list-actions.ts`); the `show_panel` is still sent, because it is what tells the floor the user saw the report. Held by: `list-mode.test.ts` (two tests) and the list journey ("report from the palette").
+3. **The command palette let the focus out.** It is a modal (`aria-modal`) with one stop, but Tab moved the focus to the activity filters and the splitter behind the dim area. Fix: Tab is swallowed in the field (`ui/command-palette.ts`). Held by: the "palette" screen of the list journey and the modal test of `rules.spec.ts`.
+4. **A toast or a wisp covered the list.** In the list view at 360 and 800 px the "plan ready" toast sat over the "night board" button of the list, and wisps floated over its rows. Fix: the list view hides `.al-turn` and `.al-wisp` (`ui/list-view.ts`); the rows show the same things ("Your turn", Review plan). Held by: the "list, plan waiting" screen.
+
+Not changed, and written down: the toast for a report opened with its button (`panels.openReport`) does not tell the floor that the user saw it, so the floor's overview keeps saying "Report ready" until the mailbox is opened with the furniture or the palette. Not touched by this spec.

@@ -221,15 +221,17 @@ describe("list actions", () => {
     const opened: string[] = [];
     let hotel = 0;
     const reports = opts.reports ?? new Set<string>();
+    const mailbox = { open: false };
     const nav = createNavigator({ send: (m) => sent.push(m), toast: () => undefined });
     const actions = createListActions({
       navigator: nav,
       send: (m) => sent.push(m),
+      mailboxOpen: () => mailbox.open,
       hasReport: (id) => reports.has(id),
       openReport: (id) => opened.push(id),
       showHotel: () => void (hotel += 1),
     });
-    return { nav, sent, opened, actions, reports, hotel: () => hotel };
+    return { nav, sent, opened, actions, reports, mailbox, hotel: () => hotel };
   }
 
   it("a new job on the user's own floor opens the form of its kind without moving", () => {
@@ -270,15 +272,39 @@ describe("list actions", () => {
   });
 
   it("open report opens the mailbox, then the report once the floor has sent it", () => {
-    const { nav, sent, opened, actions, reports } = harness();
+    const { nav, sent, opened, actions, reports, mailbox } = harness();
     nav.handle(welcome("lobby"));
     actions.openReport("project:alpha", "r1");
     nav.handle(welcome("project:alpha"));
     expect(sent.at(-1)).toEqual({ type: "show_panel", panel: "mailbox" });
     expect(opened).toEqual([]);
     reports.add("r1");
+    mailbox.open = true;
     nav.handle({ type: "open_panel", panel: "mailbox" } as ServerMsg);
     expect(opened).toEqual(["r1"]);
+  });
+
+  it("open report waits for the floor's open_panel even when the client holds the report already", () => {
+    // The floor's `open_panel` closes a viewer that was opened before it: the viewer must come after it.
+    const { nav, sent, opened, actions, reports, mailbox } = harness();
+    reports.add("r1");
+    nav.handle(welcome("project:alpha"));
+    actions.openReport("project:alpha", "r1");
+    expect(sent).toEqual([{ type: "show_panel", panel: "mailbox" }]);
+    expect(opened).toEqual([]);
+    mailbox.open = true;
+    nav.handle({ type: "open_panel", panel: "mailbox" } as ServerMsg);
+    expect(opened).toEqual(["r1"]);
+  });
+
+  it("open report with the mailbox open already opens the viewer at once", () => {
+    const { nav, sent, opened, actions, reports, mailbox } = harness();
+    reports.add("r1");
+    mailbox.open = true;
+    nav.handle(welcome("project:alpha"));
+    actions.openReport("project:alpha", "r1");
+    expect(opened).toEqual(["r1"]);
+    expect(sent).toEqual([]);
   });
 
   it("go to a floor returns to the hotel view and moves", () => {

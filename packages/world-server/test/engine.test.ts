@@ -74,6 +74,37 @@ describe("FakeEngineLink", () => {
     await expect(engine.resolveApproval("nope", "approve")).rejects.toThrow();
     engine.close();
   });
+
+  it("offers no delivery unless asked for", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    expect(engine.deliver).toBeUndefined();
+    engine.close();
+  });
+
+  it("delivers a finished change once, as a branch, when asked for", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0, deliver: true });
+    const { events } = collect(engine);
+    const { taskId } = await engine.startJob("haunted-todo", "g");
+    await tick();
+    // Not before the job is over.
+    await expect(engine.deliver!(taskId)).rejects.toThrow("Only a finished change");
+    expect((await engine.getJobDetails(taskId)).job.deliverable).toBeUndefined();
+
+    await engine.resolveApproval(`appr-${taskId}`, "approve");
+    await tick();
+    expect((await engine.getJobDetails(taskId)).job).toMatchObject({ deliverable: true });
+    const info = await engine.deliver!(taskId);
+    expect(info.branch).toBe(`agentlife/${taskId}`);
+    const done = events.find((e) => e.type === "delivery.done");
+    AgentEventSchema.parse(done);
+    expect(done).toMatchObject({ taskId, branch: info.branch, commit: info.commit });
+    const { job } = await engine.getJobDetails(taskId);
+    expect(job.delivery).toEqual(info);
+    expect(job.deliverable).toBeUndefined();
+    await expect(engine.deliver!(taskId)).rejects.toThrow("delivered already");
+    await expect(engine.deliver!("nope")).rejects.toThrow("unknown task");
+    engine.close();
+  });
 });
 
 describe("gateway with the fake engine", () => {

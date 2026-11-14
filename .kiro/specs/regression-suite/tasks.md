@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Journeys and interface rules
+- [x] 1. Journeys and interface rules
   - Shared helpers (clean state, scratch files, layout and interface rules, console errors); the journeys of requirement 1 at the three sizes; fix real bugs they find and record each in design.md
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.3, 4.3_
 

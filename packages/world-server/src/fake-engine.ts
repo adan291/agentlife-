@@ -3,6 +3,7 @@ import type {
   AgentId,
   ApprovalDecision,
   ArtifactView,
+  DeliveryInfo,
   JobDetails,
   JobState,
   JobView,
@@ -28,7 +29,12 @@ export interface FakeEngineOptions {
   clock?: () => number;
   /** Give the scripted engine an HR office with the default team (tests and Playwright; `FAKE_HR=1` in `main.ts`). */
   hr?: boolean;
+  /** Let a finished job be delivered as a branch, like a job on a registered project (tests and Playwright; `FAKE_DELIVER=1`). */
+  deliver?: boolean;
 }
+
+/** What the scripted delivery reports: no repository is touched. */
+const FAKE_COMMIT = "3f2a9c1d7b5e";
 
 type Draft = AgentEvent extends infer E ? (E extends unknown ? Omit<E, "seq" | "ts" | "taskId"> : never) : never;
 
@@ -47,6 +53,7 @@ interface Job {
   approval: Promise<ApprovalDecision>;
   artifacts: ArtifactView[];
   stepWork: Map<StepName, StepWork>;
+  delivery?: DeliveryInfo;
 }
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
@@ -92,11 +99,27 @@ export class FakeEngineLink implements EngineLink {
   private wake: (() => void) | null = null;
   /** The HR office, only when asked for (`FAKE_HR=1`, tests): the scripted engine has none otherwise. */
   hr?: HrLink;
+  /** Fetches the job's branch, only when asked for (`FAKE_DELIVER=1`, tests): the scripted engine has no repository. */
+  deliver?: (taskId: string) => Promise<DeliveryInfo>;
 
   constructor(options: FakeEngineOptions = {}) {
     this.stepMs = options.stepMs ?? 1500;
     this.clock = options.clock ?? Date.now;
     if (options.hr) this.hr = createFakeHr(FAKE_REPO.id, FAKE_REPO.name);
+    if (options.deliver) this.deliver = (taskId) => this.deliverBranch(taskId);
+  }
+
+  /** The scripted delivery: a finished job gets a branch name and a commit, once, and `delivery.done` is announced. */
+  private deliverBranch(taskId: string): Promise<DeliveryInfo> {
+    const job = this.jobs.get(taskId);
+    if (!job) return Promise.reject(new Error(`unknown task '${taskId}'`));
+    if (job.delivery) return Promise.reject(new Error("This job was delivered already."));
+    if (job.view.state !== "delivered" || !job.artifacts.some((a) => a.kind === "diff")) {
+      return Promise.reject(new Error("Only a finished change can be delivered."));
+    }
+    job.delivery = { branch: `agentlife/${taskId}`, commit: FAKE_COMMIT };
+    this.emit(taskId, { type: "delivery.done", ...job.delivery });
+    return Promise.resolve({ ...job.delivery });
   }
 
   listRepos(): Promise<Repo[]> {
@@ -195,6 +218,8 @@ export class FakeEngineLink implements EngineLink {
         approvals: [],
         artifacts: job.artifacts.map((a) => ({ artifactId: a.artifactId, kind: a.kind, title: a.title })),
         ...(hasDevelop ? { branch: `agentlife/${taskId}` } : {}),
+        ...(job.delivery ? { delivery: { ...job.delivery } } : {}),
+        ...(this.deliver && !job.delivery && hasDevelop && (job.view.state === "report_ready" || job.view.state === "delivered") ? { deliverable: true } : {}),
       },
       artifacts: structuredClone(job.artifacts),
     });
