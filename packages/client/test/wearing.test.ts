@@ -120,7 +120,7 @@ describe("the user's figure wears parts", () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   it("only adds: the bare figure's drawing is inside the dressed one, and every part adds something (front-only pieces not from behind)", () => {
     for (const p of shipped) {

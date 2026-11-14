@@ -90,6 +90,21 @@ pnpm --filter @agentlife/client check:demo-build   # fails if the build referenc
 
 The `pages.yml` workflow runs the checks, the Playwright smoke test (`pnpm --filter @agentlife/client e2e:demo`) and deploys the build to GitHub Pages on every push to `main`.
 
+## Tests
+
+```bash
+pnpm check                                          # typecheck and unit tests of every package
+pnpm --filter @agentlife/client e2e                 # the browser suite (Playwright, scripted engine, scratch data files)
+pnpm --filter @agentlife/client e2e:update-visuals  # rewrite the screenshot baselines of this platform on purpose
+pnpm --filter @agentlife/client e2e:demo            # smoke test of the demo build
+```
+
+The browser suite has user journeys through the hotel, layout and interface rules checked on every screen at 360x640, 800x600 and 1366x768, and screenshot comparisons. It starts its own servers on ports 8795 to 8798 and 5196 to 5199 and writes only scratch files in the temp folder, never the hotel's `data/`. Stop any server left on those ports before a run. On Windows set `E2E_CHANNEL=msedge` (PowerShell: `$env:E2E_CHANNEL='msedge'`) to use the installed Edge; elsewhere run `pnpm --filter @agentlife/client exec playwright install chromium` once. A failed run keeps its report in `packages/client/playwright-report` (`pnpm --filter @agentlife/client exec playwright show-report`), with the expected, actual and diff images of a failed screenshot.
+
+Screenshot baselines are in `packages/client/e2e/__visuals__/<platform>/`. A platform without a folder skips the screenshot comparisons and says so. Review the PNG diff in the commit after `e2e:update-visuals`.
+
+The conductor (`pnpm conduct`) runs the whole browser suite and `e2e:demo` on `main` after every merge and stops if one fails; a test that fails and passes on one immediate retry is written to `data/sessions/log.md` as flaky. CI runs the suite on Linux and Windows on every push and pull request, without the screenshot comparisons, and keeps the Playwright report as an artifact when it fails.
+
 ## Assets and attribution
 
 Only CC0 or MIT assets and code are used. Every item is listed in [ASSETS.md](ASSETS.md) with its source and licence. No Habbo (Sulake) graphics, sounds, names, code or trade dress are used or copied.
