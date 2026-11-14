@@ -2,7 +2,7 @@ import { expect, test as base } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { ACCEPTED_MESSAGES } from "./allowlist.ts";
 import { startHotel } from "./hotel.ts";
-import type { Hotel } from "./hotel.ts";
+import type { Hotel, HotelSeed } from "./hotel.ts";
 import { installClickProbe, screenProblems } from "./rules.ts";
 
 export { expect };
@@ -12,13 +12,19 @@ interface Fixtures {
   hotel: Hotel;
 }
 
+interface Options {
+  /** What the hotel starts with besides the defaults (`test.use({ hotelSeed: ... })`). */
+  hotelSeed: HotelSeed;
+}
+
 /**
  * `test` for the journeys: the page talks to the test's own hotel, remembers what reacts to a click (for the interface
  * rules) and fails the test at the end if the page raised an error or logged one that `allowlist.ts` does not accept.
  */
-export const test = base.extend<Fixtures>({
-  hotel: async ({}, use) => {
-    const hotel = await startHotel();
+export const test = base.extend<Fixtures & Options>({
+  hotelSeed: [{}, { option: true }],
+  hotel: async ({ hotelSeed }, use) => {
+    const hotel = await startHotel(hotelSeed);
     try {
       await use(hotel);
     } finally {

@@ -82,6 +82,44 @@ Each test starts its own hotel and has no dependency on the others. The first on
 
 Known limits of the scan: accessible names are computed by a close approximation of the spec plus a second look at Chromium's `ariaSnapshot`, not by the browser for each element; contrast and the order of Tab stops are not checked.
 
+## Visual comparisons (task 2, requirement 3)
+
+`e2e/visuals.spec.ts` and `e2e/support/visual.ts`. Same hotel-per-test fixture as the journeys, so no state is shared. It reads no `data/` file.
+
+### Making a screenshot repeatable
+
+`freezeForScreenshots(page)` runs before the first load:
+
+| What moves | How it is stopped |
+|---|---|
+| Motes, glow pulse, mailbox bounce, lamp and candle flicker, working signs, team bar bob, doors | `page.emulateMedia({ reducedMotion: "reduce" })`. The client reads `prefers-reduced-motion` at start for every one of these (`scene/glow.ts`, `ui/transition.ts`, the CSS). |
+| Anything drawn from the time: the scene is ticked with `Date.now()` (`world.tick`), emote loops, elapsed times of the team bar, clock texts | `page.clock.setFixedTime(2030-01-01T12:00Z)`: `Date.now()` and `new Date()` never change. Timers keep running, so the page works as usual. |
+| Walks, bubbles and wisps, which the server stamps with the real time | The fixed time lies years after any real stamp, so the page sees every walk finished and every bubble gone, whichever day the test runs. |
+| Random numbers | None to fix: the client has no `Math.random` (the motes come from a sine hash of their index). |
+| CSS transitions (panels, toasts) | `animations: "disabled"` in `toHaveScreenshot` (config), which ends them at once. |
+| Text caret, hover | `caret: "hide"`; the mouse goes to the corner before each shot. |
+
+Playwright also takes screenshots until two in a row are identical, so a repaint that is still happening fails the shot instead of being written.
+
+Checked on 2026-11-14 (Windows, Edge): baselines written, then three full runs of 12 tests compared with them with zero differing pixels (no `maxDiffPixels` or threshold was needed; the config keeps Playwright's defaults). Control: with the freeze left out all 12 tests fail ("Failed to take two consecutive stable screenshots"), so the freeze is what makes the run repeatable, and a failure keeps `-expected`, `-actual` and `-diff` images in `test-results/` and in the HTML report (`reporter: [["list"], ["html", { open: "never" }]]`, `playwright-report/`, git-ignored).
+
+Content that is not the same every day is not compared: the quests of the Profile (the date picks three of the pool) are left out; nothing else shown depends on the date (a clean hotel has level 0, no ledger and no reports).
+
+### Screens
+
+Each at 360x640, 800x600 and 1366x768, named `<screen>-<phone|laptop|desktop>.png`:
+
+- Rooms: `lobby`, `hr-office`, `floor-default`, `floor-decorated`. The decorated floor has nine bought pieces (plants, lights, seats, a table, a rug, a poster) seeded into the scratch inventory (`hotelSeed`, `support/hotel.ts`); the test checks that the inventory file still holds all nine, because a piece the room cannot take goes back to the stock and the shot would show a bare floor.
+- Panels and menus: `shop-furniture`, `shop-outfits`, `elevator`, `menu`, `actions-menu`, `profile-badges`, `profile-look`, `lobby-editing` (the Edit room bar), `palette`, `list`, `hr-desk`, `computer`, `mailbox-empty`. The mailbox is clicked on the floor, so at 360 px, where it lies outside the stage, that one screen is not taken and the test says so in its annotations.
+
+Not compared: panels that need a running job (plan, report, job card, activity with lines): their text carries ids and times from the server. The journeys check their behaviour and layout.
+
+### Baselines per platform
+
+`snapshotPathTemplate: "{testDir}/__visuals__/{platform}/{arg}{ext}"`: `e2e/__visuals__/win32/` is committed (2 MB). Edge and Playwright's Chromium on the same OS can differ in text, so baselines are made with the browser the platform's runs use (Edge through `E2E_CHANNEL=msedge` on Windows; Chromium on Linux in CI). A platform with no folder skips all of `visuals.spec.ts`: an auto fixture (`baselines`) calls `testInfo.skip` with "No visual baselines for <platform>..." before the hotel starts, and the skipped tests and that reason are in the report. While updating (`updateSnapshots` is `all` or `changed`) the gate is open.
+
+`pnpm --filter @agentlife/client e2e:update-visuals` runs `playwright test visuals.spec.ts --update-snapshots=all`: it rewrites every baseline of this platform on purpose, and the diff of the PNGs is what a person reviews in the commit. Linux baselines do not exist yet; task 3 decides whether CI writes them or only skips.
+
 ## Bugs found
 
 Each entry: what the test showed, the cause, the smallest fix, the test that now holds it.

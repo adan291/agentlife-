@@ -72,17 +72,39 @@ function waitForListening(child: ChildProcess): Promise<void> {
   });
 }
 
+/** A bought piece already standing on a project floor when the hotel starts (the visual comparisons need a decorated floor). */
+export interface SeedPiece {
+  /** The catalogue item (`fern`). */
+  item: string;
+  x: number;
+  y: number;
+  dir: 0 | 2 | 4 | 6;
+}
+
+/** What a hotel starts with besides the defaults. */
+export interface HotelSeed {
+  /** Pieces placed on project floors, by project id. They are numbered `bought_1`, `bought_2`... in the order given. */
+  placed?: Readonly<Record<string, readonly SeedPiece[]>>;
+}
+
 /**
  * Starts a hotel of its own: a scripted engine with an HR office and branch delivery, a wallet with Ecto, wisps every
  * 300 to 500 ms, and scratch files for everything it saves. Nothing is read from or written to `data/`.
  */
-export async function startHotel(): Promise<Hotel> {
+export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
   const dir = await mkdtemp(join(tmpdir(), "agentlife-journey-"));
   const file = (name: string): string => join(dir, `${name}.json`);
   const seed = (name: string, value: unknown): Promise<void> => writeFile(file(name), `${JSON.stringify(value)}\n`, "utf8");
+  let seq = 0;
+  const placed = Object.fromEntries(
+    Object.entries(options.placed ?? {}).map(([project, pieces]) => [
+      project,
+      pieces.map((p) => ({ id: `bought_${++seq}`, itemId: p.item, x: p.x, y: p.y, dir: p.dir })),
+    ]),
+  );
   await Promise.all([
     seed("wallet", { version: 1, since: 0, balance: START_BALANCE, ledger: [], granted: [] }),
-    seed("inventory", { version: 1, stock: {}, placed: {}, seq: 0 }),
+    seed("inventory", { version: 1, stock: {}, placed, seq }),
     seed("wardrobe", { version: 1, owned: [] }),
     seed("quests", { version: 1, quests: QUEST_POOL }),
   ]);
