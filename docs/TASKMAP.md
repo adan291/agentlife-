@@ -22,13 +22,14 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 12 | `team-progress` | S31 | yes | needs-check | RPG: XP and levels from real stats, badges, daily quests |
 | 13 | `waiting-fun` | S32 | yes | needs-check | While you wait: catch wisps, sit and emotes, ghost mood with a coffee machine |
 | 14 | `ui-tidy` | S33 S34 | yes | needs-check | Clean top bar: Edit room button, Menu dropdown, Actions menu for the avatar; no stale Builder |
-| 15 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
+| 15 | `ghost-skins` | S35 S36 | yes | todo | Outfits for the ghosts and the avatar (hat, top, accessory), bought with Ecto or unlocked by badges, worn from the HR desk and the Profile |
+| 16 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
 
 Dependencies: 2 needs 1; 3 needs 2; 4, 5, 6, 7 need 2; 5 needs 4; 8 needs 4 and 5; 9 needs 6; 10 needs 2; 11 needs 10; 12 needs 11 and 6; 13 needs 12. Rows 11-13 are the game layer (user, 2026-11-13): rewards come only from verified engine events, granted by the world-server; the game never changes what agents do or their permissions. The order above respects them.
 
-Cut order if late (freeze 2026-12-01): 14 task 2, then 13, then 12, then 9, then 8, then 7. Never cut 1, 2, 4, 5 or 10.
+Cut order if late (freeze 2026-12-01): 15, 14 task 2, then 13, then 12, then 9, then 8, then 7. Never cut 1, 2, 4, 5 or 10.
 
 ## Agents
 

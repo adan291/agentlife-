@@ -287,6 +287,20 @@
       "model": "claude-sonnet-5.5",
       "effort": "medium",
       "prompt": "Implement task 3 of the ui-tidy spec (.kiro/specs/ui-tidy), following its design.md. Follow workflow.md."
+    },
+    {
+      "id": "S35",
+      "spec": "ghost-skins",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 1 of the ghost-skins spec (.kiro/specs/ghost-skins). Write its design.md first (part format, how parts are drawn on the ghost per direction, wardrobe and grant rules reusing furni-shop). Every part is drawn in code in the hotel's pixel style; nothing traced from a picture or another game. Follow workflow.md."
+    },
+    {
+      "id": "S36",
+      "spec": "ghost-skins",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 2 of the ghost-skins spec (.kiro/specs/ghost-skins), following its design.md. Follow workflow.md."
     }
   ]
 }

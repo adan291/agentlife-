@@ -1,4 +1,4 @@
-# How AGENT LIFE uses Kiro
+﻿# How AGENT LIFE uses Kiro
 
 AGENT LIFE uses Kiro in four places: the IDE, the product's own agents, the unattended build sessions, and the Discord side (Kiro Crew). Each item below links to the files that show it.
 
@@ -26,7 +26,6 @@ Hooks run automatically on Kiro events.
 - [push-guard.json](.kiro/hooks/push-guard.json): a PreToolUse hook. Before any shell call that is a `git push`, it runs the leak scanner and blocks the push if it finds secrets or personal data.
 - [typecheck-on-save.json](.kiro/hooks/typecheck-on-save.json): runs `pnpm typecheck` when a TypeScript file under `packages/` is saved.
 - [status-reminder.json](.kiro/hooks/status-reminder.json): at the end of a run, checks that the spec's tasks and `docs/STATUS.md` match the work done.
-- [presence-here.json](.kiro/hooks/presence-here.json): records that the user is at the PC, so automatic notifications stay in the chat and do not go to Discord.
 
 ## 4. Custom agents
 

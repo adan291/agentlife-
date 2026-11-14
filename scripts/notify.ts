@@ -188,8 +188,9 @@ async function statusMessage(): Promise<string> {
   ].join("\n");
 }
 
-// Presence = where the user last wrote from. A Kiro IDE hook writes "here" on every prompt in this
-// workspace; Kiro Crew's steering writes "away" on every Discord turn (pnpm notify --away).
+// Presence: Kiro Crew's steering writes "away" on every Discord turn (pnpm notify --away) and "here" when the
+// user says on Discord that they are back at the PC (pnpm notify --here). Kiro IDE no longer has a hook for it
+// (it fired on every prompt; user, 2026-11-14).
 const PRESENCE = join(ROOT, "data", "presence.json");
 
 function setPresence(mode: "here" | "away"): void {
