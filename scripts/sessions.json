@@ -322,6 +322,20 @@
       "model": "claude-sonnet-5.5",
       "effort": "medium",
       "prompt": "Implement task 3 of the regression-suite spec (.kiro/specs/regression-suite), following its design.md. Follow workflow.md."
+    },
+    {
+      "id": "S40",
+      "spec": "bug-sack",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 1 of the bug-sack spec (.kiro/specs/bug-sack). Write its design.md first (fingerprint, grouping, file format, where each grabber hooks in, limits). Every stored text passes the shared leak scanner. Follow workflow.md."
+    },
+    {
+      "id": "S41",
+      "spec": "bug-sack",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 2 of the bug-sack spec (.kiro/specs/bug-sack), following its design.md. The bug jar is drawn in code in the hotel's pixel style. Run the whole Playwright suite with E2E_CHANNEL=msedge and update the visual baselines for the new panel. Follow workflow.md."
     }
   ]
 }
