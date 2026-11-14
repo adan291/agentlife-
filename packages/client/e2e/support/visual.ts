@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Size } from "./world.ts";
@@ -44,9 +44,28 @@ export function missingBaselines(testInfo: TestInfo): string | undefined {
 /**
  * Compares the page with the baseline `<screen>-<size>.png`. The mouse goes to a corner first so no hover state is left, and
  * the screenshot waits until two takes in a row are the same. On a failure Playwright keeps the expected, actual and diff
- * images in the report.
+ * images in the report. `mask` lists what the server stamps with the real time (clock times, durations): it is painted over in
+ * both images, so the rest of the screen is still compared.
  */
-export async function expectLooksLike(page: Page, screen: string, size: Size): Promise<void> {
+export async function expectLooksLike(page: Page, screen: string, size: Size, mask: readonly Locator[] = []): Promise<void> {
   await page.mouse.move(0, 0);
-  await expect(page).toHaveScreenshot(`${screen}-${size.name}.png`);
+  await expect(page).toHaveScreenshot(`${screen}-${size.name}.png`, { mask: [...mask] });
+}
+
+/**
+ * What a job's panels show that depends on the real time or the date: the clock times of the activity lines, the report rows
+ * and the timeline, the durations (steps table and progress strip), and the Ecto balance (the quests the date picks pay
+ * different amounts). Everything else on those panels is the same on every run.
+ */
+export function timeMasks(page: Page): Locator[] {
+  return [
+    page.locator(".al-term-time"),
+    page.locator(".al-report-item .al-muted"),
+    page.locator(".al-report-head .al-muted"),
+    page.locator(".al-timeline"),
+    page.locator(".al-table td:nth-child(5)"),
+    page.locator(".al-term-latest"),
+    page.locator(".al-step-time"),
+    page.locator(".al-balance"),
+  ];
 }

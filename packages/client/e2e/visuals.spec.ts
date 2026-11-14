@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test as hotelTest } from "./support/fixtures.ts";
 import type { SeedPiece } from "./support/hotel.ts";
-import { expectLooksLike, freezeForScreenshots, missingBaselines } from "./support/visual.ts";
-import { COMPUTER, FLOOR_NAME, SIZES, canvasHit, goTo, openHotel, tilePoint, useFurniture } from "./support/world.ts";
+import { expectLooksLike, freezeForScreenshots, missingBaselines, timeMasks } from "./support/visual.ts";
+import { COMPUTER, FLOOR_NAME, SIZES, canvasHit, goTo, mailbox, openHotel, tilePoint, useFurniture } from "./support/world.ts";
 import type { Size } from "./support/world.ts";
 
 /**
@@ -133,6 +133,68 @@ for (const size of SIZES) {
       await page.keyboard.press("l");
       await expect(page.locator(".al-list")).toBeVisible();
       await expectLooksLike(page, "list", size);
+      await page.keyboard.press("l");
+      await expect(page.locator(".al-list")).toBeHidden();
+
+      await page.keyboard.press("?");
+      const help = page.getByRole("dialog", { name: "How it works" });
+      await expect(help).toBeVisible();
+      await expectLooksLike(page, "help", size);
+      await page.keyboard.press("Escape");
+      await expect(help).toBeHidden();
+
+      const reception = await tilePoint(page, "lobby", 1, 0);
+      await page.mouse.click(reception.x, reception.y - 12);
+      await expect(page.locator(".al-panel h3").first()).toHaveText(/Reception/);
+      await expectLooksLike(page, "reception", size);
+    });
+
+    test.describe("a job running", () => {
+      test.use({ hotelSeed: { noWisps: true } });
+
+      test("panels of a job: activity, plan, job card, report", async ({ page }) => {
+        test.setTimeout(150_000);
+        await open(page, size, "project");
+        const panel = page.locator(".al-panel");
+        const masks = timeMasks(page);
+
+        await useFurniture(page, COMPUTER);
+        await expect(panel.locator("h3").first()).toHaveText("Computer");
+        await panel.locator("textarea").fill("Add a title check to addTodo");
+        await panel.getByRole("button", { name: "Start job" }).click();
+        await page.keyboard.press("Escape");
+        await expect(panel).toBeHidden();
+
+        // The job stops at the plan and waits for the user: its lines in the activity terminal, then the plan in the mailbox.
+        await expect(page.locator('.al-turn[data-kind="your-turn"]')).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator(".al-term-row").first()).toBeAttached();
+        await expectLooksLike(page, "activity-lines", size, masks);
+        await useFurniture(page, mailbox(`Approve plan in ${FLOOR_NAME}`));
+        await expect(panel.locator("h3").first()).toHaveText("Mailbox");
+        await expect(panel.getByRole("button", { name: "Approve" })).toBeVisible();
+        await expectLooksLike(page, "plan", size, masks);
+        await panel.getByRole("button", { name: "Approve" }).click();
+        await page.keyboard.press("Escape");
+        await expect(panel).toBeHidden();
+
+        // The job ends: the job card from the progress strip, then the report from the mailbox.
+        await expect(page.locator('.al-turn[data-kind="report"]')).toBeVisible({ timeout: 60_000 });
+        await page.locator(".al-step, .al-stepper-compact").locator("visible=true").first().click();
+        const card = page.getByRole("dialog", { name: "Job" });
+        await expect(card).toBeVisible();
+        await expect(card.locator(".al-table tbody tr")).not.toHaveCount(0);
+        await expectLooksLike(page, "job-card", size, masks);
+        await page.keyboard.press("Escape");
+        await expect(card).toBeHidden();
+
+        const route = await useFurniture(page, mailbox(`Open report of ${FLOOR_NAME}`));
+        if (route === "palette") await panel.getByRole("button", { name: /Back to the mailbox/ }).click();
+        await expect(panel.locator(".al-report-item")).toHaveCount(1);
+        await expectLooksLike(page, "mailbox-report", size, masks);
+        await panel.locator(".al-report-item").click();
+        await expect(panel.getByRole("button", { name: "Deliver as branch" })).toBeVisible();
+        await expectLooksLike(page, "report", size, masks);
+      });
     });
 
     test("panels on the HR office and a project floor", async ({ page }) => {

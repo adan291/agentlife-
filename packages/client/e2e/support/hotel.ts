@@ -85,6 +85,8 @@ export interface SeedPiece {
 export interface HotelSeed {
   /** Pieces placed on project floors, by project id. They are numbered `bought_1`, `bought_2`... in the order given. */
   placed?: Readonly<Record<string, readonly SeedPiece[]>>;
+  /** No wisp during the test (the first one comes after 10 minutes): a screenshot of a running job must not show one. */
+  noWisps?: boolean;
 }
 
 /**
@@ -119,7 +121,7 @@ export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
       ENGINE: "fake",
       FAKE_HR: "1",
       FAKE_DELIVER: "1",
-      AGENTLIFE_WISP_MS: "300,500",
+      AGENTLIFE_WISP_MS: options.noWisps ? "600000,900000" : "300,500",
       AGENTLIFE_LAYOUTS_FILE: file("layouts"),
       AGENTLIFE_WALLET_FILE: file("wallet"),
       AGENTLIFE_INVENTORY_FILE: file("inventory"),

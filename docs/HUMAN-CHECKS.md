@@ -1,50 +1,23 @@
 # Human checks
 
-The Playwright suite (`pnpm --filter @agentlife/client e2e`, see README) walks the hotel as a user does, checks layout and interface rules at 360x640, 800x600 and 1366x768, and compares screenshots with baselines. Whatever it covers is ticked at the end of this file with the test that covers it. The first part is what is left, and it needs a person.
+The Playwright suite (`pnpm --filter @agentlife/client e2e`, see README) walks the hotel as a user does, checks layout and interface rules at 360x640, 800x600 and 1366x768, and compares screenshots with baselines. Whatever it covers is ticked at the end of this file with the test that covers it. The list below is what is left, and it needs a person. Checks that a test could do but none does yet are in `docs/regression-backlog.md`.
 
 ## Needs a human
 
 Tick an item when checked; tell Kiro about anything that fails.
 
-### Real runs (real engine, `kiro-cli`, Docker, a real project)
-- [ ] Copy a small git project into D:\AgentHotel, register it at the Reception, run one job with the real engine, approve, press "Deliver as branch": the branch `agentlife/<task>` exists in your repository and nothing else changed. (Scripted delivery is in the journeys; the real branch is not.)
-- [ ] With two registered projects, start jobs on both and a third one to see the queue.
-- [ ] A real job to the end: the team bar shows "Lv N" lines, a Developer and a QA go up a level, the first run starts at level 0 and old jobs give no XP or Ecto (the `since` rule), and a real "Deliver a branch" quest pays once (restart the world-server: the balance does not change).
-- [ ] HR with the real engine: hire a QA, fire the first one, take the elevator (the old one leaves, the new one walks in with its name); "Suggest a team" and "Apply this team"; hire a second developer, a reviewer, a researcher and the Night intern on one project; rename, change model; the hire, rename and fire lines in the activity terminal.
-- [ ] Imports: one https address in `packages/agent-engine/config/catalogue-sources.json`, import, read the persona and the review, approve, hire; change the file at the source and import again to see "Update waits for you". A real download from a listed source.
-- [ ] Real `kiro-cli`: `AGENTLIFE_LIVE=1` run of the validate test for generated agent files; the import review and the HR agent with real replies; a job on a customised team (`--agent`, `--model`); the researcher and second reviewer with their agent files (read-only tier).
-- [ ] Night intern: Ollama with `qwen3.5:4b` answers; with Ollama stopped `claude-haiku-5.5` answers and the report's Notes say so. The Night intern chosen as researcher fails the research step with its own message (known limit).
-- [ ] Pipeline editor with a real engine: hire a Reviewer and a Researcher, add "+ Second review" and "+ Research", start a job (research notes artifact, "Second review" and "Research" in the report, a failing second review fails the job); fire the Reviewer while the pipeline uses it and see the refusal with its reason; save a pipeline while a job runs (the running job keeps the old one).
-- [ ] A night shift for real, and the Library's Librarian note (Night owl and Librarian badges were tested with fake clocks).
-- [ ] Furniture during a real job: move a desk and other pieces while the real engine works; the agents keep walking, and the next walk of a moved desk's agent goes to the new seat. Earn Ecto with a real delivery and see the toast (about 4 s); the first run of the real wallet starts at 0.
-- [ ] Stop a `pnpm session` mid-run: the Builder ghost and its team row go idle after 10 minutes (also after a reload or a world-server restart).
-- [ ] Coffee machine: buy it (Tables, 40 Ecto), place it, serve a tired agent in a live run of 60 real minutes.
-- [ ] Touch screen: tap an item in the tray, then tap the floor (the suite uses a mouse). Check in a browser other than Edge too (the baselines and tests are Edge).
-
-### Look and feel (is it clear, does it look right)
-- [ ] Look once through the baseline images in `packages/client/e2e/__visuals__/win32/` (lobby, HR office, floors, shop, Menu, Actions menu, Profile, palette, list, Edit room) and say if anything looks wrong, cramped or ugly. After that the suite keeps them from changing by accident; a wrong one is fixed and rewritten with `e2e:update-visuals`.
-- [ ] Art: the 25 furniture previews and the 23 outfit parts (do the cap, waistcoat, neckerchief, carnation, pumpkin hat, witch hat, bat bow tie and candle read as what they are?), on every role colour (teal, orange, purple, pink, yellow, blue), in the cheer and glum poses, and on the user's taller figure (a top covers only its upper 15 px).
-- [ ] Motion that a screenshot cannot show: the level-up ring (1.6 s, and with reduced motion), the wisp blink and catch ring on a real moving wisp, the poses for sit, wave, dance and cheer (also on a project floor and the sitter's depth against a sofa and a chair), the mood face on the name tag, the parts staying in place on the user's figure while it walks and in all four directions.
-- [ ] Arrange mode: the green and red overlay, the red cross, the selected outline, the standing-spot dots, a wall piece refused in the middle of the floor and turned with R on the north and west walls, how much room the "Editing" banner takes at a small height.
-- [ ] A project floor with a full team (six ghosts): name tags that overlap when two stand close, the two spots beside the QA desk, the tooltip of a ghost at a spot, a hire walking in and a fired member walking out with the real engine.
-- [ ] The recorded demo (public URL): elevator to the lobby and back, no Edit room button, the default look, no levels.
-
-### Decisions for you
-- [ ] hr-desk D10: the import review uses `agentlife-import-review` instead of `agentlife-security` (docs/risks-and-decisions.md). Waiting for your yes.
-- [ ] Ghost skins: three slots only, so a ghost wears the neckerchief or the carnation, not both. A fourth `neck` slot is a small change.
-- [ ] The HR ghost and the Builder cannot be dressed. Say if you want that.
-- [ ] A hotel with the plain scripted engine and no wallet file has no wisps. Say if you expect them there.
-- [ ] waiting-fun and furni-move are marked "first to cut if late".
-
-### Could be a test, not covered yet
-These are checks of behaviour that the suite does not run yet. They are listed so they are not forgotten; none needs a person's eyes.
-- [ ] Restart the world-server (not only the page): placed pieces, stock, the lobby and HR office arrangements, worn outfits and the wardrobe are still there; a `data/layouts.json` written before ui-tidy is read and rewritten with `project:<id>` keys.
-- [ ] Removing a project at the Reception puts its pieces back in the tray of another floor.
-- [ ] A second purchase of an owned outfit part is refused and the item says "Owned". A badge part unlocks with a toast when its badge is earned (also at the next visit, also a member's badge).
-- [ ] The same part on two members at once, a different top on a member who stands on the floor, None takes a part off; a fired member who wore something leaves the new hire bare and the part stays in Owned.
-- [ ] The HR ghost stands at tile 7,1 of the HR office and the Builder's desk takes its seat when moved.
-- [ ] Hover on a ghost or its team-bar row shows the stats (jobs, % passed, average step time). The pipeline editor's "Back to the default".
-- [ ] The day after: three other quests and yesterday's gone.
+- [ ] A real job on a real project: copy a small git project into D:\AgentHotel, register it at the Reception, run a job with the real engine, approve, press "Deliver as branch". The branch `agentlife/<task>` exists in your repository and nothing else changed. XP, Ecto and the "Deliver a branch" quest are paid once (restart the world-server: the balance does not change). With two projects, start jobs on both and a third to see the queue. (The suite delivers with a scripted engine only.)
+- [ ] HR and pipeline with the real engine and `kiro-cli`: hire, rename, fire, "Suggest a team", a job on a customised team, a Reviewer and a Researcher in the pipeline (second review, research notes, a refusal to fire a member the pipeline uses), imports from a real source (persona, review, "Update waits for you"), the Night intern with Ollama and without it.
+- [ ] A real night shift and the Librarian's note in the Library.
+- [ ] Long real runs: furniture moved during a real job, the coffee machine serving a tired agent in 60 real minutes, the Builder ghost going idle 10 minutes after a stopped `pnpm session`.
+- [ ] A touch screen (tap an item in the tray, then the floor) and a browser other than Edge (the tests and baselines are Edge).
+- [ ] Look once through the baseline images in `packages/client/e2e/__visuals__/win32/` (rooms and panels, 71 images) and say if anything looks wrong, cramped or ugly. A wrong baseline is fixed and rewritten with `e2e:update-visuals`; from then on the suite keeps screens from changing by accident.
+- [ ] Art: the 25 furniture previews and the 23 outfit parts read as what they are, on every role colour, in the cheer and glum poses and on the user's taller figure.
+- [ ] Motion a screenshot cannot show: the level-up ring, the wisp blink and catch ring, the poses (sit, wave, dance, cheer, the sitter's depth against a sofa), the mood face, the outfit parts staying in place while a figure walks in all four directions.
+- [ ] Edit room look: the green and red overlay, the cross, the selected outline, the standing-spot dots, a wall piece turned on the north and west walls, the room the "Editing" banner takes at a small height.
+- [ ] A floor with a full team (six ghosts): overlapping name tags, the spots beside the QA desk, a hire walking in and a fired member walking out.
+- [ ] The recorded demo at the public URL: elevator to the lobby and back, no Edit room button, the default look, no levels.
+- [ ] Decisions for you: hr-desk D10 (import review by `agentlife-import-review`); three outfit slots, so a ghost wears the neckerchief or the carnation, not both; the HR ghost and the Builder cannot be dressed; a hotel with the plain scripted engine and no wallet file has no wisps; waiting-fun and furni-move are "first to cut if late"; regression-suite: CI skips the visual comparisons, four bug fixes in product code (design.md "Bugs found"), and the empty mailbox is not compared at 360x640 (it lies outside the stage and no command opens it).
 
 ## Covered by tests (ticked)
 
@@ -87,4 +60,4 @@ Spec files are in `packages/client/e2e/`. A journey runs at the three sizes. A r
 ### Layout and screens
 - [x] Regions do not overlap, nothing scrolls the page, the canvas fills the stage, the side bar and the dock collapse, the dock height is remembered: `shell.spec.ts`; the job stepper has no scroll bars at its sizes: `job-insight.spec.ts`.
 - [x] Every screen of the journeys at the three sizes: nothing outside the window or covered, no horizontal scroll bar, no text cut, every clickable element has a role, a name, a Tab stop, a focus ring and a pointer cursor, no console error: `journeys.spec.ts` (`expectScreen`), checked against deliberately broken pages by `rules.spec.ts`.
-- [x] A screen does not change by accident: `visuals.spec.ts` compares 4 rooms and 13 panels and menus at the three sizes with the baselines of this platform (see the human look at the top).
+- [x] A screen does not change by accident: `visuals.spec.ts` compares 4 rooms and 20 panels and menus, including Help, the Reception and, for a running job, the activity lines, the plan, the job card, the mailbox with a report and the report (clock times, durations and the Ecto balance masked), at the three sizes with the baselines of this platform (see the human look at the top).
