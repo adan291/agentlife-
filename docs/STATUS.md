@@ -1,4 +1,4 @@
-# Status
+﻿# Status
 
 Updated: 2026-11-14 (ghost-skins tasks 1-2 done on branch feat/ghost-skins, not merged; rows 1-14 are in main; main pushed at fcd0fd2)
 
@@ -22,6 +22,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-14 (IDE): user's plan: finish ghost-skins and the rest, push, test together to find what to fix, then the user records the video. main pushed (fbe1ceb..fcd0fd2). Hotel stopped; conductor started on ghost-skins (S35, S36), log data/sessions/conduct-run11.txt. Next: user tests the hotel, Kiro fixes, then final-demo (re-record replay, README, video, Devpost). D10 still waits for a yes.
 - 2026-11-14 (conductor S35): ghost-skins task 1 done (design.md first). Decisions for the user to check: three slots only, so the picture's neckerchief and carnation are both accessories and a ghost wears one of them (a fourth `neck` slot is a small change); 23 parts, 4 of them unlocked by badges (crown: Hotel veteran, halo: Ten passes, lab coat: Review regular, delivery ribbon: Ten deliveries); prices 15 to 60 Ecto in `packages/world-server/config/outfits.json`; the sprite frame of avatars grew (`AVATAR_FRAME` 40x76) so hats fit above a cheering ghost.
 - 2026-11-14 (conductor S36): ghost-skins task 2 done (design.md first). Decisions for the user to check: one `outfits` message with the whole state instead of the outline's welcome field plus live message; members are dressed only in the HR office, the user anywhere; a member's outfit is dropped when the team no longer lists them (fire, replace, or fired outside the hotel at the next visit); HR ghost and Builder are not dressable; a top on the user's figure covers its upper 15 px; lapel and pocket recipes now stay inside narrow bodies.
+- 2026-11-14 14:10 (IDE): ghost-skins PASS and merged (S35, S36). Full automated pass on main: `pnpm check` (shared 485, world-server 453, client 759, engine 682), security scan clean, `check:demo-build`, Edge e2e 95/95, e2e:demo 1/1. Hotel restarted (Docker up) for the user's test round; Kiro fixes what the user reports. Then final-demo.
 
 ## Next
 1. Review and merge ghost-skins (both tasks done), then final-demo. Never cut final-demo.
