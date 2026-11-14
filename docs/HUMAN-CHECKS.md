@@ -109,3 +109,6 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Fire a member who wears something, hire another one: the new one starts bare. The part stays in the shop's Owned list.
 - [ ] The HR ghost and the Builder cannot be dressed (no card for them). Say if you want that.
 - [ ] The recorded demo shows the default look.
+
+## ghost-skins (merged 2026-11-14)
+- [ ] Look at the feature in the browser
