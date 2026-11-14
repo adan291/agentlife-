@@ -4,6 +4,8 @@ import { FURNI_CATALOG, HEIGHT_UNIT, LAYER, depthKey, footprintSize, footprintTi
 import type { AgentId, AgentState, AvatarId, ClientMsg, ErrorCode, Mood, RoomDef, ServerMsg, StaffId, Tile, TeamViewGuest, WelcomeMsg } from "@agentlife/shared";
 import { FloorPeople } from "./floor-people.ts";
 import { LevelUpFx } from "./levelup-fx.ts";
+import { OutfitBook, outfitOfAvatar } from "./outfit-book.ts";
+import { lookKey } from "./outfit.ts";
 import { CatchFx, WispFx } from "./wisp-fx.ts";
 import { ROLE_COLOURS } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
@@ -111,6 +113,8 @@ export class WorldView {
   private readonly seatNames = new Map<AgentId, string>();
   /** Who is on the floor besides the three desk ghosts, and who has left by the elevator (`team_view`, `agent_presence`). */
   private readonly people = new FloorPeople();
+  /** The parts and what each person wears (`wardrobe`, `outfits`). Shared with the panels, which show and change it. */
+  readonly book = new OutfitBook();
   /** The HR agent behind its desk in the HR office; decorative, not part of the simulation. */
   private hrGhost: AvatarEntry | null = null;
   /** Level-up effects that are playing, each over the ghost it was started for. */
@@ -281,6 +285,7 @@ export class WorldView {
   handle(msg: ServerMsg, now = Date.now()): void {
     this.work.apply(msg);
     this.people.apply(msg);
+    const looksChanged = this.book.apply(msg);
     switch (msg.type) {
       case "welcome":
         this.hooks.tooltip?.hide();
@@ -348,6 +353,22 @@ export class WorldView {
         // Panel messages are handled by the UI layer.
         break;
     }
+    // Who wears what follows the outfits, the parts and who stands where; a new floor starts from the book as it is.
+    if (looksChanged || msg.type === "welcome" || msg.type === "team_view") this.applyLooks();
+  }
+
+  /** Puts the outfit of each person on their avatar (ghost-skins). */
+  private applyLooks(): void {
+    const worn: Record<string, string> = {};
+    for (const [id, { view }] of this.avatars) {
+      const outfit = outfitOfAvatar(this.book, this.people, this.roomId, id);
+      const look = outfit ? this.book.look(outfit) : undefined;
+      view.setLook(look);
+      const key = lookKey(look);
+      if (key) worn[String(id)] = key;
+    }
+    // The canvas cannot say who wears what: the scene's state is also on the element, for the Playwright test.
+    this.app.canvas.dataset["looks"] = JSON.stringify(worn);
   }
 
   /** Advance animations; call once per frame. */

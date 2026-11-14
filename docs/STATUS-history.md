@@ -291,3 +291,14 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 ## Key dates
 - 2026-12-01 feature freeze
 - 2026-12-04 14:00 PT submission deadline (aim for Dec 3)
+
+## Last conversation lines of 2026-11-13, condensed on 2026-11-14 (ghost-skins task 1)
+- DiscordIA live check done (job, approve, delivery as a branch; the user's `main` untouched). Fixes merged from it: new visits start in the lobby, one plaque over the elevator, writable `node_modules` in the test sandbox, review desk offers only branches with a base, mailboxes come back after a restart (`/health restoreSeq`), report rows show "Open" and "Branch ready".
+- User asked to move furniture like classic hotel sims: furni-move (S27, S28) merged. User described the goal: housing plus a light RPG / sims layer, fun while waiting. Specs furni-shop, team-progress, waiting-fun written (rows 11-13, S29-S32).
+- The steering warned that workflow.md's reference to STATUS.md was cut (75 000 characters). STATUS.md was split; sessions keep it under 15 000 characters.
+- team-progress tasks 1 and 2 on `feat/team-progress`. Decisions: level n needs 25*n*(n+1) XP (level 0 until 50 XP); amounts in `config/progress.json`, quests in `config/quests.json`, badges in `config/badges.json`; XP goes to the members who finished a step.
+- waiting-fun tasks 1 and 2 on `feat/waiting-fun`. Decisions: wisps only with an economy, 1 Ecto each, 10 per job and 50 per day; the coffee machine (Tables, 40 Ecto) is the one sold piece with an interaction (`SHOP_INTERACTIONS`); mood thresholds 20 min busy and 60 min tired, in memory only; keys 1 to 4.
+- "Fix what needs fixing and continue": merged into main (f217cf4) the mailbox keeping the newest 10 reports per floor, the hr-desk review suggestions, and the conductor keeping both sides of a STATUS.md conflict.
+- 19:30: furni-shop, team-progress and waiting-fun PASS and merged. The engine did not start because a TypeScript parameter property is refused by `--experimental-strip-types`; fixed, with a test that loads engine.ts and gateway.ts with the real flag.
+- 21:15 and 21:30: the user could not find how to move furniture in the lobby, a moved piece could not be selected again, many places refused, wants to turn almost everything, every room editable, the emote bar as a closed menu. Spec ui-tidy (row 14, S33-S34).
+- 23:05: ui-tidy PASS and merged; hotel restarted for the user to try it.

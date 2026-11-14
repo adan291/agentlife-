@@ -93,3 +93,19 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Try Edit room in the lobby and the HR office by hand: move, turn with R, reset, reload. Confirm refusal messages read clearly and the elevator and doors cannot move.
 - [ ] With the real engine, stop a `pnpm session` mid-run and confirm the Builder ghost and its team row go idle after 10 minutes. Tests use short timeouts.
 - [ ] Confirm the HR ghost still stands at the HR desk after the `home_hr` anchor change (design says tile 7,1).
+
+## ghost-skins task 1 (on feat/ghost-skins, not merged)
+- [ ] Open the shop counter in the lobby, then the Outfits tab: 23 parts in Hats, Tops and Accessories, each on a ghost. Look at them at your usual zoom: do the cap, waistcoat, neckerchief, carnation, pumpkin hat, witch hat, bat bow tie and candle read as what they are?
+- [ ] The picture you gave has four pieces and the spec has three slots, so a ghost wears the neckerchief or the carnation, not both. Say if you want a fourth slot (neck).
+- [ ] Buy a cheap part (the carnation, 15 Ecto) and check the balance, the "Owned" mark and that a second purchase is refused. Badge parts say "Locked: earn the ... badge" and have no Buy button.
+- [ ] A badge part unlocks with a toast when its badge is earned (Hotel veteran: crown), and at the next visit if the badge was earned earlier (also a badge of a team member).
+- [ ] Parts are only seen in the shop until task 2 puts them on a ghost. Then check every part on the role colours (teal, orange, purple, pink, yellow, blue) and in the cheer and glum poses.
+
+## ghost-skins task 2 (on feat/ghost-skins, not merged)
+- [ ] Buy two or three parts, go to the HR office, open the HR desk: each member card has a Look section with a picture and three pickers (Hat, Top, Accessory). Put the flat cap on the Developer, go to its floor: the Developer wears it. Reload the page and restart the world-server: it still does.
+- [ ] Put the same part on two members at once, and a different top on a member who stands on the floor (a hired reviewer or researcher). Take a part off with None.
+- [ ] Open the Profile (level chip, or Menu when the bar is folded), tab Look: dress your own figure. Walk, sit (key 4), wave and dance (keys 1 to 3) and check the hat, top and accessory stay in place on the user's figure in all four directions.
+- [ ] Look at every part on the user's figure by eye. The recipes were drawn for the ghost; the user's torso is taller, so a top covers only its upper 15 px and the shirt shows below. Say if that looks wrong.
+- [ ] Fire a member who wears something, hire another one: the new one starts bare. The part stays in the shop's Owned list.
+- [ ] The HR ghost and the Builder cannot be dressed (no card for them). Say if you want that.
+- [ ] The recorded demo shows the default look.

@@ -14,6 +14,7 @@ export * from "./progress.ts";
 export * from "./badges.ts";
 export * from "./progress-rules.ts";
 export * from "./shop.ts";
+export * from "./outfits.ts";
 export * from "./fun.ts";
 export * from "./inventory.ts";
 export * from "./roles.ts";

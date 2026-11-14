@@ -1,24 +1,48 @@
-import { FURNI_CATALOG, PAGE_LABELS, SHOP_PAGES, footprintSize } from "@agentlife/shared";
-import type { CatalogueItem, ShopPage, ShopState } from "@agentlife/shared";
+import { FURNI_CATALOG, OUTFIT_SLOTS, PAGE_LABELS, SHOP_PAGES, SLOT_HEADINGS, footprintSize } from "@agentlife/shared";
+import type { CatalogueItem, OutfitPart, OutfitSlot, ShopPage, ShopState, WardrobeState } from "@agentlife/shared";
 import type { PanelContent } from "./computer.ts";
 import { balanceText } from "./wallet.ts";
 
-/** What the shop panel does: ask the server to sell one item. The server checks everything again. */
+/** What the shop panel does: ask the server to sell one item or one outfit part. The server checks everything again. */
 export interface ShopActions {
   buy(itemId: string): void;
+  buyPart?(partId: string): void;
 }
 
 export interface ShopDeps {
   /** A picture of the item drawn by the room's own renderer (a data URL), or undefined when there is none (tests, no renderer). */
   preview?(defId: string): string | undefined;
+  /** A picture of an outfit part on a ghost, drawn by the room's own renderer. */
+  outfitPreview?(part: OutfitPart): string | undefined;
 }
 
 export interface ShopView {
   shop: ShopState | null;
+  /** The outfit parts and the wardrobe; null when the hotel has none (the Outfits tab is then not shown). */
+  wardrobe?: WardrobeState | null;
   /** Why the last purchase or the shop itself was refused, in words. */
   error: string | null;
   /** Replay mode: the shop is off, and this is the reason. */
   locked?: string | undefined;
+}
+
+/** The tab of the outfits, after the furniture pages. */
+export const OUTFITS_TAB = "outfits";
+type Tab = ShopPage | typeof OUTFITS_TAB;
+
+/** The parts of one slot, in file order. */
+export function partsOfSlot(parts: readonly OutfitPart[], slot: OutfitSlot): OutfitPart[] {
+  return parts.filter((p) => p.slot === slot);
+}
+
+export type PartStatus = { kind: "owned" } | { kind: "badge"; badge: string } | { kind: "buy"; price: number; why?: string };
+
+/** What the user can do with a part: wear it already (owned), earn it, or buy it (with the reason it cannot be bought now). */
+export function partStatus(w: WardrobeState, part: OutfitPart): PartStatus {
+  if (w.owned.includes(part.id)) return { kind: "owned" };
+  if (part.badge !== undefined || part.price === undefined) return { kind: "badge", badge: w.badges.find((b) => b.id === part.badge)?.name ?? part.badge ?? "special" };
+  if (w.balance < part.price) return { kind: "buy", price: part.price, why: `You need ${part.price - w.balance} more Ecto.` };
+  return { kind: "buy", price: part.price };
 }
 
 /** The items of one page, in catalogue order. */
@@ -59,7 +83,57 @@ function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, classN
  * open page survives re-renders. The panel only asks; the balance, the stock and any refusal come back from the server.
  */
 export function createShopPanel(doc: Document, actions: ShopActions, deps: ShopDeps = {}) {
-  let page: ShopPage = SHOP_PAGES[0];
+  let page: Tab = SHOP_PAGES[0];
+
+  function partCard(w: WardrobeState, part: OutfitPart): HTMLElement {
+    const li = el(doc, "li", "al-shop-item");
+    li.dataset["part"] = part.id;
+    const pic = el(doc, "div", "al-shop-preview");
+    const src = deps.outfitPreview?.(part);
+    if (src) {
+      const img = el(doc, "img");
+      img.setAttribute("src", src);
+      img.setAttribute("alt", "");
+      pic.appendChild(img);
+    } else {
+      pic.appendChild(el(doc, "span", "al-muted", "No picture"));
+    }
+    li.append(pic, el(doc, "p", "al-shop-facts", part.name));
+    const status = partStatus(w, part);
+    if (status.kind === "owned") {
+      li.appendChild(el(doc, "p", "al-muted", "Owned"));
+    } else if (status.kind === "badge") {
+      li.appendChild(el(doc, "p", "al-muted", `Locked: earn the ${status.badge} badge`));
+    } else {
+      li.appendChild(el(doc, "p", "al-shop-price", balanceText(status.price)));
+      const buy = el(doc, "button", "al-btn", "Buy");
+      buy.type = "button";
+      buy.setAttribute("aria-label", `Buy ${part.name} for ${balanceText(status.price)}`);
+      if (status.why) {
+        buy.disabled = true;
+        buy.title = status.why;
+      }
+      buy.addEventListener("click", () => actions.buyPart?.(part.id));
+      li.appendChild(buy);
+    }
+    return li;
+  }
+
+  /** The Outfits tab: the parts in three groups, one per slot. */
+  function outfitsPage(w: WardrobeState): HTMLElement {
+    const wrap = el(doc, "div", "al-outfits");
+    wrap.appendChild(el(doc, "p", "al-muted", `You own ${w.owned.length} of ${w.parts.length} outfit parts. Put them on a ghost at the HR desk.`));
+    for (const slot of OUTFIT_SLOTS) {
+      const group = partsOfSlot(w.parts, slot);
+      if (group.length === 0) continue;
+      wrap.appendChild(el(doc, "h3", "al-shop-head", SLOT_HEADINGS[slot]));
+      const list = el(doc, "ul", "al-shop-list");
+      list.dataset["slot"] = slot;
+      for (const part of group) list.appendChild(partCard(w, part));
+      wrap.appendChild(list);
+    }
+    return wrap;
+  }
 
   function card(shop: ShopState, item: CatalogueItem): HTMLElement {
     const li = el(doc, "li", "al-shop-item");
@@ -114,8 +188,11 @@ export function createShopPanel(doc: Document, actions: ShopActions, deps: ShopD
 
     const tabs = el(doc, "div", "al-row al-wrap");
     tabs.setAttribute("role", "tablist");
-    for (const p of SHOP_PAGES) {
-      const b = el(doc, "button", "al-btn", PAGE_LABELS[p]);
+    const wardrobe = view.wardrobe ?? null;
+    if (page === OUTFITS_TAB && !wardrobe) page = SHOP_PAGES[0];
+    const tabList: Tab[] = wardrobe ? [...SHOP_PAGES, OUTFITS_TAB] : [...SHOP_PAGES];
+    for (const p of tabList) {
+      const b = el(doc, "button", "al-btn", p === OUTFITS_TAB ? "Outfits" : PAGE_LABELS[p]);
       b.type = "button";
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", String(p === page));
@@ -129,8 +206,12 @@ export function createShopPanel(doc: Document, actions: ShopActions, deps: ShopD
     }
     root.appendChild(tabs);
 
+    if (page === OUTFITS_TAB && wardrobe) {
+      root.appendChild(outfitsPage(wardrobe));
+      return { body: root };
+    }
     const list = el(doc, "ul", "al-shop-list");
-    for (const item of itemsOnPage(shop.items, page)) list.appendChild(card(shop, item));
+    for (const item of itemsOnPage(shop.items, page as ShopPage)) list.appendChild(card(shop, item));
     root.appendChild(list);
     return { body: root };
   };

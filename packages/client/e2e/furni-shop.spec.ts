@@ -69,7 +69,7 @@ test.describe("the shop counter", () => {
     await expect(panel).toContainText(/You have \d+ Ecto\. In your inventory: \d+ of 200\./);
 
     const tabs = panel.getByRole("tab");
-    await expect(tabs).toHaveText(["Seating", "Tables", "Lights", "Plants", "Spooky", "Walls"]);
+    await expect(tabs).toHaveText(["Seating", "Tables", "Lights", "Plants", "Spooky", "Walls", "Outfits"]);
 
     const shotDir = process.env["E2E_SHOT_DIR"];
     let items = 0;
@@ -99,6 +99,19 @@ test.describe("the shop counter", () => {
     await expect(panel.getByRole("tab", { name: "Seating" })).toHaveAttribute("aria-selected", "true");
     const throne = panel.locator('.al-shop-item[data-item="throne"]').getByRole("button", { name: /^Buy Bone throne/ });
     await expect(throne).toBeVisible();
+
+    // The Outfits page: every part on a ghost drawn by the room's own renderer, in three groups.
+    await panel.getByRole("tab", { name: "Outfits" }).click();
+    await expect(panel.locator(".al-shop-item[data-part]")).toHaveCount(23);
+    await expect(panel.locator("[data-slot]")).toHaveCount(3);
+    const outfitCards = panel.locator(".al-shop-item[data-part]");
+    for (let i = 0; i < 23; i++) {
+      const img = outfitCards.nth(i).locator("img");
+      await expect(img).toHaveAttribute("src", /^data:image\/png;base64,/);
+      expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(8);
+    }
+    await expect(panel.locator('.al-shop-item[data-part="crown"]')).toContainText("Locked: earn the Hotel veteran badge");
+    if (shotDir) await panel.screenshot({ path: `${shotDir}/shop-outfits.png` });
     await panel.getByRole("button", { name: "Close panel" }).click();
     await expect(panel).toBeHidden();
     expect(errors).toEqual([]);

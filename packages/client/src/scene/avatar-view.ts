@@ -3,6 +3,7 @@ import { EMOTE_MS, LAYER, depthKey, tileToScreen } from "@agentlife/shared";
 import type { Dir, Emote, Tile } from "@agentlife/shared";
 import type { RoleKey } from "../palette.ts";
 import { SIT_LIFT_PX, viewFor } from "./figure.ts";
+import type { OutfitLook } from "./outfit.ts";
 import { prefersReducedMotion } from "./glow.ts";
 import { isSeatedPose, poseFor } from "./pose.ts";
 import type { SpriteProvider } from "./textures.ts";
@@ -27,6 +28,8 @@ export class AvatarView {
   /** The emote that is playing and when it began; it ends by itself. */
   private emote: { emote: Emote; since: number; until: number } | null = null;
   private readonly reduced = prefersReducedMotion();
+  /** What the avatar wears (ghost-skins); undefined: the default look. */
+  private look: OutfitLook | undefined;
 
   constructor(
     readonly id: number | string,
@@ -58,6 +61,16 @@ export class AvatarView {
 
   setDir(dir: number): void {
     this.dir = (((dir % 8) + 8) % 8) as Dir;
+  }
+
+  /** Puts an outfit on (or takes it off with undefined). The next `update` draws it. */
+  setLook(look: OutfitLook | undefined): void {
+    this.look = look;
+  }
+
+  /** The look the avatar draws now, for tests. */
+  get currentLook(): OutfitLook | undefined {
+    return this.look;
   }
 
   /** The avatar sat down (facing `dir`) or got up. `depth` is the depth key of the seat piece: a sitter is drawn in front of it. */
@@ -113,8 +126,8 @@ export class AvatarView {
       reduced: this.reduced,
     });
     const frame = choice.pose
-      ? this.sprites.avatar(this.role, view, choice.frame, choice.pose)
-      : this.sprites.avatar(this.role, view, this.role === "user" ? (moving ? walkFrame(now) : 0) : ghostFrame(now, this.bobOffset));
+      ? this.sprites.avatar(this.role, view, choice.frame, choice.pose, this.look)
+      : this.sprites.avatar(this.role, view, this.role === "user" ? (moving ? walkFrame(now) : 0) : ghostFrame(now, this.bobOffset), undefined, this.look);
     this.sprite.texture = frame.texture;
     this.sprite.anchor.set(frame.anchor.x, frame.anchor.y);
     this.sprite.scale.x = mirror ? -1 : 1;

@@ -13,7 +13,8 @@ import type {
   StepRecord,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink, StartJobOptions } from "./engine-link.ts";
+import type { EngineLink, HrLink, StartJobOptions } from "./engine-link.ts";
+import { createFakeHr } from "./fake-hr.ts";
 
 export const FAKE_REPO: Repo = {
   id: "haunted-todo",
@@ -25,6 +26,8 @@ export interface FakeEngineOptions {
   /** Pause between scripted steps in ms. Tests use 0. */
   stepMs?: number;
   clock?: () => number;
+  /** Give the scripted engine an HR office with the default team (tests and Playwright; `FAKE_HR=1` in `main.ts`). */
+  hr?: boolean;
 }
 
 type Draft = AgentEvent extends infer E ? (E extends unknown ? Omit<E, "seq" | "ts" | "taskId"> : never) : never;
@@ -87,10 +90,13 @@ export class FakeEngineLink implements EngineLink {
   private taskCounter = 0;
   private stopped = false;
   private wake: (() => void) | null = null;
+  /** The HR office, only when asked for (`FAKE_HR=1`, tests): the scripted engine has none otherwise. */
+  hr?: HrLink;
 
   constructor(options: FakeEngineOptions = {}) {
     this.stepMs = options.stepMs ?? 1500;
     this.clock = options.clock ?? Date.now;
+    if (options.hr) this.hr = createFakeHr(FAKE_REPO.id, FAKE_REPO.name);
   }
 
   listRepos(): Promise<Repo[]> {
