@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Parts, wardrobe and the shop
+- [x] 1. Parts, wardrobe and the shop
   - Shared schemas (part, wardrobe, outfit, messages); `config/outfits.json` with 20+ parts; renderer draws each part on the ghost in four directions; Outfits page in the shop with previews; buy and badge unlock on the server; tests
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 4.1, 4.3_
 

@@ -1,4 +1,6 @@
 import type { Renderer } from "pixi.js";
+import type { OutfitPart } from "@agentlife/shared";
+import { lookOf } from "./outfit.ts";
 import type { SpriteProvider } from "./textures.ts";
 
 /**
@@ -19,6 +21,31 @@ export function createFurniPreviews(sprites: SpriteProvider, renderer: Renderer)
       url = undefined;
     }
     cache.set(defId, url);
+    return url;
+  };
+}
+
+/** The role of the ghost that models a part: the pale builder tint, so the colours of the part are what shows. */
+export const OUTFIT_PREVIEW_ROLE = "builder";
+
+/**
+ * Pictures of outfit parts for the DOM (the Outfits page): a neutral ghost facing the front that wears the part, drawn by
+ * the room's own renderer. Kept per part id and palette.
+ */
+export function createOutfitPreviews(sprites: SpriteProvider, renderer: Renderer): (part: OutfitPart) => string | undefined {
+  const cache = new Map<string, string | undefined>();
+  return (part) => {
+    const key = `${part.id}:${Object.values(part.palette).join("")}`;
+    if (cache.has(key)) return cache.get(key);
+    let url: string | undefined;
+    try {
+      const frame = sprites.avatar(OUTFIT_PREVIEW_ROLE, 3, 0, undefined, lookOf([part]));
+      const canvas = renderer.extract.canvas(frame.texture) as { toDataURL?: (type?: string) => string };
+      url = canvas.toDataURL?.("image/png");
+    } catch {
+      url = undefined;
+    }
+    cache.set(key, url);
     return url;
   };
 }

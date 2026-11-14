@@ -12,6 +12,8 @@ const LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-layouts.json");
 /** The shop tests earn and spend Ecto; the wallet and the inventory are scratch files too, never `data/`. */
 const WALLET_FILE = join(tmpdir(), "agentlife-e2e-wallet.json");
 const INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-inventory.json");
+/** Outfits bought in the shop (ghost-skins) go to a scratch wardrobe as well. */
+const WARDROBE_FILE = join(tmpdir(), "agentlife-e2e-wardrobe.json");
 
 /**
  * The team-progress tests run one scripted job and check XP, badges and quests, which would add toasts, level-ups and
@@ -22,6 +24,7 @@ const PROGRESS_WEB_PORT = 5198;
 const PROGRESS_FILE = join(tmpdir(), "agentlife-e2e-progress.json");
 const PROGRESS_WALLET_FILE = join(tmpdir(), "agentlife-e2e-progress-wallet.json");
 const PROGRESS_INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-progress-inventory.json");
+const PROGRESS_WARDROBE_FILE = join(tmpdir(), "agentlife-e2e-progress-wardrobe.json");
 const PROGRESS_LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-progress-layouts.json");
 /**
  * The waiting-fun tests need wisps to appear within a second of a job starting (`AGENTLIFE_WISP_MS`), and they catch them,
@@ -31,6 +34,7 @@ const FUN_WORLD_PORT = 8797;
 const FUN_WEB_PORT = 5197;
 const FUN_WALLET_FILE = join(tmpdir(), "agentlife-e2e-fun-wallet.json");
 const FUN_INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-fun-inventory.json");
+const FUN_WARDROBE_FILE = join(tmpdir(), "agentlife-e2e-fun-wardrobe.json");
 const FUN_LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-fun-layouts.json");
 /** A quest pool that one scripted job finishes whichever three the date picks: plan, steps and a pass. */
 const QUESTS_FILE = join(tmpdir(), "agentlife-e2e-quests.json");
@@ -55,11 +59,14 @@ if (process.env["TEST_WORKER_INDEX"] === undefined) {
   };
   seed(WALLET_FILE, { version: 1, since: 0, balance: 500, ledger: [], granted: [] });
   seed(INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
+  seed(WARDROBE_FILE, { version: 1, owned: [] });
   // The progress server starts from nothing: the fake engine reuses task ids, and a file from an earlier run would have counted them.
   seed(PROGRESS_WALLET_FILE, { version: 1, since: 0, balance: 0, ledger: [], granted: [] });
   seed(PROGRESS_INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
+  seed(PROGRESS_WARDROBE_FILE, { version: 1, owned: [] });
   seed(FUN_WALLET_FILE, { version: 1, since: 0, balance: 0, ledger: [], granted: [] });
   seed(FUN_INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
+  seed(FUN_WARDROBE_FILE, { version: 1, owned: [] });
   seed(QUESTS_FILE, { version: 1, quests: QUEST_POOL });
   rmSync(PROGRESS_FILE, { force: true });
 }
@@ -92,6 +99,7 @@ export default defineConfig({
         AGENTLIFE_LAYOUTS_FILE: LAYOUTS_FILE,
         AGENTLIFE_WALLET_FILE: WALLET_FILE,
         AGENTLIFE_INVENTORY_FILE: INVENTORY_FILE,
+        AGENTLIFE_WARDROBE_FILE: WARDROBE_FILE,
         // The page is served from WEB_PORT, so the Origin check must allow it.
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`,
       },
@@ -113,6 +121,7 @@ export default defineConfig({
         AGENTLIFE_LAYOUTS_FILE: PROGRESS_LAYOUTS_FILE,
         AGENTLIFE_WALLET_FILE: PROGRESS_WALLET_FILE,
         AGENTLIFE_INVENTORY_FILE: PROGRESS_INVENTORY_FILE,
+        AGENTLIFE_WARDROBE_FILE: PROGRESS_WARDROBE_FILE,
         AGENTLIFE_PROGRESS_FILE: PROGRESS_FILE,
         AGENTLIFE_QUESTS_FILE: QUESTS_FILE,
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${PROGRESS_WEB_PORT},http://localhost:${PROGRESS_WEB_PORT}`,
@@ -135,6 +144,7 @@ export default defineConfig({
         AGENTLIFE_LAYOUTS_FILE: FUN_LAYOUTS_FILE,
         AGENTLIFE_WALLET_FILE: FUN_WALLET_FILE,
         AGENTLIFE_INVENTORY_FILE: FUN_INVENTORY_FILE,
+        AGENTLIFE_WARDROBE_FILE: FUN_WARDROBE_FILE,
         AGENTLIFE_WISP_MS: "300,500",
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${FUN_WEB_PORT},http://localhost:${FUN_WEB_PORT}`,
       },

@@ -1,7 +1,7 @@
 import { Hotel, RoomValidationError } from "@agentlife/shared";
 import { FakeEngineLink } from "./fake-engine.ts";
 import type { EngineLink } from "./engine-link.ts";
-import { Economy, defaultWalletFile, loadEconomyConfig } from "./economy-store.ts";
+import { Economy, defaultWalletFile, defaultWardrobeFile, loadEconomyConfig, loadOutfits } from "./economy-store.ts";
 import { startGateway } from "./gateway.ts";
 import { HttpEngineLink } from "./http-engine.ts";
 import { LayoutStore, defaultLayoutsFile } from "./layout-store.ts";
@@ -51,7 +51,15 @@ if (engineKind === "fake") {
 let economy: Economy | undefined;
 if (engineKind === "http" || process.env["AGENTLIFE_WALLET_FILE"]) {
   try {
-    economy = new Economy({ walletFile: defaultWalletFile(), config: loadEconomyConfig(), onLog: (m) => console.warn(m) });
+    const badges = loadBadges();
+    economy = new Economy({
+      walletFile: defaultWalletFile(),
+      config: loadEconomyConfig(),
+      outfits: loadOutfits(new Set(badges.map((b) => b.id))),
+      wardrobeFile: defaultWardrobeFile(),
+      badgeNames: (id) => badges.find((b) => b.id === id)?.name ?? id,
+      onLog: (m) => console.warn(m),
+    });
   } catch (e) {
     console.error(`Cannot start the economy: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);

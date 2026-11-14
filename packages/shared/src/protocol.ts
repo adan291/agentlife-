@@ -16,6 +16,7 @@ import { LevelUpMsgSchema } from "./progress.ts";
 import { ProgressViewSchema } from "./progress-rules.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
+import { OutfitSlotSchema, PartIdSchema, WardrobeStateSchema } from "./outfits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, AnchorSchema, GuestIdSchema, PlacedFurniSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
 
@@ -247,6 +248,10 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("shop_state") }),
   /** Shop counter (lobby): buy one item. Answered with `wallet` and `shop`, or `error` `shop_error` with the reason (nothing changes). */
   z.object({ type: z.literal("shop_buy"), itemId: CatalogueItemIdSchema }),
+  /** Outfits: ask for the parts, the wardrobe and the balance. Answered with `wardrobe` (on any floor). */
+  z.object({ type: z.literal("wardrobe_state") }),
+  /** Shop counter (lobby): buy one outfit part. Answered with `wallet` and `wardrobe`, or `error` `shop_error` with the reason (nothing changes). */
+  z.object({ type: z.literal("outfit_buy"), partId: PartIdSchema }),
   /**
    * Catch the wisp that is on the screen (waiting-fun). A click on a wisp that is not there, was too late or belongs to
    * another floor pays nothing and is answered with `wisp_gone` (`caught: false`). A catch pays through `wallet`.
@@ -363,6 +368,14 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
   }),
   /** The shop: catalogue, balance and stock. */
   z.object({ type: z.literal("shop"), state: ShopStateSchema }),
+  /**
+   * The outfit parts, which of them the user owns and the balance (ghost-skins). Sent after every `welcome`, after a
+   * purchase, after an unlock and on `wardrobe_state`. The client draws ghosts with the palettes in it. Never sent when the
+   * hotel has no wardrobe (no economy, or no outfits file).
+   */
+  z.object({ type: z.literal("wardrobe"), state: WardrobeStateSchema }),
+  /** A badge unlocked an outfit part (toast). Sent once per part. */
+  z.object({ type: z.literal("part_unlocked"), partId: PartIdSchema, name: z.string().min(1).max(30), slot: OutfitSlotSchema, badge: z.string().min(1).max(30) }),
   /**
    * XP, levels and stats of the user and of the team members (team-progress). Sent after every `welcome` and after every
    * fact that changed something. Never sent when the hotel has no progress (fake engine).

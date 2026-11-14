@@ -1,5 +1,5 @@
 import { Application } from "pixi.js";
-import { FURNI_CATALOG, RunExportSchema, isSeatDef, levelText, validateRoom } from "@agentlife/shared";
+import { FURNI_CATALOG, RunExportSchema, isSeatDef, levelText, unlockText, validateRoom } from "@agentlife/shared";
 import type { FloorStatus, OverviewFloor, PlacedFurni, RunExport, ServerMsg } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
 import { DEMO_RUN_PATH, assetUrl, currentMode } from "./mode.ts";
@@ -7,7 +7,7 @@ import { ReplayTransport } from "./replay/transport.ts";
 import type { ReplayRooms } from "./replay/transport.ts";
 import { prefersReducedMotion } from "./scene/glow.ts";
 import { ProceduralSprites } from "./scene/textures.ts";
-import { createFurniPreviews } from "./scene/previews.ts";
+import { createFurniPreviews, createOutfitPreviews } from "./scene/previews.ts";
 import { WorldView } from "./scene/world-view.ts";
 import { LiveTransport } from "./transport.ts";
 import type { Transport } from "./transport.ts";
@@ -112,6 +112,8 @@ if (DEMO_BUILD || mode === "demo") {
 const sprites = new ProceduralSprites(app.renderer);
 /** Pictures of furniture for the shop panel and the inventory tray: the room's own sprites. */
 const furniPreview = createFurniPreviews(sprites, app.renderer);
+/** Pictures of outfit parts on a ghost, for the Outfits page of the shop. */
+const outfitPreview = createOutfitPreviews(sprites, app.renderer);
 
 // ---- floors: where the user is, the floor list, the elevator and the remembered floor ----
 
@@ -217,6 +219,7 @@ const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl
   goTo,
   hrThinking: () => world.setHrThinking(true),
   shopPreview: furniPreview,
+  outfitPreview,
   memberProgress: (projectId, memberId) => progressModel.memberOrNew(projectId, memberId),
   ...(replay
     ? {
@@ -486,6 +489,8 @@ transport.onMessage((msg) => {
     if (msg.slot) world.levelUp(msg.slot);
   } else if (msg.type === "badge_earned") {
     hud.toast(msg.who === "user" ? `Badge earned: ${msg.badge}` : `${msg.owner} earned a badge: ${msg.badge}`, GRANT_TOAST_MS);
+  } else if (msg.type === "part_unlocked") {
+    hud.toast(unlockText(msg.name, msg.slot, msg.badge), GRANT_TOAST_MS);
   } else if (msg.type === "activity") {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {

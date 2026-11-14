@@ -5,6 +5,8 @@ import type { AgentState } from "@agentlife/shared";
 import type { RoleKey } from "../palette.ts";
 import { AVATAR_FRAME, BADGE_FRAME, drawAvatar, drawBadge } from "./figure.ts";
 import type { AvatarPose, DrawnView } from "./figure.ts";
+import { lookKey } from "./outfit.ts";
+import type { OutfitLook } from "./outfit.ts";
 import { RECIPES } from "./recipes.ts";
 
 export interface SpriteFrame {
@@ -22,7 +24,7 @@ export interface SpriteFrame {
  */
 export interface SpriteProvider {
   furni(defId: string, dir: 0 | 2 | 4 | 6): SpriteFrame | undefined;
-  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): SpriteFrame;
+  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose, look?: OutfitLook): SpriteFrame;
   badge(state: AgentState): SpriteFrame;
 }
 
@@ -46,10 +48,11 @@ export class ProceduralSprites implements SpriteProvider {
     });
   }
 
-  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): SpriteFrame {
-    return this.cached(`a:${role}:${view}:${frame}${pose ? `:${pose}` : ""}`, () => {
+  avatar(role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose, look?: OutfitLook): SpriteFrame {
+    const worn = lookKey(look);
+    return this.cached(`a:${role}:${view}:${frame}${pose ? `:${pose}` : ""}${worn ? `:o=${worn}` : ""}`, () => {
       const g = new Graphics();
-      drawAvatar(g, role, view, frame, pose);
+      drawAvatar(g, role, view, frame, pose, look);
       return this.bakeFixed(g, AVATAR_FRAME);
     });
   }

@@ -2,6 +2,8 @@ import type { Graphics } from "pixi.js";
 import type { AgentState } from "@agentlife/shared";
 import { HAIR_COLOURS, PALETTE, ROLE_COLOURS, STATE_COLOURS, glyphColourOn, shade } from "../palette.ts";
 import type { RoleKey } from "../palette.ts";
+import { drawLookSlot } from "./outfit.ts";
+import type { OutfitLook, PartAnchors } from "./outfit.ts";
 
 /**
  * Avatars have 8 logical directions (see shared geometry/dir.ts). Because the camera is rotated
@@ -32,7 +34,7 @@ export function viewFor(dir: number): { view: DrawnView; mirror: boolean } {
   }
 }
 
-export const AVATAR_FRAME = { x: -16, y: -56, width: 32, height: 60 } as const;
+export const AVATAR_FRAME = { x: -20, y: -72, width: 40, height: 76 } as const;
 export const BADGE_FRAME = { x: -8, y: -8, width: 16, height: 16 } as const;
 
 interface ViewSpec {
@@ -64,9 +66,9 @@ export type AvatarPose = "sit" | "wave" | "cheer" | "dance" | "glum" | "sit_wave
 /** Pixels the sprite of a seated figure is lifted so that it sits on the seat of the piece, not inside it. */
 export const SIT_LIFT_PX = 6;
 
-export function drawAvatar(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): void {
+export function drawAvatar(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose, look?: OutfitLook): void {
   if (role !== "user") {
-    drawGhost(g, role, view, frame, pose);
+    drawGhost(g, role, view, frame, pose, look);
     return;
   }
   drawGuest(g, role, view, frame, pose);
@@ -80,7 +82,7 @@ export const GHOST_BOB_PX = 3;
  * `frame` 1 is the raised half of the float bob. Directions are the same 5 drawn views as guests;
  * back views have no eyes.
  */
-function drawGhost(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): void {
+function drawGhost(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose, look?: OutfitLook): void {
   const spec = VIEWS[view];
   const body = ROLE_COLOURS[role];
   const cheer = pose === "cheer";
@@ -105,6 +107,10 @@ function drawGhost(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, po
   g.circle(hx + 2 * r, hem, r).fill(shade(body, 0.78));
   g.ellipse(hx - half / 2, top - half / 2, 3, 2).fill({ color: 0xffffff, alpha: 0.35 });
 
+  // Outfit (ghost-skins): the top goes over the body and under the face; the hat and the accessory go over the face.
+  const anchors: PartAnchors = { view, hx, hy: top, hr: half, bw: half, chest: top + 10, hem, eyes: spec.eyes };
+  drawLookSlot(g, look, "top", anchors);
+
   // Eyes (front and side views only).
   if (spec.face) {
     const mid = spec.eyes.reduce((a, b) => a + b, 0) / spec.eyes.length;
@@ -122,6 +128,8 @@ function drawGhost(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, po
       for (const ex of spec.eyes) g.ellipse(hx + ex, top + 1, 1.8, 2.8).fill(PALETTE.eye);
     }
   }
+  drawLookSlot(g, look, "hat", anchors);
+  drawLookSlot(g, look, "accessory", anchors);
   // A few sparks around a cheering ghost on the high frame (a still frame, as under reduced motion, has none).
   if (cheer && frame === 1) {
     g.circle(hx - half - 1, top - 2, 1.4).fill(0xffd75e);

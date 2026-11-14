@@ -1,4 +1,4 @@
-import type { ClientMsg, EntityView, HrAction, MemoryAction, PanelName, ServerMsg } from "@agentlife/shared";
+import type { ClientMsg, EntityView, HrAction, MemoryAction, OutfitPart, PanelName, ServerMsg } from "@agentlife/shared";
 import { approveMessage, deliverMessage, startJobMessage } from "./actions.ts";
 import { createComputerPanel } from "./computer.ts";
 import type { PanelContent } from "./computer.ts";
@@ -132,6 +132,7 @@ const CSS = `
 .al-shop-item p { margin: 0; }
 .al-shop-preview { display: flex; align-items: center; justify-content: center; height: 112px; background: ${UI_COLOURS.inputBg}; border-radius: var(--al-radius); overflow: hidden; }
 .al-shop-preview img { max-width: 100%; max-height: 100%; image-rendering: pixelated; transform: scale(1.5); }
+.al-outfits .al-shop-preview img { transform: scale(2); }
 .al-shop-price { font-weight: bold; color: ${UI_COLOURS.accentText}; }
 .al-hr-level { margin: var(--al-s1) 0; color: ${UI_COLOURS.accentText}; }
 .al-hr-badges { display: flex; flex-wrap: wrap; gap: var(--al-s1); margin: var(--al-s1) 0; }
@@ -230,6 +231,8 @@ export interface PanelHooks {
   hrThinking?(): void;
   /** A picture of a piece of furniture drawn by the room's own renderer (a data URL), for the shop. */
   shopPreview?(defId: string): string | undefined;
+  /** A picture of an outfit part on a ghost drawn by the room's own renderer (a data URL), for the Outfits page. */
+  outfitPreview?(part: OutfitPart): string | undefined;
   /** Level and stats of a team member (team-progress), for the HR card; undefined when the hotel has no progress. */
   memberProgress?(projectId: string, memberId: string): EntityView | undefined;
 }
@@ -312,8 +315,12 @@ export function createPanels(
         state.shopError = null;
         send({ type: "shop_buy", itemId });
       },
+      buyPart: (partId) => {
+        state.shopError = null;
+        send({ type: "outfit_buy", partId });
+      },
     },
-    hooks.shopPreview ? { preview: hooks.shopPreview } : {},
+    { ...(hooks.shopPreview ? { preview: hooks.shopPreview } : {}), ...(hooks.outfitPreview ? { outfitPreview: hooks.outfitPreview } : {}) },
   );
 
   const profilePanel = createProfilePanel(document);
@@ -519,7 +526,7 @@ export function createPanels(
                     : state.open === "hr"
                       ? hrPanel({ hr: state.hr, error: state.hrError, suggestion: state.suggestion, busy: state.hrBusy, ...(locked ? { locked: HR_LOCKED } : {}) }, render)
                       : state.open === "shop"
-                        ? shopPanel({ shop: state.shop, error: state.shopError, ...(locked ? { locked: SHOP_LOCKED } : {}) }, render)
+                        ? shopPanel({ shop: state.shop, wardrobe: state.wardrobe, error: state.shopError, ...(locked ? { locked: SHOP_LOCKED } : {}) }, render)
                         : state.open === "profile"
                           ? profilePanel({ progress: state.progress }, render)
                     : state.open === "door"

@@ -6,16 +6,21 @@ import {
   EconomyConfigSchema,
   INVENTORY_MAX,
   InventoryFileSchema,
+  OutfitsFileSchema,
   WalletSchema,
+  WardrobeFileSchema,
   applyGrant,
+  applyOutfitPurchase,
   applyPurchase,
   checkCatalogue,
+  checkOutfits,
   emptyInventory,
   floorsWithPieces,
   furniOf,
   grantKey,
   movePlaced,
   newWallet,
+  outfitRef,
   pickUpToStock,
   piecesOf,
   placeFromStock,
@@ -23,8 +28,9 @@ import {
   returnHidden,
   stockCount,
   stockList,
+  unlockedBy,
 } from "@agentlife/shared";
-import type { CatalogueItem, EconomyConfig, GrantReason, Inventory, LedgerEntry, Placement, PlacedFurni, ShopState, Wallet } from "@agentlife/shared";
+import type { CatalogueItem, EconomyConfig, GrantReason, Inventory, LedgerEntry, OutfitPart, Placement, PlacedFurni, ShopState, Wallet, WardrobeState } from "@agentlife/shared";
 import { readJsonFile, writeJsonFile } from "./json-file.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -39,6 +45,19 @@ export function defaultWalletFile(env: NodeJS.ProcessEnv = process.env): string 
 /** `data/inventory.json` at the repository root, or `AGENTLIFE_INVENTORY_FILE`. */
 export function defaultInventoryFile(env: NodeJS.ProcessEnv = process.env): string {
   return env["AGENTLIFE_INVENTORY_FILE"] ?? join(DATA_DIR, "inventory.json");
+}
+
+/** `data/wardrobe.json` at the repository root, or `AGENTLIFE_WARDROBE_FILE`. */
+export function defaultWardrobeFile(env: NodeJS.ProcessEnv = process.env): string {
+  return env["AGENTLIFE_WARDROBE_FILE"] ?? join(DATA_DIR, "wardrobe.json");
+}
+
+/** Reads and checks `config/outfits.json` against the badges that exist. Throws with every problem when it is wrong. */
+export function loadOutfits(badgeIds: ReadonlySet<string>, file: string = join(CONFIG_DIR, "outfits.json")): OutfitPart[] {
+  const parts = OutfitsFileSchema.parse(JSON.parse(readFileSync(file, "utf8"))).parts;
+  const problems = checkOutfits(parts, badgeIds);
+  if (problems.length > 0) throw new Error(`${file}:\n  ${problems.join("\n  ")}`);
+  return parts;
 }
 
 /** Reads and checks `config/economy.json`. Throws with the reason when it is wrong. */
@@ -61,6 +80,15 @@ export interface EconomyOptions {
   config: EconomyConfig;
   /** What the shop sells. Default: `loadCatalogue()`. */
   catalogue?: readonly CatalogueItem[];
+  /**
+   * The outfit parts (ghost-skins). Without them the economy has no wardrobe: no file is read or written for it, and the
+   * gateway sends no `wardrobe` message.
+   */
+  outfits?: readonly OutfitPart[];
+  /** Default: `defaultWardrobeFile()`. Only used with `outfits`. */
+  wardrobeFile?: string;
+  /** Names of the badges that parts ask for, for the refusal text and the unlock toast. Default: the badge id. */
+  badgeNames?: (badgeId: string) => string;
   now?: () => number;
   onLog?: (message: string) => void;
 }
@@ -78,6 +106,12 @@ export interface InventoryPlan {
 export type PlacePlan = { ok: true; piece: PlacedFurni; commit(): void } | { ok: false; reason: string };
 export type ChangePlan = ({ ok: true } & InventoryPlan) | { ok: false; reason: string };
 
+/** A part a badge unlocked, with the name of that badge. */
+export interface UnlockedPart {
+  part: OutfitPart;
+  badgeName: string;
+}
+
 /**
  * The user's Ecto and what they bought: the balance in `data/wallet.json`, the stock and the pieces placed on the floors
  * in `data/inventory.json`, the grants that fill the wallet and the purchases that empty it. The rules are the shared ones
@@ -92,6 +126,10 @@ export class Economy {
   private readonly inventoryFile: string;
   private readonly config: EconomyConfig;
   private readonly items: readonly CatalogueItem[];
+  private readonly parts: readonly OutfitPart[] | undefined;
+  private readonly wardrobeFile: string;
+  private readonly badgeName: (badgeId: string) => string;
+  private owned: string[] = [];
   private readonly now: () => number;
   private readonly log: (message: string) => void;
 
@@ -107,6 +145,10 @@ export class Economy {
     if (!loaded) this.trySave(this.file, this.wallet);
     const file = readJsonFile(this.inventoryFile, InventoryFileSchema, { now: this.now, onLog: this.log });
     this.inventory = file ? { stock: file.stock, placed: file.placed, seq: file.seq } : emptyInventory();
+    this.parts = opts.outfits;
+    this.wardrobeFile = opts.wardrobeFile ?? defaultWardrobeFile();
+    this.badgeName = opts.badgeNames ?? ((id) => id);
+    if (this.parts) this.owned = [...(readJsonFile(this.wardrobeFile, WardrobeFileSchema, { now: this.now, onLog: this.log })?.owned ?? [])];
   }
 
   get balance(): number {
@@ -192,6 +234,63 @@ export class Economy {
     this.wallet = result.wallet;
     this.inventory = next;
     return { ok: true, entry: result.entry };
+  }
+
+  // ---- outfits (ghost-skins) ----
+
+  /** True when this economy has outfit parts and a wardrobe file. */
+  get hasWardrobe(): boolean {
+    return this.parts !== undefined;
+  }
+
+  /** The parts, the ones the user owns and the balance; undefined without a wardrobe. */
+  wardrobe(): WardrobeState | undefined {
+    const parts = this.parts;
+    if (!parts) return undefined;
+    const badgeIds = [...new Set(parts.flatMap((p) => (p.badge === undefined ? [] : [p.badge])))];
+    return {
+      balance: this.wallet.balance,
+      parts: [...parts],
+      owned: [...this.owned],
+      badges: badgeIds.map((id) => ({ id, name: this.badgeName(id) })),
+    };
+  }
+
+  private writeWardrobe(owned: readonly string[]): boolean {
+    return this.trySave(this.wardrobeFile, { version: 1, owned });
+  }
+
+  /**
+   * Buys one outfit part. A refusal says why and changes nothing. Like a furniture purchase, the wardrobe is written first
+   * and the wallet second; if the second write fails the first is written back and the purchase is refused.
+   */
+  buyPart(partId: string): BuyResult {
+    if (!this.parts) return { ok: false, reason: "The shop is closed: it needs the real engine." };
+    const part = this.parts.find((p) => p.id === partId);
+    const result = applyOutfitPurchase(this.wallet, this.owned, part, this.now(), this.badgeName);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    if (!this.writeWardrobe(result.owned)) return { ok: false, reason: "Could not save your purchase." };
+    if (!this.trySave(this.file, result.wallet)) {
+      this.writeWardrobe(this.owned);
+      return { ok: false, reason: "Could not save your purchase." };
+    }
+    this.wallet = result.wallet;
+    this.owned = result.owned;
+    return { ok: true, entry: result.entry };
+  }
+
+  /**
+   * Adds every part that one of these badges unlocks and the user does not own yet, in one write. Returns the new parts
+   * (each only once, ever). When the file cannot be written nothing is added and the next call tries again.
+   */
+  unlockParts(badgeIds: ReadonlySet<string>): UnlockedPart[] {
+    if (!this.parts || badgeIds.size === 0) return [];
+    const fresh = unlockedBy(this.parts, this.owned, badgeIds);
+    if (fresh.length === 0) return [];
+    const next = [...this.owned, ...fresh.map((p) => p.id)];
+    if (!this.writeWardrobe(next)) return [];
+    this.owned = next;
+    return fresh.map((part) => ({ part, badgeName: this.badgeName(part.badge ?? "") }));
   }
 
   // ---- bought furniture on the floors (task 3) ----

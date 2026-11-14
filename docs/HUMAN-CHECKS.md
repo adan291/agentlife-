@@ -93,3 +93,10 @@ The conductor merged these specs and kept going. Tick each item when checked; te
 - [ ] Try Edit room in the lobby and the HR office by hand: move, turn with R, reset, reload. Confirm refusal messages read clearly and the elevator and doors cannot move.
 - [ ] With the real engine, stop a `pnpm session` mid-run and confirm the Builder ghost and its team row go idle after 10 minutes. Tests use short timeouts.
 - [ ] Confirm the HR ghost still stands at the HR desk after the `home_hr` anchor change (design says tile 7,1).
+
+## ghost-skins task 1 (on feat/ghost-skins, not merged)
+- [ ] Open the shop counter in the lobby, then the Outfits tab: 23 parts in Hats, Tops and Accessories, each on a ghost. Look at them at your usual zoom: do the cap, waistcoat, neckerchief, carnation, pumpkin hat, witch hat, bat bow tie and candle read as what they are?
+- [ ] The picture you gave has four pieces and the spec has three slots, so a ghost wears the neckerchief or the carnation, not both. Say if you want a fourth slot (neck).
+- [ ] Buy a cheap part (the carnation, 15 Ecto) and check the balance, the "Owned" mark and that a second purchase is refused. Badge parts say "Locked: earn the ... badge" and have no Buy button.
+- [ ] A badge part unlocks with a toast when its badge is earned (Hotel veteran: crown), and at the next visit if the badge was earned earlier (also a badge of a team member).
+- [ ] Parts are only seen in the shop until task 2 puts them on a ghost. Then check every part on the role colours (teal, orange, purple, pink, yellow, blue) and in the cheer and glum poses.

@@ -61,7 +61,7 @@ import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import type { LayoutStore } from "./layout-store.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
-import type { Economy } from "./economy-store.ts";
+import type { Economy, UnlockedPart } from "./economy-store.ts";
 import { GrantTracker } from "./grants.ts";
 import { ProgressTracker } from "./progress-tracker.ts";
 import type { TrackedFact } from "./progress-tracker.ts";
@@ -108,7 +108,7 @@ export interface GatewayOptions {
    */
   economy?: Pick<
     Economy,
-    "balance" | "ledger" | "grant" | "hasGranted" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces"
+    "balance" | "ledger" | "grant" | "hasGranted" | "shop" | "buy" | "planPlace" | "planPickUp" | "planMove" | "returnAbsentFloors" | "returnHiddenPieces" | "hasWardrobe" | "wardrobe" | "buyPart" | "unlockParts"
   >;
   /** Test knobs of the wisps (waiting-fun): how often they appear, how long they live and the random source. Defaults: 20 to 60 s and 8 s. */
   wisps?: WispOptions;
@@ -283,6 +283,63 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (!result.ok) return sendError(ws, "shop_error", result.reason);
     send(ws, { type: "wallet", balance: economy.balance });
     send(ws, { type: "shop", state: economy.shop() });
+  };
+
+  // ---- outfits: parts to buy and to unlock (ghost-skins) ----
+
+  /** The parts, the wardrobe and the balance. Nothing is sent when the hotel has no wardrobe. */
+  const sendWardrobe = (ws: WebSocket): void => {
+    const state = economy?.wardrobe();
+    if (state) send(ws, { type: "wardrobe", state });
+  };
+
+  /** The wardrobe on request: closed like the shop when there is none. */
+  const askWardrobe = (ws: WebSocket): void => {
+    if (!economy?.hasWardrobe) return sendError(ws, "shop_error", SHOP_CLOSED);
+    sendWardrobe(ws);
+  };
+
+  /** One outfit purchase at the shop counter in the lobby, with the same refusals and the same order of writes as furniture. */
+  const buyOutfit = (ws: WebSocket, partId: string): void => {
+    if (!economy?.hasWardrobe) return sendError(ws, "shop_error", SHOP_CLOSED);
+    if (userRoom() !== LOBBY_ROOM) return sendError(ws, "shop_error", "The shop counter is in the lobby.");
+    const result = economy.buyPart(partId);
+    if (!result.ok) return sendError(ws, "shop_error", result.reason);
+    send(ws, { type: "wallet", balance: economy.balance });
+    sendWardrobe(ws);
+  };
+
+  /**
+   * Gives the parts that these badges unlock, once each, and tells the connected user (a toast per part, then the new
+   * wardrobe). A badge of the user or of any team member counts. A part that cannot be saved is tried again at the next
+   * welcome.
+   */
+  const toastUnlocked = (ws: WebSocket, unlocked: readonly UnlockedPart[]): void => {
+    for (const { part, badgeName } of unlocked) send(ws, { type: "part_unlocked", partId: part.id, name: part.name, slot: part.slot, badge: badgeName });
+  };
+
+  const unlockOutfits = (badgeIds: ReadonlySet<string>): void => {
+    const unlocked = economy?.unlockParts(badgeIds) ?? [];
+    if (unlocked.length === 0 || !current) return;
+    toastUnlocked(current.ws, unlocked);
+    sendWardrobe(current.ws);
+  };
+
+  /** Every badge the user and the team members have, from the progress view. */
+  const earnedBadgeIds = (): Set<string> => {
+    const view = progress?.view();
+    const ids = new Set<string>();
+    if (!view) return ids;
+    for (const b of view.user.badges) ids.add(b.id);
+    for (const m of view.members) for (const b of m.badges) ids.add(b.id);
+    return ids;
+  };
+
+  /** The wardrobe for a client that just arrived, after the parts that badges earned in the meantime unlocked. */
+  const welcomeWardrobe = (ws: WebSocket): void => {
+    if (!economy?.hasWardrobe) return;
+    toastUnlocked(ws, economy.unlockParts(earnedBadgeIds()));
+    sendWardrobe(ws);
   };
 
   // ---- wisps: something to catch while a job runs (waiting-fun) ----
@@ -707,6 +764,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       await sendHr(ws);
     } else if (panel === "shop") {
       sendShop(ws);
+      sendWardrobe(ws);
     }
   };
 
@@ -722,6 +780,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const lines = f?.activity ?? [];
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
     if (economy) send(ws, { type: "wallet", balance: economy.balance });
+    welcomeWardrobe(ws);
     if (progress) send(ws, { type: "progress", state: progress.view() });
     // The mood of the desk agents of a project floor, for the tags over their heads and their tooltips.
     const moodProject = projectIdOfRoom(roomId);
@@ -1166,6 +1225,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (projectId !== undefined) for (const s of seats) named.set(memberKey(projectId, s.id), { projectId, memberId: s.id, name: s.name });
     const result = progress.record(tracked.fact, [...named.keys()]);
     payQuests();
+    if (result.badges.length > 0) unlockOutfits(new Set(result.badges.map((b) => b.badge.id)));
     if (!result.changed || !current) return;
     send(current.ws, { type: "progress", state: progress.view() });
     for (const up of result.levelUps) announceLevelUp(up, named);
@@ -1726,6 +1786,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         sendShop(ws);
       } else if (msg.type === "shop_buy") {
         buyItem(ws, msg.itemId);
+      } else if (msg.type === "wardrobe_state") {
+        askWardrobe(ws);
+      } else if (msg.type === "outfit_buy") {
+        buyOutfit(ws, msg.partId);
       } else if (msg.type === "wisp_catch") {
         catchWisp(ws, msg.wispId);
       } else {

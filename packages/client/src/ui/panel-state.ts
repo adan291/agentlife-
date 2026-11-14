@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, ProgressView, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, ProgressView, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion, WardrobeState } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -51,6 +51,8 @@ export class PanelState {
   /** The shop (catalogue, balance, stock) and why the last purchase was refused. The error is cleared when the panel opens. */
   shop: ShopState | null = null;
   shopError: string | null = null;
+  /** The outfit parts and the wardrobe (Outfits page of the shop). Null in the recorded demo and without a wardrobe. */
+  wardrobe: WardrobeState | null = null;
   /** XP, levels, badges and quests (Profile panel, HR cards). Null when the hotel has no progress. */
   progress: ProgressView | null = null;
 
@@ -110,15 +112,27 @@ export class PanelState {
         this.shop = msg.state;
         this.shopError = null;
         return this.open === "shop";
+      case "wardrobe":
+        this.wardrobe = msg.state;
+        this.shopError = null;
+        return this.open === "shop";
       case "progress":
         // The HR cards and the Profile panel show it; the HR cards read their level through a hook.
         this.progress = msg.state;
         return this.open === "hr" || this.open === "profile";
-      case "wallet":
+      case "wallet": {
         // A grant or a purchase changes the balance; the shop's header and its Buy buttons follow it.
-        if (!this.shop || this.shop.balance === msg.balance) return false;
-        this.shop = { ...this.shop, balance: msg.balance };
-        return this.open === "shop";
+        let changed = false;
+        if (this.shop && this.shop.balance !== msg.balance) {
+          this.shop = { ...this.shop, balance: msg.balance };
+          changed = true;
+        }
+        if (this.wardrobe && this.wardrobe.balance !== msg.balance) {
+          this.wardrobe = { ...this.wardrobe, balance: msg.balance };
+          changed = true;
+        }
+        return changed && this.open === "shop";
+      }
       case "hr":
         // After a change the desk sends its new state; a refused change keeps its error on screen until the next action.
         this.hr = msg.state;
