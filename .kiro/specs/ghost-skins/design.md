@@ -111,5 +111,51 @@ A badge of the user or of any team member unlocks the part (requirement 2.2). Th
 - client (`outfits.test.ts`): every part of the shipped file has a recipe; every recipe draws in the five views, at several lifts (-2, 0, 3, 4, 8) and in the cheer and glum poses, with every point inside `AVATAR_FRAME`; a hat stays above `hy - 1.5` and within 7 px of the dome; a top stays inside the body; a bare ghost's calls are a subsequence of the dressed ghost's; the cache key; the card render and the Buy message; the preview helper.
 - Playwright for the whole flow is task 2.
 
-## Task 2: wearing (outline)
-`data/outfits.json` (`{ version: 1, members: { "<project>/<member>": { hat?, top?, accessory? } }, user: {...} }`); client message `outfit_wear { who: "user" | { project, member }, slot, partId | null }` checked by the server (known member, part owned, right slot); `room`/`welcome` carry each person's outfit and a live `outfit` message follows a change; `AvatarView.setLook`; the HR card's Look section and the Profile picker; `guestAnchors`. Written in detail when task 2 starts.
+## Task 2: wearing
+
+### Who wears what
+- Who can wear: the user and every team member of a project (desk members and members at the standing spots, keyed `<project>/<member>` like progress, `memberKey`). The desk of a role nobody was hired for belongs to the default member whose id is the role name (`project/developer`), as the progress counts it. The HR ghost and the Builder are scenery and the engine's session mirror, not team members: they have no card to dress them in, so they keep the default look (the intro of the requirements lists them as able to wear parts; no requirement gives a way to do it, so it is left out until the user asks).
+- A part can be worn by any number of figures at once (a wardrobe, not stock). Wearing never changes a model, a permission or a job: nothing reaches the engine.
+
+### Data (`data/outfits.json`, `AGENTLIFE_OUTFITS_FILE` overrides the path)
+```json
+{ "version": 1, "user": { "hat": "crown" }, "members": { "haunted-todo/developer": { "hat": "flat_cap", "top": "waistcoat" } } }
+```
+- `Outfit` = `{ hat?, top?, accessory? }` of part ids. An empty outfit is not stored (a member with nothing on has no entry). At most 400 member entries. Same file rules as the wardrobe (`json-file.ts`): temporary file then rename; an unreadable file is moved aside as `outfits.json.bad-<time>` and everybody starts bare.
+- `WornStore` (`world-server/src/outfit-store.ts`) owns the file: `state()`, `wear(who, slot, partId | null)`, `pruneProject(project, memberIds)`. A write that fails changes nothing in memory and answers "Could not save the outfit.". It is on only when the economy has a wardrobe (a part id is meaningless without the parts file); `main.ts` passes both or neither.
+- A part id that is no longer in `outfits.json` stays in the file and is not drawn (client: no recipe or no part, skipped).
+
+### Rules (`shared/outfits.ts`, pure)
+`applyWear(parts, owned, outfit, slot, partId)` returns the new outfit or the first refusal:
+
+| Code | Rule | Text |
+|---|---|---|
+| `unknown_part` | the id is not in the parts file | "That outfit is not in the shop." |
+| `not_owned` | the id is not in the wardrobe | "You do not own the Checked flat cap yet. Buy it at the shop counter in the lobby." |
+| `wrong_slot` | the part belongs to another slot than the one asked | "The Checked flat cap is a hat, not a top." |
+
+`partId: null` takes the slot off and is always allowed. Wearing the same part again changes nothing and is not an error.
+
+### Messages (`protocol.ts`)
+- Client to server: `outfit_wear { who, slot, partId }` with `who` = `"user"` or `{ project, member }` and `partId` a part id or `null`.
+- Server to client: `outfits { state }` with `state` = `{ user: Outfit, members: [{ project, member, outfit }] }`: the whole file, which is small (a team has at most 8 members). It follows the `wardrobe` at every welcome, follows every change, and follows a prune. So a reload, a restart of the world-server and a move to another floor all show the same look: the client rebuilds it from the last `outfits` and `team_view`. (Changed from the outline, which had the outfit travel inside `welcome` and a separate live message: one message for both is simpler and cannot disagree with itself.)
+- Refusals are `error` with the new code `outfit_error` and the text of the table. Besides the table: "The hotel has no wardrobe: it needs the real engine." (no wardrobe), "That team member is not on this project's team." (unknown member: checked with `engine.hr.team(project)`, which lists the default members too), "Team members are dressed at the HR desk." (a member outfit from outside the HR office, as hire and fire are). The user's own outfit can be changed on any floor, because the Profile panel opens on any floor.
+- The replay mode never receives `wardrobe` or `outfits`: no parts, the default look, and the Look sections say the wardrobe is off (requirement 3.4). A test checks that a world view fed only the recorded demo's messages draws the bare look.
+
+### Fired members
+`refreshTeam` (the gateway's one place that reads a project's team) drops from `outfits.json` every entry of that project whose member id is no longer in the team, and sends the new `outfits` when something was dropped. `hire`, `update`, `fire` and `apply` all end in `refreshTeam`, so a fired member (by the HR desk or by a proposal that replaces one) loses the outfit at once, and a member fired outside the hotel loses it the next time the floor is entered. A hire that reuses an id starts bare. The wardrobe keeps the parts.
+
+### Client
+- `scene/outfit-book.ts` (`OutfitBook`, pure, no Pixi): keeps the parts and the owned ids (from `wardrobe`) and the worn state (from `outfits`); `forMember(project, member)`, `forUser()`, `look(outfit)` (part ids resolved to palettes) and a `signature()` for tests. `WorldView.handle` feeds it before it draws, and `main.ts` hands the same book to the panels.
+- `WorldView.applyLooks()` runs after a welcome, a `team_view`, a `wardrobe` and an `outfits` message: for each avatar it finds the person (the user's figure: the user; a desk ghost: `team_view` member id or the role name; a standing member: `team_view` guest member id; the Builder and the HR ghost: nobody) and calls `AvatarView.setLook(look)`. The sprite of a look is baked once per distinct look (cache key `o=<hat>|<top>|<accessory>`), so a team of eight costs a handful of textures.
+- The canvas carries `data-looks` (JSON of avatar id to `hat|top|accessory`, only for figures that wear something). It is the state the scene draws from, exposed so the Playwright test can read what a canvas cannot say.
+- The user's figure is not a ghost. `figure.ts` gets `guestAnchors(view, spec, bob, sway)`: `hy = -39 + bob` (the head), `hr = 9.5`, `bw = torsoW / 2`, `chest = hy + 9` (the top of the torso), `hem = hy + 24` (above the belt), `eyes` of the view. The recipes are the ghost's and take the anchors as they are; the user's torso is taller than a ghost's body, so a top covers its upper 15 px and the shirt shows below. The depth order is the ghost's: the top after the torso and before the arms (the arms stay in front of it), the hat and the accessory after the head. A seated or gesturing figure moves its head and torso with `bob`, and the anchors follow it.
+- `ui/look-picker.ts`: one component for both panels. For a person it shows the preview (a figure facing front wearing the current outfit, drawn by the room's renderer: `createLookPreviews`), and one `select` per slot with "None" and the parts of that slot the user owns (a worn part that is not owned stays in the list, so the picker never lies). A change sends `outfit_wear` at once. Without a wardrobe it says so; with an empty wardrobe it says where to buy parts.
+- HR card: a Look section under the level line, `data-section="look"`. Profile: a third tab, Look, for the user's own figure (it also works while there is no progress yet).
+- `PanelState` keeps `lookError` (from `outfit_error`, cleared by the next `outfits`) and re-renders the HR and Profile panels on `wardrobe` and `outfits`.
+
+### Tests (task 2)
+- shared: `applyWear` table, a fast-check property (any sequence of wear and take-off keeps every worn id owned, in the right slot), the schemas of the file and of the messages, `wornKey`-style helpers.
+- world-server: `WornStore` (wear, take off, empty not stored, restart, bad file moved aside, write failure, prune); through the gateway: wear a member and the user, the refusals (not owned, wrong slot, unknown part, unknown member, no wardrobe, member outside the HR office), `outfits` after welcome, survives a restart of the gateway, a fired member drops it and the wardrobe keeps the part, a hire that reuses the id starts bare.
+- client: `OutfitBook`; every part draws on the user's figure in the five views and the poses (sit, wave, cheer, dance) inside `AVATAR_FRAME`; a bare figure's calls are a subsequence of the dressed figure's; `setLook` changes the sprite; `applyLooks` maps desk ghosts, standing members and the user; the picker lists owned parts only and sends the right message; the recorded demo's messages leave everybody bare.
+- Playwright (a fourth test world-server with a scripted HR link, ports 8798 and 5196, `FAKE_HR=1`): buy the Checked flat cap in the shop, put it on the Developer at the HR desk, go to the project floor, the Developer wears it, and still does after a reload. The scripted engine has no HR office otherwise; the link of `FAKE_HR` serves the default team of the one project and refuses hiring and firing.
