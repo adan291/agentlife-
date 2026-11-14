@@ -3,9 +3,14 @@ import type {
   AgentId,
   ApprovalDecision,
   ArtifactView,
+  BranchesResponse,
+  BuildBoard,
+  BuildReport,
+  DeliveryInfo,
   JobDetails,
   JobState,
   JobView,
+  NightState,
   Project,
   RegisterProjectResult,
   Repo,
@@ -13,8 +18,12 @@ import type {
   StepRecord,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink, HrLink, StartJobOptions } from "./engine-link.ts";
+import type { EngineLink, HrLink, MemoryLink, PipelineLink, StartJobOptions } from "./engine-link.ts";
 import { createFakeHr } from "./fake-hr.ts";
+import { fakeBranches, fakeBuildBoard, fakeBuildReport, fakeMemory, fakeNight, fakePipeline } from "./fake-panels.ts";
+
+/** A change to a panel of the scripted engine: refused. */
+const refusePanel = (): Promise<never> => Promise.reject(new Error("The scripted engine only shows this panel. Start the real engine to change it."));
 
 export const FAKE_REPO: Repo = {
   id: "haunted-todo",
@@ -28,7 +37,17 @@ export interface FakeEngineOptions {
   clock?: () => number;
   /** Give the scripted engine an HR office with the default team (tests and Playwright; `FAKE_HR=1` in `main.ts`). */
   hr?: boolean;
+  /** Let a finished job be delivered as a branch, like a job on a registered project (tests and Playwright; `FAKE_DELIVER=1`). */
+  deliver?: boolean;
+  /**
+   * Fixed, read-only data for the night board, the Library, the review desk, the pipeline editor and the imports of the HR
+   * desk (Playwright's visual comparisons; `FAKE_PANELS=1`). Needs `hr` for the imports.
+   */
+  panels?: boolean;
 }
+
+/** What the scripted delivery reports: no repository is touched. */
+const FAKE_COMMIT = "3f2a9c1d7b5e";
 
 type Draft = AgentEvent extends infer E ? (E extends unknown ? Omit<E, "seq" | "ts" | "taskId"> : never) : never;
 
@@ -47,6 +66,7 @@ interface Job {
   approval: Promise<ApprovalDecision>;
   artifacts: ArtifactView[];
   stepWork: Map<StepName, StepWork>;
+  delivery?: DeliveryInfo;
 }
 
 const STEP_OF_STATE: Partial<Record<JobState, StepName>> = {
@@ -92,11 +112,48 @@ export class FakeEngineLink implements EngineLink {
   private wake: (() => void) | null = null;
   /** The HR office, only when asked for (`FAKE_HR=1`, tests): the scripted engine has none otherwise. */
   hr?: HrLink;
+  /** Fetches the job's branch, only when asked for (`FAKE_DELIVER=1`, tests): the scripted engine has no repository. */
+  deliver?: (taskId: string) => Promise<DeliveryInfo>;
+  /** Fixed data for these panels, only when asked for (`FAKE_PANELS=1`): the scripted engine has none otherwise. */
+  memory?: MemoryLink;
+  pipeline?: PipelineLink;
+  listBranches?: (projectId: string) => Promise<BranchesResponse>;
+  getNight?: () => Promise<NightState>;
+  addNightJob?: () => Promise<never>;
+  removeNightJob?: () => Promise<never>;
+  moveNightJob?: () => Promise<never>;
+  getBuildBoard?: () => Promise<BuildBoard>;
+  getBuildReport?: (spec: string) => Promise<BuildReport>;
 
   constructor(options: FakeEngineOptions = {}) {
     this.stepMs = options.stepMs ?? 1500;
     this.clock = options.clock ?? Date.now;
-    if (options.hr) this.hr = createFakeHr(FAKE_REPO.id, FAKE_REPO.name);
+    if (options.hr) this.hr = createFakeHr(FAKE_REPO.id, FAKE_REPO.name, options.panels === true);
+    if (options.deliver) this.deliver = (taskId) => this.deliverBranch(taskId);
+    if (options.panels) {
+      this.memory = fakeMemory();
+      this.pipeline = fakePipeline();
+      this.listBranches = () => Promise.resolve(fakeBranches());
+      this.getNight = () => Promise.resolve(fakeNight());
+      this.addNightJob = refusePanel;
+      this.removeNightJob = refusePanel;
+      this.moveNightJob = refusePanel;
+      this.getBuildBoard = () => Promise.resolve(fakeBuildBoard());
+      this.getBuildReport = (spec) => Promise.resolve(fakeBuildReport(spec));
+    }
+  }
+
+  /** The scripted delivery: a finished job gets a branch name and a commit, once, and `delivery.done` is announced. */
+  private deliverBranch(taskId: string): Promise<DeliveryInfo> {
+    const job = this.jobs.get(taskId);
+    if (!job) return Promise.reject(new Error(`unknown task '${taskId}'`));
+    if (job.delivery) return Promise.reject(new Error("This job was delivered already."));
+    if (job.view.state !== "delivered" || !job.artifacts.some((a) => a.kind === "diff")) {
+      return Promise.reject(new Error("Only a finished change can be delivered."));
+    }
+    job.delivery = { branch: `agentlife/${taskId}`, commit: FAKE_COMMIT };
+    this.emit(taskId, { type: "delivery.done", ...job.delivery });
+    return Promise.resolve({ ...job.delivery });
   }
 
   listRepos(): Promise<Repo[]> {
@@ -195,6 +252,8 @@ export class FakeEngineLink implements EngineLink {
         approvals: [],
         artifacts: job.artifacts.map((a) => ({ artifactId: a.artifactId, kind: a.kind, title: a.title })),
         ...(hasDevelop ? { branch: `agentlife/${taskId}` } : {}),
+        ...(job.delivery ? { delivery: { ...job.delivery } } : {}),
+        ...(this.deliver && !job.delivery && hasDevelop && (job.view.state === "report_ready" || job.view.state === "delivered") ? { deliverable: true } : {}),
       },
       artifacts: structuredClone(job.artifacts),
     });

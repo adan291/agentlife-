@@ -98,12 +98,27 @@ if (process.env["TEST_WORKER_INDEX"] === undefined) {
  */
 export default defineConfig({
   testDir: "e2e",
-  // demo.spec.ts belongs to playwright.demo.config.ts (it needs a demo build).
-  testIgnore: "demo.spec.ts",
+  // demo.spec.ts belongs to playwright.demo.config.ts (it needs a demo build). CI sets E2E_SKIP_VISUALS=1: the baselines are
+  // made on the developer's machine (Edge on Windows) and a runner draws text a little differently, so the visual
+  // comparisons run in the conductor, not in CI (design.md of regression-suite).
+  testIgnore: process.env["E2E_SKIP_VISUALS"] === "1" ? ["demo.spec.ts", "visuals.spec.ts"] : "demo.spec.ts",
   timeout: 30_000,
   // The world-server serves one user at a time: a second page would replace the first.
   workers: 1,
-  reporter: "list",
+  // The HTML report keeps the expected, actual and diff images of a failed visual comparison (`pnpm exec playwright show-report`).
+  // The conductor asks for a JSON report too (PLAYWRIGHT_JSON_OUTPUT_NAME) to tell a failed test from a flaky one.
+  reporter: [["list"], ["html", { open: "never" }], ...(process.env["PLAYWRIGHT_JSON_OUTPUT_NAME"] ? [["json"] as ["json"]] : [])],
+  // Visual baselines (visuals.spec.ts) are kept per platform: Windows and Linux draw text differently. A platform with no
+  // folder under `e2e/__visuals__/` skips the visual step and says so; `pnpm --filter @agentlife/client e2e:update-visuals` writes it.
+  snapshotPathTemplate: "{testDir}/__visuals__/{platform}/{arg}{ext}",
+  expect: {
+    toHaveScreenshot: {
+      // The page's own CSS transitions end at once and the text caret is hidden; the rest is frozen by `freezeForScreenshots`.
+      animations: "disabled",
+      caret: "hide",
+      scale: "css",
+    },
+  },
   use: {
     baseURL: `http://127.0.0.1:${WEB_PORT}`,
     ...(channel ? { channel } : {}),

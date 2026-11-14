@@ -33,7 +33,7 @@ const allowedOrigins = parseAllowedOrigins(process.env["WORLD_ALLOWED_ORIGINS"])
 const engineKind = process.env["ENGINE"] ?? "fake";
 let engine: EngineLink;
 if (engineKind === "fake") {
-  engine = new FakeEngineLink({ hr: process.env["FAKE_HR"] === "1" });
+  engine = new FakeEngineLink({ hr: process.env["FAKE_HR"] === "1", deliver: process.env["FAKE_DELIVER"] === "1", panels: process.env["FAKE_PANELS"] === "1" });
 } else if (engineKind === "http") {
   const baseUrl = process.env["ENGINE_URL"] ?? "http://127.0.0.1:8788";
   engine = new HttpEngineLink({
@@ -75,7 +75,17 @@ if (engineKind === "http" || process.env["AGENTLIFE_WALLET_FILE"]) {
 let progress: ProgressStore | undefined;
 if (engineKind === "http" || process.env["AGENTLIFE_PROGRESS_FILE"]) {
   try {
-    progress = new ProgressStore({ file: defaultProgressFile(), config: loadProgressConfig(), badges: loadBadges(), quests: loadQuests(), onLog: (m) => console.warn(m) });
+    // `AGENTLIFE_PROGRESS_NOW` (epoch ms) fixes the progress clock, so the day that picks the quests is the same on every run.
+  // For Playwright's visual comparisons only.
+  const fixedNow = Number(process.env["AGENTLIFE_PROGRESS_NOW"] ?? "");
+  progress = new ProgressStore({
+    file: defaultProgressFile(),
+    config: loadProgressConfig(),
+    badges: loadBadges(),
+    quests: loadQuests(),
+    onLog: (m) => console.warn(m),
+    ...(Number.isFinite(fixedNow) && fixedNow > 0 ? { now: () => fixedNow } : {}),
+  });
   } catch (e) {
     console.error(`Cannot start the progress store: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);

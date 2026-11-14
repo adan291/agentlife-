@@ -1,114 +1,63 @@
-# Human checks waiting for the user
+# Human checks
 
-The conductor merged these specs and kept going. Tick each item when checked; tell Kiro about anything that fails.
+The Playwright suite (`pnpm --filter @agentlife/client e2e`, see README) walks the hotel as a user does, checks layout and interface rules at 360x640, 800x600 and 1366x768, and compares screenshots with baselines. Whatever it covers is ticked at the end of this file with the test that covers it. The list below is what is left, and it needs a person. Checks that a test could do but none does yet are in `docs/regression-backlog.md`.
 
-## project-registry (merged 2026-11-11)
-- [ ] Copy a small git project of yours into D:\AgentHotel, register it at the Reception, run one job, approve, press "Deliver as branch" and check the branch `agentlife/<task>` exists in your repo and nothing else changed.
+## Needs a human
 
-## hotel-floors (merged 2026-11-12)
-- [x] Lobby, elevator with door transition, project floor with its name (checked by the user 2026-11-12)
-- [ ] With two registered projects, start jobs on both and a third one to see the queue
-- [ ] Demo build (`?mode=demo` or the public URL): elevator to the lobby and back
+Tick an item when checked; tell Kiro about anything that fails.
 
-## night-shift (merged 2026-11-12)
-- [ ] Look at the feature in the browser
+- [ ] A real job on a real project: copy a small git project into D:\AgentHotel, register it at the Reception, run a job with the real engine, approve, press "Deliver as branch". The branch `agentlife/<task>` exists in your repository and nothing else changed. XP, Ecto and the "Deliver a branch" quest are paid once (restart the world-server: the balance does not change). With two projects, start jobs on both and a third to see the queue. (The suite delivers with a scripted engine only.)
+- [ ] HR and pipeline with the real engine and `kiro-cli`: hire, rename, fire, "Suggest a team", a job on a customised team, a Reviewer and a Researcher in the pipeline (second review, research notes, a refusal to fire a member the pipeline uses), imports from a real source (persona, review, "Update waits for you"), the Night intern with Ollama and without it.
+- [ ] A real night shift and the Librarian's note in the Library.
+- [ ] Long real runs: furniture moved during a real job, the coffee machine serving a tired agent in 60 real minutes, the Builder ghost going idle 10 minutes after a stopped `pnpm session`.
+- [ ] A touch screen (tap an item in the tray, then the floor) and a browser other than Edge (the tests and baselines are Edge).
+- [ ] Look once through the baseline images in `packages/client/e2e/__visuals__/win32/` (rooms and panels, 71 images) and say if anything looks wrong, cramped or ugly. A wrong baseline is fixed and rewritten with `e2e:update-visuals`; from then on the suite keeps screens from changing by accident.
+- [ ] Art: the 25 furniture previews and the 23 outfit parts read as what they are, on every role colour, in the cheer and glum poses and on the user's taller figure.
+- [ ] Motion a screenshot cannot show: the level-up ring, the wisp blink and catch ring, the poses (sit, wave, dance, cheer, the sitter's depth against a sofa), the mood face, the outfit parts staying in place while a figure walks in all four directions.
+- [ ] Edit room look: the green and red overlay, the cross, the selected outline, the standing-spot dots, a wall piece turned on the north and west walls, the room the "Editing" banner takes at a small height.
+- [ ] A floor with a full team (six ghosts): overlapping name tags, the spots beside the QA desk, a hire walking in and a fired member walking out.
+- [ ] The recorded demo at the public URL: elevator to the lobby and back, no Edit room button, the default look, no levels.
+- [ ] Decisions for you: hr-desk D10 (import review by `agentlife-import-review`); three outfit slots, so a ghost wears the neckerchief or the carnation, not both; the HR ghost and the Builder cannot be dressed; a hotel with the plain scripted engine and no wallet file has no wisps; waiting-fun and furni-move are "first to cut if late"; regression-suite: CI skips the visual comparisons, four bug fixes in product code (design.md "Bugs found"), and the Construction board is not compared at 360x640 (it lies outside the stage and no command opens it).
 
-## hr-desk tasks 3-4 (on feat/hr-desk, not merged)
-- [ ] Engine and world-server running, go to the HR office (door in the lobby), click the HR desk: hire a QA from the catalogue on a project, fire the first QA, then take the elevator to that project: the old QA leaves by the elevator and the new one walks in with its name
-- [ ] "Suggest a team" for a project: the HR ghost looks like it is thinking, the proposal appears, nothing changes until "Apply this team"
-- [ ] Hire a second developer, a reviewer, a researcher and the Night intern on one project, then take the elevator to that floor: all four walk in from the elevator and stand at their own spots with their names and role colours; hover one for the tooltip; fire one and watch it walk back to the elevator; check that name tags do not overlap badly
-- [ ] Imports: put one https address in `packages/agent-engine/config/catalogue-sources.json`, restart the engine, import, read the persona and the review, approve, hire it; change the file at the source and import again to see "Update waits for you"
+## Covered by tests (ticked)
 
-## hr-desk (merged 2026-11-12)
-- [ ] Look at a project floor with a full team in a browser: six standing ghosts, name tags that may overlap when two stand close, the two spots beside the QA desk, the tooltip of a ghost at a spot. The Edge test covers only the HR office.
-- [ ] Watch the walks with a real engine: a hire walking in from the elevator to a spot, a fired member walking out, a desk holder replaced by the next member of the role (that member leaves by the elevator and the desk ghost comes in through it).
-- [ ] HR panel in a browser against a real engine: hire, rename, change model, fire; the import queue with an allowlisted source; "suggest a team" and "Apply this team"; the hire, rename and fire lines in the activity terminal on the right floor.
-- [ ] Real `kiro-cli`: `AGENTLIFE_LIVE=1` run of the validate test for the generated agent files; the import review and the HR agent with real replies; a real job on a customised team using `--agent` and `--model`.
-- [ ] Real download from a source listed in `config/catalogue-sources.json`.
-- [ ] Night intern: start Ollama with `qwen3.5:4b` and check an answer; stop Ollama and check that `claude-haiku-5.5` answers and the report's Notes section says so. No pipeline step asks for a researcher yet, so this needs a test harness or pipeline-editor.
-- [ ] The user should ratify D10 (import review uses `agentlife-import-review`, not `agentlife-security`).
+Spec files are in `packages/client/e2e/`. A journey runs at the three sizes. A rule is checked on every screen of the journeys.
 
-## pipeline-editor (on feat/pipeline-editor, not merged)
-- [ ] Engine and world-server running (`ENGINE=http`), open the board of a project: the Pipeline section is above the job card; drag a card, use the arrows, see the red card with its rule and Save off; put the steps back and press "Back to the default".
-- [ ] HR desk: hire a Reviewer (change its model so it differs from QA) and a Researcher; on the board add "+ Second review" and "+ Research", choose who does them, Save, start a job: the research notes appear as an artifact, the report has "Second review" and "Research" sections, and a failing second review fails the job.
-- [ ] Fire the Reviewer while the pipeline uses it, then start a job: it is refused with the reason ("Second review needs a reviewer…"), and starts again after "Back to the default".
-- [ ] Save a pipeline while a job runs: the running job keeps its old pipeline, the next one uses the new one.
-- [ ] Real `kiro-cli`: the researcher and second reviewer with their generated agent files (read-only tier); the Night intern chosen as researcher fails the research step with its own message (known limit).
+### project-registry, hotel-floors
+- [x] Lobby, elevator with door transition, project floor with its name (checked by the user 2026-11-12). Also `shell.spec.ts` "the elevator takes the user to a project floor, and a reload returns there", and `journeys.spec.ts` "one run through the hotel".
+- [x] A scripted delivery shows "Branch ready" before and the delivered branch after: `journeys.spec.ts` "one run through the hotel: shop, HR office, a floor, a job to its delivered branch, the Profile".
 
-## furni-move (merged 2026-11-13)
-- [ ] Look at arrange mode in a real browser: the green and red tile overlay, the red cross, the selected outline, the standing-spot dots, the tool bar at the bottom left, and that the Arrange button in the top right corner does not cover the room under about 900 px width (STATUS says this was not checked by eye).
-- [ ] Look at the new default layout of a project floor (wall pieces, west-wall board and mailbox, agents walking between the new spots, name tags).
-- [ ] Requirement 2.4c: start a job on a floor with the real engine, move a desk and other pieces during the job, and confirm the agents keep walking and working; confirm the next walk of a moved desk's agent goes to the new seat.
-- [ ] Open the recorded demo and confirm there is no Arrange button (`pnpm --filter @agentlife/client e2e:demo` was not run in this verification).
-- [ ] Not run live: a real engine with a real registered project (only the scripted engine was used by the e2e).
+### hr-desk
+- [x] The HR office draws its desk and its ghost; its elevator takes the user back: `hr.spec.ts` (two tests); the member's Look section at the HR desk: `outfits.spec.ts` "buys the flat cap, puts it on the Developer at the HR desk..." and `visuals.spec.ts` "panels on the HR office and a project floor" (`hr-desk`).
 
-## furni-shop task 3: placing (on feat/furni-shop, not merged)
-- [ ] In a real browser with the real engine: earn some Ecto (a delivered job), buy two or three pieces at the lobby counter, go to a project floor, press Arrange, and drag items from the tray onto the floor with the mouse. Look at the green and red preview, the tray (picture, count, width next to the room under about 900 px), and that the tray does not cover the Arrange button.
-- [ ] Place a wall piece (clock, poster, mirror, banner) on the north and the west wall, turn it with R, and check that it is refused in the middle of the floor.
-- [ ] Pick a piece up, restart the world-server, and check that placed pieces and the stock are still there; remove a project in the Reception and check that its pieces are back in the tray of another floor.
-- [ ] Touch screen: tap an item in the tray, then tap the floor (dragging from the tray is for a mouse).
+### pipeline-editor
+- [x] Move a step with the arrows or by dragging, the broken rule in red, Save off until fixed, add an optional step and pick a member from the themed menu, Save sends the pipeline: `pipeline-editor.spec.ts` (six tests).
 
-## furni-shop (merged 2026-11-13)
-- [ ] Open the app against the real engine, look at the balance chip in the top left of the stage and confirm it does not cover the Arrange button, the floor label or the tray at your usual window size. The e2e tests prove it is visible and does not push the top bar, not that it looks right.
-- [ ] Earn a grant for real (for example deliver a branch) and confirm the "+N Ecto: ..." toast shows for about 4 s. No browser test asserts the toast; the wiring is `client/src/main.ts:429`.
-- [ ] Look at the 25 previews in the Shop panel and the placed pieces on a floor, to judge the art (own recipes, drawn in code). The e2e only checks that each preview is a non-empty PNG.
-- [ ] With the real wallet (not the Playwright scratch wallet), confirm the first run starts at 0 Ecto and old jobs pay nothing (`since` rule). Covered by `wallet-gateway.test.ts` "does not pay for events older than the wallet", but not run against real history.
-- [ ] Note, not a failure: `docs/reviews/feat-furni-shop.md` (an earlier, untracked review) already exists; this report is a separate file.
+### furni-move, furni-shop, ui-tidy (arranging and shopping)
+- [x] Move a piece, turn it, press on it again where it was dropped (several times, mouse and arrow keys, without a reload): `furni-move.spec.ts` "a moved piece can be grabbed, moved and turned again where it was dropped..." and `journeys.spec.ts` "lobby: edit the room, use the Menu with the keyboard, wave from the Actions menu".
+- [x] A move that blocks the way is refused with the reason; Reset asks first; undo; leave and reload keeps the layout: `furni-move.spec.ts`, `edit-rooms.spec.ts` ("a move that would shut off the Reception desk says which path it blocks", "the mailbox turns in place once it is away from the wall...", "a piece moves, and the arrangement is still there after a reload").
+- [x] Edit room in the lobby, the HR office and a project floor, the banner, E and Esc, Done, the elevator and doors stay: `ui-tidy.spec.ts` ("the Edit room" tests), `edit-rooms.spec.ts` ("move, turn and reset a plant, and the elevator stays").
+- [x] Buy a piece, drag it from the tray onto the floor, reload, pick it up; click the item, then the floor; the lobby has no tray: `furni-place.spec.ts` (three tests) and the floor part of `journeys.spec.ts` "one run through the hotel".
+- [x] The Ecto balance sits in the top bar next to the level, does not overflow, and folds into the Menu below 900 px: `furni-shop.spec.ts` ("Ecto balance" tests); nothing is cut or covered by another element at 360, 800 and 1366 px: the `viewport`, `covered` and `text-cut` rules in every journey.
+- [x] The Shop has the pictures on its pages, a button the user cannot pay is disabled, a badge part reads "Locked: earn the Hotel veteran badge", Esc closes it: `furni-shop.spec.ts` ("the shop counter" tests); buying a fern and the flat cap lowers the balance by 14 and 40: `journeys.spec.ts` "one run through the hotel".
+- [x] The Menu with the mouse and the keyboard (arrows, Esc, Zoom, Text larger, Help, the keys Z, ? and Ctrl+K), and below 900 px Hotel / List, Edit room and Profile come first: `ui-tidy.spec.ts` ("the Menu" tests, "every control is reachable: in the bar or in the Menu", "below 900 px the Menu starts Edit room...").
+- [x] The top bar does not overflow and always has the Menu and the Elevator at the three sizes: `ui-tidy.spec.ts` "does not overflow, and the Menu and the Elevator are always there" and the rules.
+- [x] The Actions menu is closed by default, opens upwards with Wave, Dance, Cheer and Sit down, the keys 1 to 4 work with it closed, it reads Stand up after sitting, it is out of the way while editing and in the list view, and the dock does not cut it: `ui-tidy.spec.ts` ("the Actions menu" tests), `waiting-fun.spec.ts` "the Actions menu sits the avatar on the sofa...".
 
-## team-progress (on feat/team-progress, not merged)
-- [ ] Real engine: run a job to the end and look at the team bar (a "Lv 0 · N XP to Lv 1" line under each name), the tooltip of each ghost (level and stats), the "Lv N" chip next to the Ecto chip at your usual window size (it must not cover the Arrange button or the floor label), and an HR card (level line and stats).
-- [ ] Look at the level-up effect over a ghost (a ring of small stars rising for 1.6 s) and the toast; with the system setting "reduce motion" the ring only fades. No browser test looks at the effect, only its numbers.
-- [ ] Open the Profile panel from the level chip: badge pictures (12 shapes drawn in code) look right and the locked ones are clearly greyed; the Quests tab shows today's three quests and a finished one reads "Done". Come back the next day: three quests, probably other ones, and yesterday's are gone.
-- [ ] A real quest, for example "Deliver a branch": deliver one and see "+30 Ecto: daily quest done" in the toast and in the balance. Restart the world-server and check the balance does not change (the quest pays once).
-- [ ] With the real history: the first run starts at level 0 and old jobs give no XP (`since`). Covered by `progress-gateway.test.ts` "counts nothing for events older than the file", not run against real history.
-- [ ] Night owl (a job that passes between 00:00 and 05:00 local time) and Librarian (a note accepted in the Library) were tested with fake clocks and a scripted Library, not live.
+### team-progress, waiting-fun
+- [x] A scripted job raises the Developer's XP, earns a badge and completes the day's quests; after a reload they are still done: `team-progress.spec.ts` (two tests); the Profile shows level, XP, the `approver` badge and the quests of the run: `journeys.spec.ts` "one run through the hotel".
+- [x] The Lv and Ecto chips and the Profile panel fit at the three sizes without being cut or covered: the rules on the Profile screens of `journeys.spec.ts`.
+- [x] A wisp appears during a job and catching it adds 1 Ecto; with reduced motion it does not move and the job ends cleanly: `waiting-fun.spec.ts` (two tests) and `journeys.spec.ts` "one run through the hotel".
+- [x] The user sits on the sofa, gets up again, the keys work except in a text field: `waiting-fun.spec.ts` "the Actions menu sits the avatar on the sofa of the lobby and gets it up again...".
 
-## team-progress (merged 2026-11-13)
-- [ ] Navegador: el efecto de level-up (anillo de ocho estrellas sobre el fantasma, 1.6 s, y con movimiento reducido) se ve bien y es legible (1.4). Solo hay tests de la función pura `levelUpFrame` y de la forma de la estrella.
-- [ ] Navegador: la línea "Lv N · X XP to Lv N+1" de cada fila de la team bar cabe en la barra lateral. Pasar el ratón por ella debe mostrar las stats (jobs, % pasados, tiempo medio de paso) (1.3). Si el usuario quiere las stats visibles sin hover, hay que añadirlas al texto de la fila.
-- [ ] Navegador: el chip "Lv N" junto al chip de Ecto, el panel Profile (pestañas Badges y Quests, iconos, barras de progreso) y las tiras de badges en la tarjeta HR (2.2, 3.2). El e2e solo comprueba existencia, `data-*` y texto.
-- [ ] Ya anotado en `docs/STATUS.md`: ejecutar con el engine real (`data/progress.json` real) para confirmar que Developer y QA suben de nivel con un job de verdad, y que no se muestran niveles con el motor de guion ni en la demo grabada.
+### ghost-skins
+- [x] Buy parts, put the flat cap on the Developer at the HR desk, it wears it on the floor, also after a reload and after going to another floor and back: `outfits.spec.ts` (first two tests) and `journeys.spec.ts` "one run through the hotel".
+- [x] Dress the user's own figure in the Profile's Look tab: `outfits.spec.ts` "the user dresses their own figure in the Profile panel".
 
-## waiting-fun (merged 2026-11-13)
-- [ ] Wisp in a browser: the orb, its blink in the last second and the catch ring (1.1). Check it can be clicked on a real, moving wisp (the e2e clicks with `force: true`).
-- [ ] The figure art for sit, wave, dance and cheer, and the glum and cheer poses of the ghosts (2.1, 2.2). Look at them on a project floor, not only in the lobby, including the sitter's depth against a sofa and a chair.
-- [ ] The mood face on the name tag and the tooltip line of each desk ghost (3.1).
-- [ ] Buy the coffee machine (Tables, 40 Ecto), place it, and serve a tired agent in a live run. The test used small limits and a faked clock; a real 60 minutes of work was not run (3.2).
-- [ ] A hotel with the plain scripted engine and no wallet file has no wisps. If the user expects wisps there, 1.1 needs a decision (design.md condition 1 of Spawn).
-- [ ] Both specs state "first to cut if late": merge decision is the user's.
+### list view and the palette
+- [x] The hotel and the list switch with the button and with L, L does nothing in a text field, a job starts from the list, the plan is approved from the palette, the palette works with the keyboard only: `list-mode.spec.ts` (four tests), `journeys.spec.ts` "list view and the command palette".
 
-## ui-tidy tasks 1-3 (on feat/ui-tidy, not merged)
-- [ ] Look at the new top bar at your usual window size: Elevator, Hotel / List, Edit room, the Ecto and level chips, Menu. With a job running, the stepper keeps its labels at 1366 px (the bar buttons got narrower side padding to make room); check that it still looks balanced.
-- [ ] Open the Menu with the mouse and with the keyboard (Tab to it, Enter, arrows, Esc): Commands, Zoom, Text smaller and larger, Help. Narrow the window under 900 px and check that Hotel / List, Edit room and Profile are the first items.
-- [ ] Press Edit room (and the E key) in the lobby, in the HR office and on a project floor: the banner under the top bar says "Editing <room>", Esc and Done leave. Look at how much of the room the banner takes at a small window height.
-- [ ] Move a piece, then press on it again where you dropped it, several times in a row (mouse and arrow keys), also next to the sofa and the desks. Press on a piece that was not selected and sits behind a taller one: you may have to press on its drawing above the tile (known limit, design.md of ui-tidy).
-- [ ] Turn the mailbox, the board, a plant and the lamps with R. Against a wall they face the room and say why they cannot turn; one step away from the wall they turn all the way round.
-- [ ] Arrange the lobby and the HR office, restart the world-server and check that both rooms keep the arrangement. A `data/layouts.json` written before this change is read and rewritten with `project:<id>` keys (back it up first if it matters).
-- [ ] Actions button at the bottom left of the stage: closed by default, opens upwards with Wave, Dance, Cheer and Sit down and their keys. Keys 1 to 4 still work with it closed. After sitting it reads Stand up and Dance is greyed. Look at it with the dock open and closed.
-- [ ] Builder after a dead build session: stop the conductor in the middle of a session and wait 10 minutes; the Builder ghost and its row should go back to idle (also after reloading the page or restarting the world-server).
-- [ ] The HR agent stands on a spot no piece can cover (the dots in edit mode); the lobby Builder's desk takes its seat when moved.
-
-## ui-tidy (merged 2026-11-13)
-- [ ] Look at the top bar, Menu, Edit room banner and Actions menu in a real browser (not only Edge under Playwright) at about 360, 800 and 1366 px. Check that nothing looks cramped or cut. The tests check bounds and overflow, not appearance.
-- [ ] Try Edit room in the lobby and the HR office by hand: move, turn with R, reset, reload. Confirm refusal messages read clearly and the elevator and doors cannot move.
-- [ ] With the real engine, stop a `pnpm session` mid-run and confirm the Builder ghost and its team row go idle after 10 minutes. Tests use short timeouts.
-- [ ] Confirm the HR ghost still stands at the HR desk after the `home_hr` anchor change (design says tile 7,1).
-
-## ghost-skins task 1 (on feat/ghost-skins, not merged)
-- [ ] Open the shop counter in the lobby, then the Outfits tab: 23 parts in Hats, Tops and Accessories, each on a ghost. Look at them at your usual zoom: do the cap, waistcoat, neckerchief, carnation, pumpkin hat, witch hat, bat bow tie and candle read as what they are?
-- [ ] The picture you gave has four pieces and the spec has three slots, so a ghost wears the neckerchief or the carnation, not both. Say if you want a fourth slot (neck).
-- [ ] Buy a cheap part (the carnation, 15 Ecto) and check the balance, the "Owned" mark and that a second purchase is refused. Badge parts say "Locked: earn the ... badge" and have no Buy button.
-- [ ] A badge part unlocks with a toast when its badge is earned (Hotel veteran: crown), and at the next visit if the badge was earned earlier (also a badge of a team member).
-- [ ] Parts are only seen in the shop until task 2 puts them on a ghost. Then check every part on the role colours (teal, orange, purple, pink, yellow, blue) and in the cheer and glum poses.
-
-## ghost-skins task 2 (on feat/ghost-skins, not merged)
-- [ ] Buy two or three parts, go to the HR office, open the HR desk: each member card has a Look section with a picture and three pickers (Hat, Top, Accessory). Put the flat cap on the Developer, go to its floor: the Developer wears it. Reload the page and restart the world-server: it still does.
-- [ ] Put the same part on two members at once, and a different top on a member who stands on the floor (a hired reviewer or researcher). Take a part off with None.
-- [ ] Open the Profile (level chip, or Menu when the bar is folded), tab Look: dress your own figure. Walk, sit (key 4), wave and dance (keys 1 to 3) and check the hat, top and accessory stay in place on the user's figure in all four directions.
-- [ ] Look at every part on the user's figure by eye. The recipes were drawn for the ghost; the user's torso is taller, so a top covers only its upper 15 px and the shirt shows below. Say if that looks wrong.
-- [ ] Fire a member who wears something, hire another one: the new one starts bare. The part stays in the shop's Owned list.
-- [ ] The HR ghost and the Builder cannot be dressed (no card for them). Say if you want that.
-- [ ] The recorded demo shows the default look.
-
-## ghost-skins (merged 2026-11-14)
-- [ ] Look at the feature in the browser
+### Layout and screens
+- [x] Regions do not overlap, nothing scrolls the page, the canvas fills the stage, the side bar and the dock collapse, the dock height is remembered: `shell.spec.ts`; the job stepper has no scroll bars at its sizes: `job-insight.spec.ts`.
+- [x] Every screen of the journeys at the three sizes: nothing outside the window or covered, no horizontal scroll bar, no text cut, every clickable element has a role, a name, a Tab stop, a focus ring and a pointer cursor, no console error: `journeys.spec.ts` (`expectScreen`), checked against deliberately broken pages by `rules.spec.ts`.
+- [x] A screen does not change by accident: `visuals.spec.ts` compares 4 rooms and 20 panels and menus, including Help, the Reception and, for a running job, the activity lines, the plan, the job card, the mailbox with a report and the report (clock times, durations and the Ecto balance masked), at the three sizes with the baselines of this platform (see the human look at the top).

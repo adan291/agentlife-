@@ -50,6 +50,8 @@ const CSS = `
 .al-list-steps [data-status="pending"] { color: ${UI_COLOURS.muted}; }
 .al-list-empty { max-width: 960px; margin: var(--al-s4) auto; color: ${UI_COLOURS.muted}; }
 .al-shell[data-view="list"] .al-stage > canvas { visibility: hidden; }
+/* The list covers the stage: a call-to-action toast or a wisp floating over it would cover its buttons, and the rows say the same ("Your turn", Review plan). */
+.al-shell[data-view="list"] .al-turn, .al-shell[data-view="list"] .al-wisp { display: none; }
 `;
 
 export function listCss(): string {

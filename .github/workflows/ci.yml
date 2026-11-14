@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -26,3 +25,40 @@ jobs:
       - run: pnpm check
       - run: pnpm --filter @agentlife/client build
       - run: pnpm --filter @agentlife/client check:demo-build
+
+  # The user journeys, the layout and interface rules and the older browser specs, against the scripted engine and
+  # scratch files. The visual comparisons are left out here (E2E_SKIP_VISUALS): their baselines are made on the
+  # developer's machine, and the conductor runs them before every merge.
+  browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            channel: ""
+          - os: windows-latest
+            # Edge is installed on the Windows runner.
+            channel: msedge
+    runs-on: ${{ matrix.os }}
+    env:
+      E2E_SKIP_VISUALS: "1"
+      E2E_CHANNEL: ${{ matrix.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - if: matrix.os == 'ubuntu-latest'
+        run: pnpm --filter @agentlife/client exec playwright install --with-deps chromium
+      - run: pnpm --filter @agentlife/client e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: |
+            packages/client/playwright-report
+            packages/client/test-results
+          retention-days: 14

@@ -114,7 +114,7 @@ export function saveShellPrefs(storage: FlagStorage | undefined, prefs: ShellPre
 const CSS = `
 .al-shell { display: grid; position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden; grid-template-columns: var(--side-w, ${SIDE_EXPANDED_PX}px) minmax(0, 1fr); grid-template-rows: ${TOP_BAR_PX}px auto minmax(0, 1fr) var(--dock-h, ${DOCK_HEADER_PX}px); grid-template-areas: "top top" "edit edit" "side stage" "dock dock"; }
 @supports (height: 100dvh) { .al-shell { height: 100dvh; } }
-.al-top { grid-area: top; min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--al-s3); padding: 0 var(--al-s3); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-bottom: 1px solid var(--al-border); color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
+.al-top { grid-area: top; min-width: 0; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--al-s3); padding: 0 var(--al-s3); box-sizing: border-box; background: ${UI_COLOURS.panelBg}; border-bottom: 1px solid var(--al-border); color: ${UI_COLOURS.text}; font: var(--al-font, 14px)/1.4 monospace; }
 .al-top-left { display: flex; align-items: center; gap: var(--al-s3); min-width: 0; }
 .al-top-mid { display: flex; justify-content: center; min-width: 0; overflow: hidden; }
 .al-top-right { display: flex; align-items: center; gap: var(--al-s2); }

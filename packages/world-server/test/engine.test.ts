@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { AgentEventSchema, ServerMsgSchema } from "@agentlife/shared";
+import { AgentEventSchema, BranchesResponseSchema, HrStateSchema, MemoryStateSchema, NightStateSchema, PipelineResponseSchema, ServerMsgSchema } from "@agentlife/shared";
 import type { AgentEvent, ServerMsg } from "@agentlife/shared";
 import { FakeEngineLink } from "../src/fake-engine.ts";
 import { startGateway } from "../src/gateway.ts";
@@ -72,6 +72,62 @@ describe("FakeEngineLink", () => {
   it("rejects an unknown approval", async () => {
     const engine = new FakeEngineLink({ stepMs: 0 });
     await expect(engine.resolveApproval("nope", "approve")).rejects.toThrow();
+    engine.close();
+  });
+
+  it("offers no delivery unless asked for", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0 });
+    expect(engine.deliver).toBeUndefined();
+    engine.close();
+  });
+
+  it("delivers a finished change once, as a branch, when asked for", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0, deliver: true });
+    const { events } = collect(engine);
+    const { taskId } = await engine.startJob("haunted-todo", "g");
+    await tick();
+    // Not before the job is over.
+    await expect(engine.deliver!(taskId)).rejects.toThrow("Only a finished change");
+    expect((await engine.getJobDetails(taskId)).job.deliverable).toBeUndefined();
+
+    await engine.resolveApproval(`appr-${taskId}`, "approve");
+    await tick();
+    expect((await engine.getJobDetails(taskId)).job).toMatchObject({ deliverable: true });
+    const info = await engine.deliver!(taskId);
+    expect(info.branch).toBe(`agentlife/${taskId}`);
+    const done = events.find((e) => e.type === "delivery.done");
+    AgentEventSchema.parse(done);
+    expect(done).toMatchObject({ taskId, branch: info.branch, commit: info.commit });
+    const { job } = await engine.getJobDetails(taskId);
+    expect(job.delivery).toEqual(info);
+    expect(job.deliverable).toBeUndefined();
+    await expect(engine.deliver!(taskId)).rejects.toThrow("delivered already");
+    await expect(engine.deliver!("nope")).rejects.toThrow("unknown task");
+    engine.close();
+  });
+
+  it("has no night board, Library, pipeline or branches unless asked for", () => {
+    const engine = new FakeEngineLink({ stepMs: 0, hr: true });
+    expect(engine.getNight).toBeUndefined();
+    expect(engine.memory).toBeUndefined();
+    expect(engine.pipeline).toBeUndefined();
+    expect(engine.listBranches).toBeUndefined();
+    engine.close();
+  });
+
+  it("shows fixed data for the night board, Library, pipeline, branches and imports when asked for, and refuses changes", async () => {
+    const engine = new FakeEngineLink({ stepMs: 0, hr: true, panels: true });
+    NightStateSchema.parse(await engine.getNight!());
+    MemoryStateSchema.parse(await engine.memory!.state("haunted-todo"));
+    PipelineResponseSchema.parse(await engine.pipeline!.state("haunted-todo"));
+    BranchesResponseSchema.parse(await engine.listBranches!("haunted-todo"));
+    const hr = await engine.hr!.state();
+    HrStateSchema.parse(hr);
+    expect(hr.imports.map((i) => i.status)).toEqual(["pending", "approved"]);
+    expect(hr.sources.length).toBeGreaterThan(0);
+    await expect(engine.addNightJob!()).rejects.toThrow("only shows this panel");
+    await expect(engine.memory!.remove("haunted-todo", "mem-aaaaaa01")).rejects.toThrow("only shows this panel");
+    await expect(engine.pipeline!.reset("haunted-todo")).rejects.toThrow("only shows this panel");
     engine.close();
   });
 });

@@ -7,6 +7,8 @@ import type { ListActions } from "./list-view.ts";
 export interface ListActionDeps {
   navigator: Navigator;
   send(msg: ClientMsg): void;
+  /** Whether the mailbox panel is open on this floor (the floor's `open_panel` was handled). */
+  mailboxOpen(): boolean;
   /** Whether the client already holds this report of the floor it is on. */
   hasReport(reportId: string): boolean;
   /** Opens the report in the mailbox viewer. */
@@ -28,9 +30,15 @@ export function createListActions(deps: ListActionDeps): ListActions {
     reviewPlan: (roomId) => show(roomId, "mailbox"),
     openReport: (roomId, reportId) =>
       navigator.act(roomId, () => {
-        // The mailbox sends the floor's reports before it opens; the viewer opens once this one is here.
+        // The mailbox is open already (and so the floor knows the user saw it): only the viewer is missing.
+        if (deps.mailboxOpen() && deps.hasReport(reportId)) {
+          deps.openReport(reportId);
+          return;
+        }
+        // Otherwise the floor opens the mailbox and sends its reports first. The viewer waits for that answer: an
+        // `open_panel` that arrives after the viewer would close it again (the mailbox opens on its list).
         send(showPanelMessage("mailbox"));
-        navigator.act(roomId, () => deps.openReport(reportId), () => deps.hasReport(reportId));
+        navigator.act(roomId, () => deps.openReport(reportId), () => deps.mailboxOpen() && deps.hasReport(reportId));
       }),
     openJobCard: (roomId) => show(roomId, "board"),
     goTo: (roomId) => {

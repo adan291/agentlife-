@@ -6,15 +6,17 @@
 //
 // For each spec: build sessions (scripts/run-session.ts) -> review (agentlife-reviewer) ->
 // acceptance verification (agentlife-verifier) -> if FAIL, one fix session and verify again
-// (max 2 rounds) -> merge into main with `pnpm check` and the leak scanner -> push only when
+// (max 2 rounds) -> merge into main with `pnpm check`, the browser tests (Playwright suite and e2e:demo) and the leak
+// scanner -> push only when
 // AGENTLIFE_PUSH=1. Any red light stops the conductor and notifies the user.
 // Specs marked `live` get their human checks queued in docs/HUMAN-CHECKS.md and the conductor carries on.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { describeE2e, summarizeE2e, type E2eSummary } from "./e2e-report.ts";
 
 interface Item { spec: string; sessions: string[]; live: boolean; status: string }
 
@@ -24,11 +26,11 @@ const NOREPLY = "14869836+adan291@users.noreply.github.com";
 const GIT_ENV = { ...process.env, GIT_AUTHOR_NAME: "adan291", GIT_AUTHOR_EMAIL: NOREPLY, GIT_COMMITTER_NAME: "adan291", GIT_COMMITTER_EMAIL: NOREPLY };
 const args = new Set(process.argv.slice(2));
 
-function sh(cmd: string, a: string[], inherit = false): { code: number; out: string } {
+function sh(cmd: string, a: string[], inherit = false, extraEnv: Record<string, string> = {}): { code: number; out: string } {
   // Only pnpm needs a shell on Windows (it is a .cmd shim). kiro-cli is a real executable: through a shell its
   // multi-word prompt would be split into separate arguments (that is how review and verification got lost).
   const shell = process.platform === "win32" && cmd === "pnpm";
-  const r = spawnSync(cmd, a, { cwd: ROOT, encoding: "utf8", env: GIT_ENV, shell, windowsHide: true, maxBuffer: 64 * 1024 * 1024, stdio: inherit ? "inherit" : "pipe" });
+  const r = spawnSync(cmd, a, { cwd: ROOT, encoding: "utf8", env: { ...GIT_ENV, ...extraEnv }, shell, windowsHide: true, maxBuffer: 64 * 1024 * 1024, stdio: inherit ? "inherit" : "pipe" });
   return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
@@ -150,6 +152,53 @@ function unionStatus(): void {
   writeFileSync(join(ROOT, "docs", "STATUS.md"), merged);
   rmSync(dir, { recursive: true, force: true });
 }
+const E2E_REPORT_DIR = join("packages", "client", "playwright-report");
+const SESSION_LOG = join(ROOT, "data", "sessions", "log.md");
+
+/** Adds a line to the session log (git-ignored, next to the lines `pnpm session` writes). */
+function logLine(msg: string): void {
+  mkdirSync(dirname(SESSION_LOG), { recursive: true });
+  appendFileSync(SESSION_LOG, `- ${new Date().toISOString()} conduct: ${msg}\n`);
+}
+
+/**
+ * The whole Playwright suite (journeys, rules, visual comparisons and the older specs) and the demo smoke test, on main
+ * after the merge and `pnpm check`. A failure stops the conductor like a failing check. A test that fails and passes on
+ * the one immediate retry is named in the log, not hidden. `CI=1` makes Playwright start its own test servers and refuse
+ * to reuse one that is already running with state of its own (ports 8795 to 8798 and 5196 to 5199, never the hotel's).
+ */
+function runBrowserTests(spec: string): void {
+  reportPhase("browser tests");
+  const jsonFile = join(tmpdir(), `agentlife-e2e-report-${process.pid}.json`);
+  const env: Record<string, string> = { CI: "1", PLAYWRIGHT_HTML_OPEN: "never", PLAYWRIGHT_JSON_OUTPUT_NAME: jsonFile };
+  if (process.platform === "win32" && !process.env["E2E_CHANNEL"]) env["E2E_CHANNEL"] = "msedge";
+  rmSync(jsonFile, { force: true });
+  say(`browser tests of main after ${spec}`);
+  const run = sh("pnpm", ["--filter", "@agentlife/client", "exec", "playwright", "test", "--retries=1"], false, env);
+  let summary: E2eSummary | undefined;
+  try {
+    summary = summarizeE2e(JSON.parse(readFileSync(jsonFile, "utf8")));
+  } catch {
+    // no report: the run died before it could write one (a server that did not start, a missing browser)
+  }
+  rmSync(jsonFile, { force: true });
+  if (summary) {
+    say(`browser tests: ${describeE2e(summary)}`);
+    logLine(`${spec}: browser tests ${describeE2e(summary)}`);
+    for (const name of summary.flaky) {
+      say(`flaky: ${name}`);
+      logLine(`${spec}: FLAKY ${name}`);
+    }
+  }
+  if (run.code !== 0 || !summary || summary.failed.length > 0) {
+    const what = summary ? `${summary.failed.slice(0, 5).join("; ") || "no test failed, the run itself did"}` : `no report (${run.out.trim().split("\n").slice(-3).join(" | ").slice(0, 300)})`;
+    stop(`the browser tests fail on main after merging ${spec}: ${what}. Report: ${E2E_REPORT_DIR}${sep}index.html`);
+  }
+  say("demo smoke test");
+  const demo = sh("pnpm", ["--filter", "@agentlife/client", "e2e:demo"], false, env);
+  if (demo.code !== 0) stop(`the demo smoke test (e2e:demo) fails on main after merging ${spec}: ${demo.out.trim().split("\n").slice(-3).join(" | ").slice(0, 300)}`);
+}
+
 function merge(spec: string): void {
   const branch = branchOf(spec);
   reportPhase("merge");
@@ -170,6 +219,7 @@ function merge(spec: string): void {
   }
   sh("pnpm", ["install"]);
   if (sh("pnpm", ["check"]).code !== 0) stop(`pnpm check fails on main after merging ${spec}`);
+  runBrowserTests(spec);
   if (sh("pnpm", ["-s", "security:scan"]).code !== 0) stop(`the leak scanner has findings after merging ${spec}`);
   if (process.env.AGENTLIFE_PUSH === "1") {
     if (sh("git", ["push", "origin", "main"]).code !== 0) stop("push to GitHub failed");

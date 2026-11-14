@@ -64,7 +64,7 @@ export function actionItems(s: ActionState): MenuItem<ActionId>[] {
 }
 
 const CSS = `
-.al-actions { position: absolute; z-index: 11; left: var(--al-s2); bottom: var(--al-s2); }
+.al-actions { position: absolute; z-index: 11; left: var(--al-s2); bottom: var(--al-s2); font: var(--al-font, 14px)/1.4 monospace; }
 .al-actions[hidden] { display: none; }
 .al-actions .al-menu-button { background: ${UI_COLOURS.panelBg}; box-shadow: var(--al-shadow); }
 .al-actions .al-menu-list { min-width: 200px; max-width: calc(100% - var(--al-s4)); }

@@ -127,6 +127,9 @@ export function createCommandPalette(doc: Document, host: HTMLElement): CommandP
     } else if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       close();
+    } else if (e.key === "Tab") {
+      // A modal with one stop: the focus stays in the field (the options are reached with the arrows), not on the page behind.
+      e.preventDefault();
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       selected = moveSelection(selected, e.key === "ArrowDown" ? 1 : -1, shown.length);
