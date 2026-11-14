@@ -10,5 +10,3 @@ Checks of behaviour that the Playwright suite does not run yet. None needs a per
 - [ ] Hover on a ghost or its team-bar row shows the stats (jobs, % passed, average step time). The pipeline editor's "Back to the default".
 - [ ] The day after: three other quests and yesterday's gone.
 - [ ] `scripts/conduct.ts` `runBrowserTests`: the decision to stop the conductor (a failure, a missing report, a retry that passes) has no test; only `summarizeE2e` and `describeE2e` do. `summarizeE2e` has no test for a report without suites or with several levels of nested suites.
-- [ ] The empty mailbox at 360x640: no palette command opens it, so `mailbox-empty` is not compared there.
-- [ ] Visual comparisons of the panels not yet compared (requirement 3.1 says "each panel"): night board, Library, review desk, test lab, directory, coffee machine, pipeline editor, HR imports. Each needs the furniture on screen and its data scripted (`FAKE_*` in the fake engine), then one `expectLooksLike` per size.

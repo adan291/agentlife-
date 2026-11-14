@@ -3,10 +3,12 @@ import type {
   AgentId,
   ApprovalDecision,
   ArtifactView,
+  BranchesResponse,
   DeliveryInfo,
   JobDetails,
   JobState,
   JobView,
+  NightState,
   Project,
   RegisterProjectResult,
   Repo,
@@ -14,8 +16,12 @@ import type {
   StepRecord,
 } from "@agentlife/shared";
 import { EventQueue } from "./engine-link.ts";
-import type { EngineLink, HrLink, StartJobOptions } from "./engine-link.ts";
+import type { EngineLink, HrLink, MemoryLink, PipelineLink, StartJobOptions } from "./engine-link.ts";
 import { createFakeHr } from "./fake-hr.ts";
+import { fakeBranches, fakeMemory, fakeNight, fakePipeline } from "./fake-panels.ts";
+
+/** A change to a panel of the scripted engine: refused. */
+const refusePanel = (): Promise<never> => Promise.reject(new Error("The scripted engine only shows this panel. Start the real engine to change it."));
 
 export const FAKE_REPO: Repo = {
   id: "haunted-todo",
@@ -31,6 +37,11 @@ export interface FakeEngineOptions {
   hr?: boolean;
   /** Let a finished job be delivered as a branch, like a job on a registered project (tests and Playwright; `FAKE_DELIVER=1`). */
   deliver?: boolean;
+  /**
+   * Fixed, read-only data for the night board, the Library, the review desk, the pipeline editor and the imports of the HR
+   * desk (Playwright's visual comparisons; `FAKE_PANELS=1`). Needs `hr` for the imports.
+   */
+  panels?: boolean;
 }
 
 /** What the scripted delivery reports: no repository is touched. */
@@ -101,12 +112,29 @@ export class FakeEngineLink implements EngineLink {
   hr?: HrLink;
   /** Fetches the job's branch, only when asked for (`FAKE_DELIVER=1`, tests): the scripted engine has no repository. */
   deliver?: (taskId: string) => Promise<DeliveryInfo>;
+  /** Fixed data for these panels, only when asked for (`FAKE_PANELS=1`): the scripted engine has none otherwise. */
+  memory?: MemoryLink;
+  pipeline?: PipelineLink;
+  listBranches?: (projectId: string) => Promise<BranchesResponse>;
+  getNight?: () => Promise<NightState>;
+  addNightJob?: () => Promise<never>;
+  removeNightJob?: () => Promise<never>;
+  moveNightJob?: () => Promise<never>;
 
   constructor(options: FakeEngineOptions = {}) {
     this.stepMs = options.stepMs ?? 1500;
     this.clock = options.clock ?? Date.now;
-    if (options.hr) this.hr = createFakeHr(FAKE_REPO.id, FAKE_REPO.name);
+    if (options.hr) this.hr = createFakeHr(FAKE_REPO.id, FAKE_REPO.name, options.panels === true);
     if (options.deliver) this.deliver = (taskId) => this.deliverBranch(taskId);
+    if (options.panels) {
+      this.memory = fakeMemory();
+      this.pipeline = fakePipeline();
+      this.listBranches = () => Promise.resolve(fakeBranches());
+      this.getNight = () => Promise.resolve(fakeNight());
+      this.addNightJob = refusePanel;
+      this.removeNightJob = refusePanel;
+      this.moveNightJob = refusePanel;
+    }
   }
 
   /** The scripted delivery: a finished job gets a branch name and a commit, once, and `delivery.done` is announced. */

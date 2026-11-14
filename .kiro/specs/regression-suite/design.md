@@ -110,10 +110,25 @@ Content that is not the same every day is not compared: the quests of the Profil
 Each at 360x640, 800x600 and 1366x768, named `<screen>-<phone|laptop|desktop>.png`:
 
 - Rooms: `lobby`, `hr-office`, `floor-default`, `floor-decorated`. The decorated floor has nine bought pieces (plants, lights, seats, a table, a rug, a poster) seeded into the scratch inventory (`hotelSeed`, `support/hotel.ts`); the test checks that the inventory file still holds all nine, because a piece the room cannot take goes back to the stock and the shot would show a bare floor.
-- Panels and menus: `shop-furniture`, `shop-outfits`, `elevator`, `menu`, `actions-menu`, `profile-badges`, `profile-look`, `lobby-editing` (the Edit room bar), `palette`, `list`, `help`, `reception`, `hr-desk`, `computer`, `mailbox-empty`. The mailbox is clicked on the floor, so at 360 px, where it lies outside the stage, that one screen is not taken and the test says so in its annotations (no palette command opens an empty mailbox; the mailbox with a plan is compared at all three sizes as `plan`).
+- Panels and menus: `shop-furniture`, `shop-outfits`, `elevator`, `menu`, `actions-menu`, `profile-badges`, `profile-look`, `lobby-editing` (the Edit room bar), `palette`, `list`, `help`, `reception`, `hr-desk`, `computer`, `mailbox-empty`. The mailbox is clicked on the floor; at 360 px, where it lies outside the stage, the message the list sends opens it (see "Panels reached with scripted data"). The mailbox with a plan is compared at all three sizes as `plan`.
 - Panels of a running job, from the test "panels of a job" (a hotel with no wisps, `hotelSeed: { noWisps: true }`, because the canvas draws them at moments that differ between runs): `activity-lines` (the job stopped at its plan), `plan` (the mailbox with the plan), `job-card` (opened from the progress strip once the job is done), `mailbox-report` and `report`. What the server stamps with the real time or the date is masked with `timeMasks` (`support/visual.ts`): the clock times of the activity lines, the report rows and the timeline, the durations of the steps table and the progress strip, and the Ecto balance (the quests the date picks pay different amounts). Everything else on those panels is compared. Checked on 2026-11-14: baselines written, then three repeats at the three sizes with zero differing pixels. A first version without `noWisps` failed at 800 and 1366 px because two wisps were drawn at other places each run.
 
-Not compared yet: the panels of the night board, the Library, the review desk, the test lab, the directory, the coffee machine, the pipeline editor and the HR imports. Their furniture or data is not part of the scripted hotel's lobby and floor as the journeys use them, and each needs its own setup; they are listed in `docs/regression-backlog.md`. The journeys' rules (layout and interface) do not reach them either.
+Not compared yet: nothing of the kind is left out any more; see "Panels reached with scripted data" below.
+
+### Panels reached with scripted data
+
+The scripted engine had no night schedule, Library, branches, pipeline or imports, so those panels could only show an error. With `FAKE_PANELS=1` (`packages/world-server/src/fake-panels.ts`, set by `support/hotel.ts` only: the shared test servers are unchanged) it gives them fixed, read-only data, and refuses every change like the scripted HR office does (`world-server/test/engine.test.ts` checks the shapes with the shared schemas). Screens, at the three sizes:
+
+- `review-desk`, `test-lab`, `library-memory`, `library-docs`, `pipeline-editor` (the board of a floor with no job), opened with the palette commands "New branch review job", "New test-writing job", "New documentation job" and by the board furniture.
+- `night-board` and `night-form` (the panel scrolled to its form), from "Schedule night job".
+- `hr-imports`: the Imports tab, with one template that waits (with a concern) and one approved. `hr-desk` now shows "Imports (1)".
+- `directory`: the directory board of the lobby, clicked (reachable at all three sizes).
+- `mailbox-empty` at 360x640: the mailbox lies outside the stage and no palette command opens an empty one, so `hotel.inject` sends the `show_panel` message the list sends for it (`openPiece` in `visuals.spec.ts`; the route goes into the annotations). It is no longer skipped.
+- `floor-coffee-machine`: the coffee machine is a piece, not a panel (using it only makes a speech bubble, and the frozen clock hides bubbles), so what is compared is the floor with one placed.
+
+The visual file runs the browser in UTC with the en-US locale (`test.use`), so the dates and times the Library writes are the same text on every machine and need no mask. The `list` screen now says "3 night jobs scheduled", the report screens changed by a few pixels (the Library is now known to the page), and all baselines of this platform were rewritten.
+
+Still not compared: the Profile's Quests tab (the date picks the quests).
 
 ### Baselines per platform
 

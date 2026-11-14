@@ -2,9 +2,9 @@ import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test as hotelTest } from "./support/fixtures.ts";
-import type { SeedPiece } from "./support/hotel.ts";
+import type { Hotel, SeedPiece } from "./support/hotel.ts";
 import { expectLooksLike, freezeForScreenshots, missingBaselines, timeMasks } from "./support/visual.ts";
-import { COMPUTER, FLOOR_NAME, SIZES, canvasHit, goTo, mailbox, openHotel, tilePoint, useFurniture } from "./support/world.ts";
+import { COMPUTER, FLOOR_NAME, SIZES, canvasHit, goTo, mailbox, openHotel, runCommand, tilePoint, useFurniture } from "./support/world.ts";
 import type { Size } from "./support/world.ts";
 
 /**
@@ -25,6 +25,9 @@ const test = hotelTest.extend<{ baselines: void }>({
     { auto: true },
   ],
 });
+
+// The same words on every machine: dates and times the page writes follow the browser's time zone and language.
+test.use({ timezoneId: "UTC", locale: "en-US" });
 
 /** A floor with every kind of bought piece the shop sells in one place: plants, a rug, lights, seats, a table, a poster. */
 const DECORATED: readonly SeedPiece[] = [
@@ -58,6 +61,30 @@ async function openByClick(page: Page, room: "lobby" | "hr" | "project", tile: {
   const point = { x: p.x, y: p.y - 12 };
   if (!(await canvasHit(page, point))) return false;
   await page.mouse.click(point.x, point.y);
+  return true;
+}
+
+/**
+ * Opens the panel of a piece of furniture the way a user does: by clicking its drawing. Where the piece lies outside the stage
+ * at this window size, the message the list and the palette send for the same panel is sent instead (`show_panel`), and the
+ * route goes into the annotations, as `useFurniture` does. The panels that message cannot open are left to the caller.
+ */
+async function openPiece(
+  page: Page,
+  hotel: Hotel,
+  room: "lobby" | "project",
+  piece: { name: string; tile: { x: number; y: number }; panel?: "mailbox" | "board" },
+): Promise<boolean> {
+  if (await openByClick(page, room, piece.tile)) {
+    test.info().annotations.push({ type: "route", description: `${piece.name}: canvas` });
+    return true;
+  }
+  if (piece.panel === undefined) {
+    test.info().annotations.push({ type: "skipped screen", description: `${piece.name}: outside the stage at this size, and no message opens it` });
+    return false;
+  }
+  test.info().annotations.push({ type: "route", description: `${piece.name}: show_panel` });
+  hotel.inject({ type: "show_panel", panel: piece.panel });
   return true;
 }
 
@@ -197,7 +224,7 @@ for (const size of SIZES) {
       });
     });
 
-    test("panels on the HR office and a project floor", async ({ page }) => {
+    test("panels on the HR office and a project floor", async ({ page, hotel }) => {
       await open(page, size);
       await goTo(page, "HR Office");
       const desk = await tilePoint(page, "hr", 4, 0);
@@ -205,6 +232,9 @@ for (const size of SIZES) {
       const hr = page.getByRole("dialog", { name: "HR desk" });
       await expect(hr).toBeVisible();
       await expectLooksLike(page, "hr-desk", size);
+      await hr.locator('[data-tab="imports"]').click();
+      await expect(hr.locator(".al-hr-import")).toHaveCount(2);
+      await expectLooksLike(page, "hr-imports", size);
       await hr.getByRole("button", { name: "Close panel" }).click();
       await expect(hr).toBeHidden();
 
@@ -216,15 +246,93 @@ for (const size of SIZES) {
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
 
-      // The mailbox lies outside the stage at 360 px: the screen is only taken where a user can click the furniture.
-      if (await openByClick(page, "project", { x: 0, y: 6 })) {
-        await expect(panel.locator("h3").first()).toHaveText("Mailbox");
-        await expectLooksLike(page, "mailbox-empty", size);
+      // The mailbox lies outside the stage at 360 px, and no palette command opens an empty mailbox: there the message
+      // the list sends for it opens it (`show_panel`), which is all the furniture does too.
+      expect(await openPiece(page, hotel, "project", { name: "mailbox", tile: { x: 0, y: 6 }, panel: "mailbox" })).toBe(true);
+      await expect(panel.locator("h3").first()).toHaveText("Mailbox");
+      await expectLooksLike(page, "mailbox-empty", size);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+    });
+
+    test("panels of the desks of a floor: review, tests, library, board", async ({ page, hotel }) => {
+      await open(page, size, "project");
+      const panel = page.locator(".al-panel");
+      const title = panel.locator("h3").first();
+
+      await runCommand(page, `New branch review job in ${FLOOR_NAME}`);
+      await expect(title).toHaveText("Review desk");
+      await expect(panel).toContainText("compared with main");
+      await expectLooksLike(page, "review-desk", size);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+
+      await runCommand(page, `New test-writing job in ${FLOOR_NAME}`);
+      await expect(title).toHaveText("Test lab");
+      await expect(panel.getByRole("button", { name: "Write tests" })).toBeVisible();
+      await expectLooksLike(page, "test-lab", size);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+
+      // The notes show the date and time they were written. The browser runs in UTC with the en-US locale (`test.use` above),
+      // so those words are the same on every machine and are compared like the rest.
+      await runCommand(page, `New documentation job in ${FLOOR_NAME}`);
+      await expect(title).toHaveText("Library");
+      await expect(panel).toContainText("Remembered (4)");
+      await expectLooksLike(page, "library-memory", size);
+      await panel.locator('[data-tab="docs"]').click();
+      await expect(panel.getByRole("button", { name: "Write docs" })).toBeVisible();
+      await expectLooksLike(page, "library-docs", size);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+
+      // The board of a floor with no job yet: the pipeline editor on top of an empty job card.
+      expect(await openPiece(page, hotel, "project", { name: "board", tile: { x: 0, y: 3 }, panel: "board" })).toBe(true);
+      await expect(title).toHaveText("Job");
+      await expect(panel.locator(".al-pipe-card")).toHaveCount(6);
+      await expectLooksLike(page, "pipeline-editor", size);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+    });
+
+    test("directory and night board in the lobby", async ({ page, hotel }) => {
+      await open(page, size);
+      const panel = page.locator(".al-panel");
+      const title = panel.locator("h3").first();
+
+      // No palette command and no message opens the directory: it is compared where a user can click it.
+      if (await openPiece(page, hotel, "lobby", { name: "directory", tile: { x: 5, y: 0 } })) {
+        await expect(title).toHaveText("Floors");
+        await expectLooksLike(page, "directory", size);
         await page.keyboard.press("Escape");
         await expect(panel).toBeHidden();
-      } else {
-        test.info().annotations.push({ type: "skipped screen", description: "mailbox-empty: the mailbox is outside the stage at this size" });
       }
+
+      await runCommand(page, "Schedule night job");
+      await expect(title).toHaveText("Night shift");
+      await expect(panel).toContainText("Reject an empty title in addTodo");
+      await expectLooksLike(page, "night-board", size);
+      await panel.locator(".al-panel-body").evaluate((body) => {
+        body.scrollTop = body.scrollHeight;
+      });
+      await expectLooksLike(page, "night-form", size);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+    });
+
+    test.describe("a floor with a coffee machine", () => {
+      // The coffee machine has no panel: using it serves coffee to the most tired desk agent, or says nobody needs it, in a
+      // speech bubble. What can be compared is the piece standing on a floor, which is the only part of it a user sees.
+      test.use({ hotelSeed: { placed: { [FLOOR_NAME]: [{ item: "coffee_machine", x: 2, y: 1, dir: 4 }] } } });
+
+      test("floor-coffee-machine", async ({ page, hotel }) => {
+        await open(page, size, "project");
+        // A piece the room could not take goes back to the stock; the screenshot would then show a floor without it.
+        const inventory = JSON.parse(await readFile(join(hotel.dir, "inventory.json"), "utf8")) as { stock: Record<string, number>; placed: Record<string, unknown[]> };
+        expect(inventory.placed[FLOOR_NAME]).toHaveLength(1);
+        expect(inventory.stock).toEqual({});
+        await expectLooksLike(page, "floor-coffee-machine", size);
+      });
     });
 
     test.describe("a decorated floor", () => {

@@ -32,6 +32,11 @@ export interface Hotel {
   readonly dir: string;
   /** Every text frame the page sent to this hotel, oldest first (the page cannot be asked what it sent). */
   readonly sent: string[];
+  /**
+   * Sends a message to this hotel as if the page had sent it (the list and the palette send `show_panel` the same way).
+   * For a screen whose furniture lies outside the stage at a small window and that no palette command opens.
+   */
+  inject(message: unknown): void;
   /** Sends the page's world connection to this hotel instead of the one the client was built with. */
   attach(page: Page): Promise<void>;
   /** Stops the world-server and removes the scratch folder. */
@@ -121,6 +126,7 @@ export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
       ENGINE: "fake",
       FAKE_HR: "1",
       FAKE_DELIVER: "1",
+      FAKE_PANELS: "1",
       AGENTLIFE_WISP_MS: options.noWisps ? "600000,900000" : "300,500",
       AGENTLIFE_LAYOUTS_FILE: file("layouts"),
       AGENTLIFE_WALLET_FILE: file("wallet"),
@@ -150,14 +156,23 @@ export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
 
   const url = `ws://127.0.0.1:${port}`;
   const sent: string[] = [];
+  /** The connection of the page to this hotel as it is now (a reload makes a new one). */
+  let upstreamNow: WebSocket | undefined;
   return {
     url,
     dir,
     sent,
     stop,
+    inject: (message) => {
+      if (!upstreamNow || upstreamNow.readyState !== WebSocket.OPEN) throw new Error("the page has no open connection to this hotel");
+      const text = JSON.stringify(message);
+      sent.push(text);
+      upstreamNow.send(text);
+    },
     attach: (page) =>
       page.routeWebSocket(BUILT_IN_WORLD_URL, (ws) => {
         const upstream = new WebSocket(url);
+        upstreamNow = upstream;
         upstream.binaryType = "arraybuffer";
         // The protocol is JSON text; a binary frame would be a bug of the client, so it is passed on as text.
         const waiting: string[] = [];
