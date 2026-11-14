@@ -301,6 +301,27 @@
       "model": "claude-sonnet-5.5",
       "effort": "high",
       "prompt": "Implement task 2 of the ghost-skins spec (.kiro/specs/ghost-skins), following its design.md. Follow workflow.md."
+    },
+    {
+      "id": "S37",
+      "spec": "regression-suite",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 1 of the regression-suite spec (.kiro/specs/regression-suite). Write its design.md first (helpers, scratch state, how each rule is measured, the allowlist). When a journey finds a real bug, fix it in the smallest way and record it in design.md. Run the e2e suite with E2E_CHANNEL=msedge. Follow workflow.md."
+    },
+    {
+      "id": "S38",
+      "spec": "regression-suite",
+      "model": "claude-sonnet-5.5",
+      "effort": "high",
+      "prompt": "Implement task 2 of the regression-suite spec (.kiro/specs/regression-suite), following its design.md. Make the screenshots repeatable before writing baselines (run each twice). Follow workflow.md."
+    },
+    {
+      "id": "S39",
+      "spec": "regression-suite",
+      "model": "claude-sonnet-5.5",
+      "effort": "medium",
+      "prompt": "Implement task 3 of the regression-suite spec (.kiro/specs/regression-suite), following its design.md. Follow workflow.md."
     }
   ]
 }
