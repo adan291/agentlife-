@@ -141,7 +141,8 @@ describe("BugStore", () => {
   });
 
   it("keeps at most 500 groups", () => {
-    const s = store();
+    // Debounced: 503 records write the file once, not 503 times (with a write per record the test ran out of time under load).
+    const s = store({ debounceMs: 60_000 });
     const letters = (i: number) => String.fromCharCode(97 + (i % 26), 97 + (Math.floor(i / 26) % 26), 97 + Math.floor(i / 676));
     for (let i = 0; i < BUG_GROUPS_MAX + 3; i++) s.record(code({ message: `bug ${letters(i)}` }), { at: 1000 + i });
     expect(s.list()).toHaveLength(BUG_GROUPS_MAX);
