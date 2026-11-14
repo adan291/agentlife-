@@ -62,6 +62,43 @@ describe("WorldSim", () => {
     expect(sim.tileOf(you)).toEqual({ x: 5, y: 8 });
   });
 
+  it("a new move in the middle of a step finishes that step first, so the avatar never goes back", () => {
+    const { sim, advance } = makeSim();
+    const { you } = sim.join();
+    const first = sim.handleIntent(you, { type: "move", x: 5, y: 8 }).find((m) => m.type === "walk");
+    if (first?.type !== "walk") throw new Error("no walk");
+    advance(250); // two steps done, the third half done
+    const entering = first.path[2]!;
+    const second = sim.handleIntent(you, { type: "move", x: room.door.x, y: room.door.y }).find((m) => m.type === "walk");
+    if (second?.type !== "walk") throw new Error("no walk");
+    // The new walk starts with the tile being entered, at the time that step began.
+    expect(second.path[0]).toEqual(entering);
+    expect(second.startedAt).toBe(first.startedAt + 200);
+    expect(second.path.at(-1)).toEqual({ x: room.door.x, y: room.door.y });
+    advance(50);
+    expect(sim.tileOf(you)).toEqual(entering);
+  });
+  it("property: a move at any moment of a walk continues from where the avatar is drawn", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 900 }), (ms) => {
+        const { sim, advance } = makeSim();
+        const { you } = sim.join();
+        const first = sim.handleIntent(you, { type: "move", x: 5, y: 8 }).find((m) => m.type === "walk");
+        if (first?.type !== "walk") return;
+        advance(ms);
+        const second = sim.handleIntent(you, { type: "move", x: 2, y: 8 }).find((m) => m.type === "walk");
+        if (second?.type !== "walk") return;
+        // Where the first walk drew the avatar, the second one starts drawing it from: same step, same start time.
+        const t = (first.startedAt + ms - second.startedAt) / 100;
+        expect(t).toBeGreaterThanOrEqual(0);
+        expect(t).toBeLessThan(1);
+        // Exactly on a step boundary nothing is half done: the walk goes on from the tile just reached.
+        if (ms % 100 === 0) return;
+        const done = Math.floor(ms / 100);
+        if (done < first.path.length) expect(second.path[0]).toEqual(first.path[done]);
+      }),
+    );
+  });
   it("replies no_path for an unreachable or blocked target and does not move", () => {
     const { sim } = makeSim();
     const { you } = sim.join();

@@ -144,3 +144,5 @@ Implemented addition: deferred messages (the `face` and `open_panel` that follow
 - `shared`: unit + fast-check property tests for projection round-trip, depth ordering, heightmap parsing, pathfinding properties, room validation, and WorldSim (e.g. after any sequence of valid intents, every avatar stands on a walkable tile).
 - `world-server`: gateway tests with a real `ws` client on an ephemeral port (validation, rate limit, welcome).
 - `client`: unit tests for pure helpers (markdown renderer escapes HTML, panel state). Rendering itself is checked manually with `pnpm --filter @agentlife/client dev`.
+
+- **A new move during a step (2026-11-15, user report: the avatar sometimes went back).** `WorldSim.walkTo` started a new walk from the last whole tile with `startedAt = now`, so an avatar drawn halfway into the next tile jumped back. Now a walk asked for in the middle of a step finishes that step first: the new path starts with the tile being entered and keeps that step's start time (`stepInProgress`). If no path leaves from that tile, the old rule applies. Tests in `shared/test/sim.test.ts` (one example and a fast-check property).

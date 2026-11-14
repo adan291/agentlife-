@@ -67,5 +67,7 @@ export function timeMasks(page: Page): Locator[] {
     page.locator(".al-term-latest"),
     page.locator(".al-step-time"),
     page.locator(".al-balance"),
+    // A toast can name a badge that depends on the hour the test runs (Night owl: a pass between 00:00 and 05:00).
+    page.locator(".al-toast"),
   ];
 }

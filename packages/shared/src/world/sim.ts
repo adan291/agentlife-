@@ -388,12 +388,21 @@ export class WorldSim {
     const from = this.tileAt(who, now);
     // Getting up from a seat that was reached: the first step is to the tile in front of it (a solid piece is not on the grid).
     const gettingUp = who.seat !== undefined && this.onSeat(who);
-    const origin = gettingUp ? who.seat!.use : from;
-    const found = findPath(this.grid, origin, target);
+    // A new walk while a step is half done finishes that step first and goes on from the tile being entered, with the
+    // step's own start time. Starting again from the last whole tile drew the avatar jumping back (user, 2026-11-15).
+    const inStep = gettingUp ? undefined : this.stepInProgress(who, now);
+    const origin = gettingUp ? who.seat!.use : (inStep?.to ?? from);
+    let found = findPath(this.grid, origin, target);
+    let step = inStep;
+    if (found === null && inStep) {
+      step = undefined;
+      found = findPath(this.grid, from, target);
+    }
     if (found === null) {
       return reportNoPath ? [{ type: "error", code: "no_path", message: "no path to target" }] : [];
     }
-    const path: Tile[] = [...(gettingUp ? [origin] : []), ...found, ...(toSeat ? [toSeat.tile] : [])];
+    const path: Tile[] = [...(gettingUp ? [origin] : []), ...(step ? [step.to] : []), ...found, ...(toSeat ? [toSeat.tile] : [])];
+    const startedAt = step?.startedAt ?? now;
     const finalDir = toSeat ? toSeat.dir : endDir;
 
     this.deferred = this.deferred.filter((d) => d.owner !== who.id);
@@ -417,15 +426,26 @@ export class WorldSim {
       return out;
     }
 
-    const walk: Walk = { origin: from, path, startedAt: now, msPerTile: this.msPerTile };
+    const walk: Walk = { origin: from, path, startedAt, msPerTile: this.msPerTile };
     if (finalDir !== undefined) walk.endDir = finalDir;
     who.walk = walk;
-    out.push({ type: "walk", id: who.id, path, msPerTile: this.msPerTile, startedAt: now });
+    out.push({ type: "walk", id: who.id, path, msPerTile: this.msPerTile, startedAt });
 
-    const arrival = now + path.length * this.msPerTile;
+    const arrival = startedAt + path.length * this.msPerTile;
     if (finalDir !== undefined) this.deferred.push({ at: arrival, owner: who.id, msg: { type: "face", id: who.id, dir: finalDir } });
     for (const m of afterWalk) this.deferred.push({ at: arrival, owner: who.id, msg: m });
     return out;
+  }
+
+  /** The step an avatar is in the middle of: the tile it is entering and when that step began. Undefined when standing. */
+  private stepInProgress(a: AvatarState, now: number): { to: Tile; startedAt: number } | undefined {
+    const w = a.walk;
+    if (!w) return undefined;
+    const n = this.completedSteps(a, now);
+    if (n >= w.path.length) return undefined;
+    const startedAt = w.startedAt + n * w.msPerTile;
+    if (now <= startedAt) return undefined;
+    return { to: w.path[n]!, startedAt };
   }
 
   private completedSteps(a: AvatarState, now: number): number {
