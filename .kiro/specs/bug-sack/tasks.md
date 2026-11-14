@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Store and Code grabber
+- [x] 1. Store and Code grabber
   - Shared schemas (bug report, group, fingerprint, messages); world-server bug store (`data/bugs.jsonl`, screenshots, leak masking, limits, atomic file); world-server and agent-engine grabbers; conductor and session errors; `pnpm bugs`; tests
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 4.2, 4.3, 5.5, 6.1, 6.2_
 

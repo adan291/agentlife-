@@ -14,7 +14,8 @@
     "notify": "node --experimental-strip-types --no-warnings scripts/notify.ts",
     "security:scan": "node --experimental-strip-types --no-warnings scripts/security-scan.ts",
     "security:install-hook": "node --experimental-strip-types --no-warnings scripts/install-git-hook.ts",
-    "conduct": "node --experimental-strip-types --no-warnings scripts/conduct.ts"
+    "conduct": "node --experimental-strip-types --no-warnings scripts/conduct.ts",
+    "bugs": "node --experimental-strip-types --no-warnings scripts/bugs.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

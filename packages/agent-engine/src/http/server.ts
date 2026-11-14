@@ -18,6 +18,7 @@ import {
 import type { EngineConfig } from "../config.ts";
 import { ConflictError, NotFoundError } from "../errors.ts";
 import type { JobRunner } from "../jobs/runner.ts";
+import { describeError, type BugSink } from "../bugs.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import { repoView, type ProjectRegistry } from "../projects/registry.ts";
 import type { Store } from "../store.ts";
@@ -41,6 +42,8 @@ export interface EngineServerDeps {
   projects?: ProjectRegistry;
   /** Local branches of a project and the checked-out one, for `review-branch` jobs. Without it that kind is refused. */
   branches?: (repoId: string) => Promise<{ current: string | null; branches: string[] }>;
+  /** The Bug sack: told about every request that ends in a 500. */
+  onBug?: BugSink;
 }
 
 export interface RouteContext {
@@ -256,6 +259,11 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
         if (e instanceof NotFoundError) return fail(res, 404, { error: "not_found", message: e.message });
         if (e instanceof ConflictError) return fail(res, 409, { error: e.code, message: e.message });
         log.error("request failed", { method: req.method ?? "", url: (req.url ?? "").slice(0, 200), error: e instanceof Error ? e.message : String(e) });
+        try {
+          deps.onBug?.({ kind: "http-500", ...describeError(e) });
+        } catch {
+          // The Bug sack must never change the answer.
+        }
         fail(res, 500, { error: "internal" });
       }
     })();

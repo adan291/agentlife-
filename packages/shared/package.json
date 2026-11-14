@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./leaks": "./src/leaks.ts"
+    "./leaks": "./src/leaks.ts",
+    "./bugs-node": "./src/bugs-node.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests"

@@ -2,6 +2,8 @@ import { WebSocketServer } from "ws";
 import type { RawData, WebSocket } from "ws";
 import {
   ACTIVITY_BUFFER_SIZE,
+  BUG_RATE_PER_MINUTE,
+  BUG_REPORT_BYTES,
   ClientMsgSchema,
   FURNI_CATALOG,
   GUEST_IDS,
@@ -61,6 +63,7 @@ import type {
 } from "@agentlife/shared";
 import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import type { LayoutStore } from "./layout-store.ts";
+import type { BugStore } from "./bug-store.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
 import type { Economy, UnlockedPart } from "./economy-store.ts";
@@ -129,6 +132,11 @@ export interface GatewayOptions {
    * both, no `outfits` message is sent and every wear request is refused.
    */
   outfits?: Pick<WornStore, "state" | "outfitOf" | "set" | "pruneProject">;
+  /**
+   * The Bug sack (spec bug-sack). Without it a `bug_report` is answered with `bug_error` and an error in the gateway is
+   * only swallowed as before. `main.ts` passes one only for the real engine or when `AGENTLIFE_BUGS_FILE` is set.
+   */
+  bugs?: Pick<BugStore, "record" | "recordError" | "setStatus" | "get" | "summaries" | "openCount">;
 }
 
 export interface Gateway {
@@ -155,6 +163,26 @@ export class TokenBucket {
     this.last = now;
     if (this.tokens < 1) return false;
     this.tokens -= 1;
+    return true;
+  }
+}
+
+/** At most `limit` events in any `windowMs`: the sliding window behind the rate of bug reports. */
+export class SlidingWindow {
+  private readonly times: number[] = [];
+  private readonly limit: number;
+  private readonly windowMs: number;
+  private readonly clock: () => number;
+  constructor(limit: number, windowMs: number, clock: () => number) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.clock = clock;
+  }
+  take(): boolean {
+    const now = this.clock();
+    while (this.times.length > 0 && now - this.times[0]! >= this.windowMs) this.times.shift();
+    if (this.times.length >= this.limit) return false;
+    this.times.push(now);
     return true;
   }
 }
@@ -256,7 +284,10 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   /** Serialises outgoing messages so panel data always precedes its `open_panel`. */
   let outbox: Promise<void> = Promise.resolve();
   const enqueue = (task: () => Promise<void> | void) => {
-    outbox = outbox.then(task).catch(() => undefined);
+    outbox = outbox.then(task).catch((e: unknown) => {
+      // Swallowed as before (one failed send must not stop the queue), but kept in the Bug sack.
+      options.bugs?.recordError("handler", e);
+    });
   };
 
   // ---- Ecto: grants from verified events (furni-shop) ----
@@ -387,6 +418,44 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const kept = worn.set(who, result.outfit);
     if (!kept.ok) return sendError(ws, "outfit_error", kept.reason);
     sendOutfits(ws);
+  };
+
+  // ---- the Bug sack: reports from the browser, the list and the status of a group (spec bug-sack) ----
+
+  const bugs = options.bugs;
+  const BUGS_OFF = "The Bug sack is off on this server.";
+  const sendBugs = (ws: WebSocket): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    send(ws, { type: "bugs", groups: bugs.summaries(), open: bugs.openCount() });
+  };
+  /** A report from the browser. The server decides who it came from: a client cannot claim to be the engine. */
+  const saveBugReport = (ws: WebSocket, msg: Extract<ClientMsg, { type: "bug_report" }>, bytes: number, window: SlidingWindow): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    if (bytes > BUG_REPORT_BYTES) return sendError(ws, "bug_error", "That bug report is too big.");
+    if (!window.take()) return sendError(ws, "bug_error", "Too many bug reports; try again in a minute.");
+    const floor = msg.floor ?? userRoom();
+    const result = bugs.record({
+      component: "game",
+      process: "client",
+      kind: msg.kind,
+      message: msg.message,
+      ...(msg.stack ? { stack: msg.stack } : {}),
+      ...(msg.note ? { note: msg.note } : {}),
+      context: { ...(floor ? { floor } : {}), ...(msg.panel ? { panel: msg.panel } : {}), ...(msg.view ? { view: msg.view } : {}) },
+      ...(msg.clientTime === undefined ? {} : { clientTime: msg.clientTime }),
+    });
+    send(ws, { type: "bug_saved", id: result.group.id, count: result.group.count });
+  };
+  const sendBugDetail = (ws: WebSocket, id: string): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    const group = bugs.get(id);
+    if (!group) return sendError(ws, "bug_error", "No such bug.");
+    send(ws, { type: "bug_detail", group });
+  };
+  const setBugStatus = (ws: WebSocket, id: string, status: "open" | "fixed" | "ignored"): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    if (!bugs.setStatus(id, status)) return sendError(ws, "bug_error", "No such bug.");
+    sendBugs(ws);
   };
 
   // ---- wisps: something to catch while a job runs (waiting-fun) ----
@@ -1738,6 +1807,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     refreshModels();
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);
+    const bugWindow = new SlidingWindow(BUG_RATE_PER_MINUTE, 60_000, clock);
 
     ws.on("message", (data: RawData, isBinary: boolean) => {
       if (!bucket.take()) return sendError(ws, "rate_limited", "too many messages");
@@ -1843,6 +1913,14 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         void wearOutfit(ws, msg);
       } else if (msg.type === "wisp_catch") {
         catchWisp(ws, msg.wispId);
+      } else if (msg.type === "bug_report") {
+        saveBugReport(ws, msg, Buffer.byteLength(rawToString(data)), bugWindow);
+      } else if (msg.type === "bugs_state") {
+        sendBugs(ws);
+      } else if (msg.type === "bug_get") {
+        sendBugDetail(ws, msg.id);
+      } else if (msg.type === "bug_status") {
+        setBugStatus(ws, msg.id, msg.status);
       } else {
         const roomId = userRoom();
         const sim = roomId ? hotel.sim(roomId) : undefined;

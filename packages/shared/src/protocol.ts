@@ -16,6 +16,7 @@ import { LevelUpMsgSchema } from "./progress.ts";
 import { ProgressViewSchema } from "./progress-rules.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
+import { BugGroupSchema, BugIdSchema, BugOpenCountSchema, BugReportFieldsSchema, BugStatusSchema, BugSummarySchema } from "./bugs.ts";
 import { OutfitSlotSchema, PartIdSchema, WardrobeStateSchema, WearWhoSchema, WornStateSchema } from "./outfits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, AnchorSchema, GuestIdSchema, PlacedFurniSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
@@ -149,6 +150,7 @@ export const ErrorCodeSchema = z.enum([
   "shop_error",
   "seat_taken",
   "outfit_error",
+  "bug_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -270,6 +272,14 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
    * sits there (`use`). Answered with a walk and `sit`, or `error` `seat_taken`.
    */
   z.object({ type: z.literal("sit_toggle") }),
+  /** Bug sack: a bug seen by the browser or reported by hand. The server decides component and process. Answered with `bug_saved`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_report"), ...BugReportFieldsSchema.shape }),
+  /** Bug sack: ask for the list of groups. Answered with `bugs`. */
+  z.object({ type: z.literal("bugs_state") }),
+  /** Bug sack: the details of one group. Answered with `bug_detail`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_get"), id: BugIdSchema }),
+  /** Bug sack: mark a group fixed, ignored or open again. Answered with `bugs`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_status"), id: BugIdSchema, status: BugStatusSchema }),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -421,6 +431,12 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     roomId: z.string().min(1).max(100),
     moods: z.partialRecord(AgentIdSchema, MoodSchema),
   }),
+  /** Bug sack: the report was kept (`count` is how many times its group has been seen). */
+  z.object({ type: z.literal("bug_saved"), id: BugIdSchema, count: z.number().int().positive() }),
+  /** Bug sack: every group without its samples, newest first, and how many are open per component. */
+  z.object({ type: z.literal("bugs"), groups: z.array(BugSummarySchema).max(500), open: BugOpenCountSchema }),
+  /** Bug sack: one group with its samples. */
+  z.object({ type: z.literal("bug_detail"), group: BugGroupSchema }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

@@ -15,6 +15,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CrewEvent } from "../packages/shared/src/crew.ts";
 import { createSendGate, crewEventFromLine } from "./crew-map.ts";
+import { createBugReporter } from "../packages/shared/src/bugs-node.ts";
+
+/** The Bug sack's inbox (spec bug-sack): the world-server reads it when it runs. Never throws. */
+const bugs = createBugReporter({ process: "session" });
 
 interface Session {
   id: string;
@@ -255,6 +259,7 @@ async function main(): Promise<void> {
     console.log("[session] This session needs you at the keyboard. Starting an interactive chat with the planned model.");
     const r = spawnSync("kiro-cli", args, { cwd: ROOT, stdio: "inherit" });
     recordRun(session, r.status === 0 ? "ok" : "failed", 0, join(RUNS, "interactive"));
+    if (r.status !== 0) bugs.report({ kind: "session-failed", message: `${session.id} (${session.spec}) interactive chat ended with exit code ${r.status ?? "none"}`, context: { session: session.id, spec: session.spec } });
     return;
   }
 
@@ -271,6 +276,10 @@ async function main(): Promise<void> {
   const ok = code === 0 && check.code === 0 && !blocker;
   recordRun(session, blocker ? "blocked" : ok ? "ok" : "failed", (Date.now() - started) / 60000, logFile);
   console.log(`[session] pnpm check: ${check.code === 0 ? "passed" : "FAILED"}`);
+  // A blocked run is the planned stop of the unattended protocol, not a bug. A failed one is.
+  if (!ok && !blocker) {
+    bugs.report({ kind: "session-failed", message: `${session.id} (${session.spec}) failed: kiro-cli exit code ${code}, pnpm check exit code ${check.code}`, context: { session: session.id, spec: session.spec } });
+  }
   const mins = ((Date.now() - started) / 60000).toFixed(0);
   notify(blocker
     ? `AGENT LIFE: ${session.id} (${session.spec}) BLOQUEADA tras ${mins} min. Motivo: ${blocker}`
