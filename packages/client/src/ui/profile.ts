@@ -1,17 +1,20 @@
 import type { BadgeDef, ProgressView, QuestView } from "@agentlife/shared";
 import type { PanelContent } from "./computer.ts";
 import { badgeIcon } from "./badge-icons.ts";
+import type { LookTarget } from "./look-picker.ts";
 import { levelLine, progressLines } from "./progress.ts";
 import { balanceText } from "./wallet.ts";
 
-export type ProfileTab = "badges" | "quests";
+export type ProfileTab = "badges" | "quests" | "look";
 
 export interface ProfileView {
   /** The latest `progress`; null while the server has not sent one. */
   progress: ProgressView | null;
+  /** The hotel has a wardrobe, so the Look tab is shown (it works without progress). */
+  lookAvailable?: boolean;
 }
 
-const TAB_LABEL: Record<ProfileTab, string> = { badges: "Badges", quests: "Quests" };
+const TAB_LABEL: Record<ProfileTab, string> = { badges: "Badges", quests: "Quests", look: "Look" };
 
 /** What a badge rule counts, as "one" and "many" phrases. */
 const COUNTER_PHRASE: Readonly<Record<string, readonly [string, string]>> = {
@@ -68,7 +71,7 @@ function dateText(ts: number): string {
  * and today's three quests with their progress. It only shows; the numbers come from the server. The open tab survives
  * re-renders.
  */
-export function createProfilePanel(doc: Document) {
+export function createProfilePanel(doc: Document, look?: (target: LookTarget) => HTMLElement) {
   let tab: ProfileTab = "badges";
 
   function badgeCard(def: BadgeDef, earnedAt: number | undefined): HTMLElement {
@@ -127,23 +130,29 @@ export function createProfilePanel(doc: Document) {
   return function render(view: ProfileView, rerender: () => void): PanelContent {
     const root = el(doc, "div", "al-profile");
     const p = view.progress;
-    if (!p) {
+    const canLook = look !== undefined && view.lookAvailable === true;
+    if (!p && !canLook) {
       root.appendChild(el(doc, "p", "al-muted", "No progress yet. Levels, badges and quests come from real, verified work."));
       return { body: root };
     }
-    const head = el(doc, "div", "al-profile-head");
-    head.append(el(doc, "strong", "al-shop-head", levelLine(p.user)), el(doc, "p", "al-muted", progressLines(p.user).join(" · ")));
-    root.appendChild(head);
+    if (p) {
+      const head = el(doc, "div", "al-profile-head");
+      head.append(el(doc, "strong", "al-shop-head", levelLine(p.user)), el(doc, "p", "al-muted", progressLines(p.user).join(" · ")));
+      root.appendChild(head);
+    }
 
+    // Look is the user's own figure; it works before there is any progress.
+    const shown: ProfileTab[] = [...(p ? (["badges", "quests"] as const) : []), ...(canLook ? (["look"] as const) : [])];
+    const active = shown.includes(tab) ? tab : shown[0]!;
     const tabs = el(doc, "div", "al-row al-wrap");
     tabs.setAttribute("role", "tablist");
-    for (const t of Object.keys(TAB_LABEL) as ProfileTab[]) {
+    for (const t of shown) {
       const b = el(doc, "button", "al-btn", TAB_LABEL[t]);
       b.type = "button";
       b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(t === tab));
+      b.setAttribute("aria-selected", String(t === active));
       b.dataset["tab"] = t;
-      if (t === tab) b.disabled = true;
+      if (t === active) b.disabled = true;
       b.addEventListener("click", () => {
         tab = t;
         rerender();
@@ -151,7 +160,8 @@ export function createProfilePanel(doc: Document) {
       tabs.appendChild(b);
     }
     root.appendChild(tabs);
-    root.appendChild(tab === "badges" ? badgesTab(p) : questsTab(p));
+    if (active === "look" && look) root.appendChild(look({ who: "user", name: "you", role: "user" }));
+    else if (p) root.appendChild(active === "badges" ? badgesTab(p) : questsTab(p));
     return { body: root };
   };
 }

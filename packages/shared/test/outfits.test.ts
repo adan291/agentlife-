@@ -11,13 +11,21 @@ import {
   ServerMsgSchema,
   WardrobeFileSchema,
   WardrobeStateSchema,
+  WornFileSchema,
+  WornStateSchema,
   applyOutfitPurchase,
+  applyWear,
   checkOutfits,
+  emptyWorn,
   newWallet,
+  outfitIsEmpty,
   unlockText,
   unlockedBy,
+  withSlot,
+  wornKey,
+  wornState,
 } from "../src/index.ts";
-import type { OutfitPart, Wallet } from "../src/index.ts";
+import type { Outfit, OutfitPart, Wallet } from "../src/index.ts";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -175,5 +183,116 @@ describe("messages", () => {
     expect(ServerMsgSchema.safeParse({ type: "part_unlocked", partId: "crown", name: "Paper crown", slot: "hat", badge: "Hotel veteran" }).success).toBe(true);
     expect(ServerMsgSchema.safeParse({ type: "part_unlocked", partId: "crown", name: "Paper crown", slot: "feet", badge: "x" }).success).toBe(false);
     expect(unlockText("Paper crown", "hat", "Hotel veteran")).toBe("Unlocked: Paper crown (hat), from the Hotel veteran badge");
+  });
+});
+
+// ---- wearing (ghost-skins task 2) ----
+
+describe("applyWear", () => {
+  const cap = part("flat_cap", { name: "Checked flat cap" });
+  const vest = part("waistcoat", { name: "Waistcoat", slot: "top" });
+  const parts = [cap, vest, part("rose", { slot: "accessory" })];
+
+  it("puts an owned part of the right slot on, keeping the other slots", () => {
+    expect(applyWear(parts, ["flat_cap", "waistcoat"], { top: "waistcoat" }, "hat", "flat_cap")).toEqual({ ok: true, outfit: { top: "waistcoat", hat: "flat_cap" } });
+  });
+
+  it("replaces the part in the slot, and wearing the same part again is not an error", () => {
+    const other = part("beanie");
+    const r = applyWear([...parts, other], ["flat_cap", "beanie"], { hat: "flat_cap" }, "hat", "beanie");
+    expect(r).toEqual({ ok: true, outfit: { hat: "beanie" } });
+    expect(applyWear(parts, ["flat_cap"], { hat: "flat_cap" }, "hat", "flat_cap")).toEqual({ ok: true, outfit: { hat: "flat_cap" } });
+  });
+
+  it("takes a slot off, and that is allowed even when nothing is owned or the slot is empty", () => {
+    expect(applyWear(parts, [], { hat: "flat_cap", top: "waistcoat" }, "hat", null)).toEqual({ ok: true, outfit: { top: "waistcoat" } });
+    expect(applyWear(parts, [], {}, "top", null)).toEqual({ ok: true, outfit: {} });
+  });
+
+  it("refuses in order: unknown, not owned, wrong slot", () => {
+    expect(applyWear(parts, ["flat_cap"], {}, "hat", "nope")).toMatchObject({ ok: false, code: "unknown_part", reason: "That outfit is not in the shop." });
+    expect(applyWear(parts, [], {}, "hat", "flat_cap")).toMatchObject({
+      ok: false,
+      code: "not_owned",
+      reason: "You do not own the Checked flat cap yet. Buy it at the shop counter in the lobby.",
+    });
+    expect(applyWear(parts, ["flat_cap"], {}, "top", "flat_cap")).toMatchObject({ ok: false, code: "wrong_slot", reason: "The Checked flat cap is a hat, not a top." });
+    // Not owned wins over a wrong slot: the user is told to buy it first.
+    expect(applyWear(parts, [], {}, "top", "flat_cap")).toMatchObject({ code: "not_owned" });
+  });
+
+  it("property: any sequence of wearing and taking off keeps every worn id owned, in its own slot", () => {
+    fc.assert(
+      fc.property(
+        fc.subarray(shipped.map((p) => p.id)),
+        fc.array(fc.tuple(fc.constantFrom(...OUTFIT_SLOTS), fc.option(fc.integer({ min: 0, max: shipped.length }), { nil: null })), { maxLength: 80 }),
+        (owned, steps) => {
+          let outfit: Outfit = {};
+          for (const [slot, pick] of steps) {
+            const id = pick === null ? null : (shipped[pick]?.id ?? "unknown_id");
+            const r = applyWear(shipped, owned, outfit, slot, id);
+            if (r.ok) outfit = r.outfit;
+            for (const s of OUTFIT_SLOTS) {
+              const worn = outfit[s];
+              if (worn === undefined) continue;
+              expect(owned).toContain(worn);
+              expect(shipped.find((p) => p.id === worn)?.slot).toBe(s);
+            }
+          }
+        },
+      ),
+    );
+  });
+});
+
+describe("the outfits file and what the server tells", () => {
+  it("is the user's outfit and one outfit per member, no empty ones", () => {
+    const file = { version: 1, user: { hat: "crown" }, members: { "alpha/developer": { hat: "flat_cap", top: "waistcoat" } } };
+    expect(WornFileSchema.safeParse(file).success).toBe(true);
+    expect(WornFileSchema.safeParse(emptyWorn()).success).toBe(true);
+    expect(WornFileSchema.safeParse({ ...file, members: { "alpha/developer": {} } }).success).toBe(false);
+    expect(WornFileSchema.safeParse({ ...file, members: { "../x/developer": { hat: "a" } } }).success).toBe(false);
+    expect(WornFileSchema.safeParse({ ...file, members: { developer: { hat: "a" } } }).success).toBe(false);
+    expect(WornFileSchema.safeParse({ ...file, user: { shoes: "a" } }).success).toBe(false);
+    expect(WornFileSchema.safeParse({ ...file, user: { hat: "Bad Id" } }).success).toBe(false);
+    expect(WornFileSchema.safeParse({ ...file, version: 2 }).success).toBe(false);
+  });
+
+  it("turns into the list the client reads, with the project and the member split", () => {
+    const state = wornState({ version: 1, user: { top: "waistcoat" }, members: { "my-app/ada": { accessory: "rose" }, "alpha/developer": { hat: "flat_cap" } } });
+    expect(state).toEqual({
+      user: { top: "waistcoat" },
+      members: [
+        { project: "my-app", member: "ada", outfit: { accessory: "rose" } },
+        { project: "alpha", member: "developer", outfit: { hat: "flat_cap" } },
+      ],
+    });
+    expect(WornStateSchema.safeParse(state).success).toBe(true);
+    expect(wornKey("alpha", "developer")).toBe("alpha/developer");
+  });
+
+  it("has withSlot and outfitIsEmpty agree", () => {
+    expect(outfitIsEmpty({})).toBe(true);
+    expect(outfitIsEmpty(withSlot({}, "hat", "flat_cap"))).toBe(false);
+    expect(outfitIsEmpty(withSlot({ hat: "flat_cap" }, "hat", null))).toBe(true);
+  });
+
+  it("accepts outfit_wear for the user and for a member, and nothing else", () => {
+    const ok = (m: unknown) => ClientMsgSchema.safeParse(m).success;
+    expect(ok({ type: "outfit_wear", who: "user", slot: "hat", partId: "flat_cap" })).toBe(true);
+    expect(ok({ type: "outfit_wear", who: "user", slot: "hat", partId: null })).toBe(true);
+    expect(ok({ type: "outfit_wear", who: { project: "alpha", member: "developer" }, slot: "top", partId: "waistcoat" })).toBe(true);
+    expect(ok({ type: "outfit_wear", who: "everybody", slot: "hat", partId: "flat_cap" })).toBe(false);
+    expect(ok({ type: "outfit_wear", who: { project: "../x", member: "developer" }, slot: "hat", partId: null })).toBe(false);
+    expect(ok({ type: "outfit_wear", who: "user", slot: "shoes", partId: null })).toBe(false);
+    expect(ok({ type: "outfit_wear", who: "user", slot: "hat", partId: "../x" })).toBe(false);
+    expect(ok({ type: "outfit_wear", who: "user", slot: "hat" })).toBe(false);
+  });
+
+  it("accepts the outfits message and the outfit_error code", () => {
+    const state = { user: {}, members: [{ project: "alpha", member: "developer", outfit: { hat: "flat_cap" } }] };
+    expect(ServerMsgSchema.safeParse({ type: "outfits", state }).success).toBe(true);
+    expect(ServerMsgSchema.safeParse({ type: "outfits", state: { user: { hat: 3 }, members: [] } }).success).toBe(false);
+    expect(ServerMsgSchema.safeParse({ type: "error", code: "outfit_error", message: "no" }).success).toBe(true);
   });
 });

@@ -42,6 +42,11 @@ export interface PartAnchors {
   hem: number;
   /** Offsets of the eyes from `hx` (empty from behind). */
   eyes: readonly number[];
+  /**
+   * Middle of the chest, when it is not where a ghost's is (a third of the way from the head to the face). The user's torso
+   * is centred under the head in every view, so its anchors set this to `hx`.
+   */
+  chestX?: number;
 }
 
 /** What a recipe gets: the anchors, the colours and what follows from the view. */
@@ -96,5 +101,5 @@ export function drawLookSlot(g: Graphics, look: OutfitLook | undefined, slot: Ou
   const lean = a.view === 4 || a.view === 5 || a.view === 6 ? -1 : 0;
   const mid = a.eyes.length > 0 ? a.eyes.reduce((s, e) => s + e, 0) / a.eyes.length : 0;
   const fx = a.hx + (front ? mid : 0);
-  PART_RECIPES[part.id]!({ ...a, g, c: part.palette, front, lean, fx, cx: a.hx + (fx - a.hx) * 0.5 });
+  PART_RECIPES[part.id]!({ ...a, g, c: part.palette, front, lean, fx, cx: a.chestX ?? a.hx + (fx - a.hx) * 0.5 });
 }

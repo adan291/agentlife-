@@ -1,6 +1,8 @@
 import type { Renderer } from "pixi.js";
 import type { OutfitPart } from "@agentlife/shared";
 import { lookOf } from "./outfit.ts";
+import type { OutfitLook } from "./outfit.ts";
+import type { RoleKey } from "../palette.ts";
 import type { SpriteProvider } from "./textures.ts";
 
 /**
@@ -21,6 +23,28 @@ export function createFurniPreviews(sprites: SpriteProvider, renderer: Renderer)
       url = undefined;
     }
     cache.set(defId, url);
+    return url;
+  };
+}
+
+/**
+ * Pictures of whole figures for the DOM (the Look pickers of the HR card and the Profile panel): a figure facing the front
+ * in `role`'s tint that wears `look`, drawn by the room's own renderer. Kept per role and look.
+ */
+export function createLookPreviews(sprites: SpriteProvider, renderer: Renderer): (role: RoleKey, look: OutfitLook | undefined) => string | undefined {
+  const cache = new Map<string, string | undefined>();
+  return (role, look) => {
+    const key = `${role}:${JSON.stringify(look ?? {})}`;
+    if (cache.has(key)) return cache.get(key);
+    let url: string | undefined;
+    try {
+      const frame = sprites.avatar(role, 3, 0, undefined, look);
+      const canvas = renderer.extract.canvas(frame.texture) as { toDataURL?: (type?: string) => string };
+      url = canvas.toDataURL?.("image/png");
+    } catch {
+      url = undefined;
+    }
+    cache.set(key, url);
     return url;
   };
 }

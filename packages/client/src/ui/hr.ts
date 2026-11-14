@@ -2,6 +2,7 @@ import { MemberNameSchema, SEATED_ROLES } from "@agentlife/shared";
 import type { BadgeDef, CatalogueEntry, EntityView, HrState, HrTeam, ImportView, TeamMember, TeamPick, TeamRole, TeamSuggestion } from "@agentlife/shared";
 import { badgeIcon } from "./badge-icons.ts";
 import type { PanelContent } from "./computer.ts";
+import type { LookTarget } from "./look-picker.ts";
 import { levelLine, progressLines, statsLine } from "./progress.ts";
 
 /** The HR desk's actions, as the panel sends them (panels.ts turns them into `hr_do` messages). */
@@ -132,6 +133,7 @@ export function createHrPanel(
   actions: HrActions,
   progressOf?: (projectId: string, memberId: string) => EntityView | undefined,
   badgeDefs?: () => readonly BadgeDef[],
+  look?: (target: LookTarget) => HTMLElement,
 ) {
   let tab: HrTab = "teams";
   const forms = new Map<string, HireForm>();
@@ -180,6 +182,8 @@ export function createHrPanel(
     }
 
     const key = `${team.projectId}/${m.id}`;
+    // What the member wears (ghost-skins): the picker is the same one the Profile panel uses.
+    if (look) row.appendChild(look({ who: { project: team.projectId, member: m.id }, name: m.displayName, role: m.role }));
     const controls = el(doc, "div", "al-row al-wrap");
     const rename = textInput(doc, renames.get(key) ?? m.displayName, `New name for ${m.displayName}`, (v) => renames.set(key, v));
     rename.dataset["field"] = "rename";

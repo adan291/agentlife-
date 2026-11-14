@@ -1,11 +1,11 @@
 # Status
 
-Updated: 2026-11-14 (ghost-skins task 1 done on branch feat/ghost-skins, not merged; rows 1-14 are in main; main pushed at fcd0fd2)
+Updated: 2026-11-14 (ghost-skins tasks 1-2 done on branch feat/ghost-skins, not merged; rows 1-14 are in main; main pushed at fcd0fd2)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13, and the 2026-11-13 conversation lines.
 
 ## Phase
-TASKMAP rows 1-14 are merged into main (everything up to ui-tidy). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 15 ghost-skins: task 1 (parts, wardrobe, shop page) is on `feat/ghost-skins`, task 2 (wearing) is next (S36). Then final-demo with the user.
+TASKMAP rows 1-14 are merged into main (everything up to ui-tidy). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 15 ghost-skins: both tasks are on `feat/ghost-skins` (parts and shop, then wearing), waiting for review and merge. Then final-demo with the user.
 
 ## Run the hotel
 Real engine (PowerShell, from the repo root; Docker running for tests):
@@ -21,13 +21,13 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-14 (IDE): user said the presence hook fired on every prompt here. Removed `.kiro/hooks/presence-here.json`; Kiro Crew's steering now runs `pnpm notify --here` when the user says on Discord they are back at the PC, and no longer starts `pnpm session` while a conductor runs. User said yes to ghost skins: spec ghost-skins (hat, top, accessory parts drawn in code, Ecto or badges, worn from the HR desk and the Profile), TASKMAP row 15, sessions S35-S36.
 - 2026-11-14 (IDE): user's plan: finish ghost-skins and the rest, push, test together to find what to fix, then the user records the video. main pushed (fbe1ceb..fcd0fd2). Hotel stopped; conductor started on ghost-skins (S35, S36), log data/sessions/conduct-run11.txt. Next: user tests the hotel, Kiro fixes, then final-demo (re-record replay, README, video, Devpost). D10 still waits for a yes.
 - 2026-11-14 (conductor S35): ghost-skins task 1 done (design.md first). Decisions for the user to check: three slots only, so the picture's neckerchief and carnation are both accessories and a ghost wears one of them (a fourth `neck` slot is a small change); 23 parts, 4 of them unlocked by badges (crown: Hotel veteran, halo: Ten passes, lab coat: Review regular, delivery ribbon: Ten deliveries); prices 15 to 60 Ecto in `packages/world-server/config/outfits.json`; the sprite frame of avatars grew (`AVATAR_FRAME` 40x76) so hats fit above a cheering ghost.
+- 2026-11-14 (conductor S36): ghost-skins task 2 done (design.md first). Decisions for the user to check: one `outfits` message with the whole state instead of the outline's welcome field plus live message; members are dressed only in the HR office, the user anywhere; a member's outfit is dropped when the team no longer lists them (fire, replace, or fired outside the hotel at the next visit); HR ghost and Builder are not dressable; a top on the user's figure covers its upper 15 px; lapel and pocket recipes now stay inside narrow bodies.
 
 ## Next
-1. ghost-skins task 2 (S36): Look section in the HR card and the Profile picker, wear message, storage, live update, Playwright.
-2. Review and merge ghost-skins, then final-demo. Never cut final-demo.
-3. With the user: browser checks in docs/HUMAN-CHECKS.md (top bar, Menu, Edit room, the game layer, the Outfits page).
-4. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
-5. Push main when the user agrees (last push fcd0fd2).
+1. Review and merge ghost-skins (both tasks done), then final-demo. Never cut final-demo.
+2. With the user: browser checks in docs/HUMAN-CHECKS.md (top bar, Menu, Edit room, the game layer, the Outfits page, the Look pickers).
+3. final-demo: re-record the replay with several floors and the game layer, video, Devpost. Freeze 2026-12-01.
+4. Push main when the user agrees (last push fcd0fd2).
 
 ## Specs
 | Spec | Tasks | State | Notes |
@@ -49,7 +49,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | team-progress | 2 / 2 | main | Row 12. XP, levels, stats, 18 badges, daily quests, Profile panel. Needs `AGENTLIFE_PROGRESS_FILE` or the real engine. Playwright: second test server (8796/5198) |
 | waiting-fun | 2 / 2 | main | Row 13. Wisps, sit and emotes, glad or glum ghosts, mood face, coffee machine. Playwright: third test server (8797/5197) |
 | ui-tidy | 3 / 3 | main | Row 14. Top bar, Menu, Edit room in every room, Actions menu, Builder back to idle after 10 min (design.md) |
-| ghost-skins | 1 / 2 | feat/ghost-skins | Row 15. Task 1: 23 parts in `config/outfits.json` (hat, top, accessory), recipes in `scene/outfit-parts.ts` drawn per view from the ghost's anchors, `data/wardrobe.json` kept by `Economy` (bought with `outfit_buy`, unlocked by badges at welcome and when earned), `wardrobe` and `part_unlocked` messages, Outfits tab in the shop (e2e checked with Edge, 23 pictures). Wearing is task 2. Not looked at by the user |
+| ghost-skins | 2 / 2 | feat/ghost-skins | Row 15. Task 1: 23 parts in `config/outfits.json`, recipes in `scene/outfit-parts.ts`, `data/wardrobe.json` kept by `Economy`, Outfits tab in the shop. Task 2: `data/outfits.json` kept by `WornStore`, `outfit_wear` checked by the shared `applyWear`, one `outfits` message (whole state) after the wardrobe and after each change, `outfit_error`, members dressed in the HR office and the user anywhere, entries pruned in `refreshTeam` when a member is no longer on the team, `OutfitBook` + `WorldView.applyLooks`, user's figure wears parts (`guestAnchors`), shared `look-picker.ts` in the HR card and a Look tab in the Profile, `data-looks` on the canvas for tests. Playwright: fourth test server (8798/5196, `FAKE_HR=1`, a scripted HR link). HR ghost and Builder cannot be dressed (design.md). Not looked at by the user |
 
 ## Open problems
 - ui-tidy: a piece that is not selected and stands behind a taller one is picked by pressing on its drawing above the tile (design.md of ui-tidy). `pnpm check` failed once under load in two world-server timing tests (`fun-gateway`, `wisp-gateway`) and passed alone and on the second run.
@@ -62,7 +62,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - The demo replay and `run-001.json` predate floors, kinds and the game layer: re-record in final-demo.
 - Scratch files outside git that a session could not delete: `data/tmp-pipeline-old.txt`, `data/tmp-demo-dist`, `data/tmp-check.txt`, `data/tmp-shots` (all git-ignored).
 - waiting-fun: after 10 catches for the same scripted task id (the fake engine reuses ids) no wisp pays. Mood is not kept across a restart. The poses and the sitter's depth were checked in screenshots of the lobby only.
-- ghost-skins: the parts were looked at only as flat drawings and in the shop page; how they read at 1x on a project floor, on every role colour, is a human check. The user's own figure (a person, not a ghost) has no part drawing yet: its anchors come with task 2.
+- ghost-skins: the parts were checked by tests and in one screenshot (the Developer's cap on a project floor); how every part reads at 1x on every role colour and on the user's taller torso is a human check. Stop the four test servers (ports 8795 to 8798) before an e2e run that buys outfits.
 
 ## Security
 - History rewritten twice with git filter-repo (noreply identity `14869836+adan291@users.noreply.github.com`, no personal emails, no key-shaped literals); backups in `data/backup/` (git-ignored). Local git config uses the noreply address. `pnpm security:scan` clean on 2026-11-13.

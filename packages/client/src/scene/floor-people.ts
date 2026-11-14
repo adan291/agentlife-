@@ -49,6 +49,17 @@ export class FloorPeople {
     return this.members.find((m) => m.agentId === id);
   }
 
+  /**
+   * The id of the team member who stands at a desk or a spot, as progress and outfits key them. A desk nobody was hired for
+   * belongs to the role's default member, whose id is the role name. A spot nobody stands at, the Builder and anybody else
+   * have none.
+   */
+  memberIdOf(id: StaffId): string | undefined {
+    if (isGuestId(id)) return this.guests.get(id)?.memberId;
+    if (id !== "architect" && id !== "developer" && id !== "qa") return undefined;
+    return this.member(id)?.memberId ?? id;
+  }
+
   /** Whether the avatar of this agent or spot is drawn now. `walking`: it is still on its way (to the elevator, for a ghost that left). */
   isShown(id: StaffId, walking: boolean): boolean {
     if (isGuestId(id) && !this.guests.has(id)) return false;

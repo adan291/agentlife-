@@ -7,7 +7,7 @@ import { ReplayTransport } from "./replay/transport.ts";
 import type { ReplayRooms } from "./replay/transport.ts";
 import { prefersReducedMotion } from "./scene/glow.ts";
 import { ProceduralSprites } from "./scene/textures.ts";
-import { createFurniPreviews, createOutfitPreviews } from "./scene/previews.ts";
+import { createFurniPreviews, createLookPreviews, createOutfitPreviews } from "./scene/previews.ts";
 import { WorldView } from "./scene/world-view.ts";
 import { LiveTransport } from "./transport.ts";
 import type { Transport } from "./transport.ts";
@@ -114,6 +114,8 @@ const sprites = new ProceduralSprites(app.renderer);
 const furniPreview = createFurniPreviews(sprites, app.renderer);
 /** Pictures of outfit parts on a ghost, for the Outfits page of the shop. */
 const outfitPreview = createOutfitPreviews(sprites, app.renderer);
+/** Pictures of whole figures wearing a look, for the Look pickers of the HR card and the Profile panel. */
+const lookPreview = createLookPreviews(sprites, app.renderer);
 
 // ---- floors: where the user is, the floor list, the elevator and the remembered floor ----
 
@@ -220,6 +222,8 @@ const panels = createPanels((msg) => transport.send(msg), refreshToasts, stageEl
   hrThinking: () => world.setHrThinking(true),
   shopPreview: furniPreview,
   outfitPreview,
+  outfits: world.book,
+  lookPreview,
   memberProgress: (projectId, memberId) => progressModel.memberOrNew(projectId, memberId),
   ...(replay
     ? {

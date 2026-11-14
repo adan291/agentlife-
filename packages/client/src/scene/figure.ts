@@ -71,7 +71,7 @@ export function drawAvatar(g: Graphics, role: RoleKey, view: DrawnView, frame: 0
     drawGhost(g, role, view, frame, pose, look);
     return;
   }
-  drawGuest(g, role, view, frame, pose);
+  drawGuest(g, role, view, frame, pose, look);
 }
 
 /** Pixels a ghost rises on its "up" float frame. */
@@ -138,7 +138,7 @@ function drawGhost(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, po
   }
 }
 
-function drawGuest(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose): void {
+function drawGuest(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, pose?: AvatarPose, look?: OutfitLook): void {
   const spec = VIEWS[view];
   const body = ROLE_COLOURS[role];
   const hair = HAIR_COLOURS[role];
@@ -200,6 +200,10 @@ function drawGuest(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, po
   g.rect(tx + spec.torsoW - 3, -30 + bob, 3, 17).fill(shade(body, 0.75));
   g.rect(tx, -14 + bob, spec.torsoW, 2).fill(shade(body, 0.55));
 
+  // Outfit (ghost-skins): the top lies on the torso, under the arms; the hat and the accessory come after the head.
+  const anchors = guestAnchors(view, spec.shift + sway, -39 + bob, spec);
+  drawLookSlot(g, look, "top", anchors);
+
   // Arms in front.
   if (!spec.side) {
     if (leftUp) armUp(tx - 3, 3, 0.8, false);
@@ -228,6 +232,16 @@ function drawGuest(g: Graphics, role: RoleKey, view: DrawnView, frame: 0 | 1, po
     // Back of the head: a lighter tuft so it reads differently from the front.
     g.ellipse(hx, hy - 4, 6, 3).fill(shade(hair, 1.4));
   }
+  drawLookSlot(g, look, "hat", anchors);
+  drawLookSlot(g, look, "accessory", anchors);
+}
+
+/**
+ * Where the parts of the user's figure are (design.md of ghost-skins): the head is a circle of radius 9.5 at `hy`, the torso
+ * starts 9 px below it and its belt 25 px below it, so a top covers the upper 15 px of the torso and the belt stays bare.
+ */
+export function guestAnchors(view: DrawnView, hx: number, hy: number, spec: { torsoW: number; eyes: readonly number[] } = VIEWS[view]): PartAnchors {
+  return { view, hx, hy, hr: 9.5, bw: spec.torsoW / 2, chest: hy + 9, hem: hy + 24, eyes: spec.eyes, chestX: hx };
 }
 
 /** Draw the 16x16 status icon for an agent state, centred on (0, 0). Each state has its own glyph and colour. */

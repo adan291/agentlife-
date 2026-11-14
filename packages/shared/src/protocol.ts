@@ -16,7 +16,7 @@ import { LevelUpMsgSchema } from "./progress.ts";
 import { ProgressViewSchema } from "./progress-rules.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
-import { OutfitSlotSchema, PartIdSchema, WardrobeStateSchema } from "./outfits.ts";
+import { OutfitSlotSchema, PartIdSchema, WardrobeStateSchema, WearWhoSchema, WornStateSchema } from "./outfits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, AnchorSchema, GuestIdSchema, PlacedFurniSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
 
@@ -148,6 +148,7 @@ export const ErrorCodeSchema = z.enum([
   "layout_error",
   "shop_error",
   "seat_taken",
+  "outfit_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -252,6 +253,11 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("wardrobe_state") }),
   /** Shop counter (lobby): buy one outfit part. Answered with `wallet` and `wardrobe`, or `error` `shop_error` with the reason (nothing changes). */
   z.object({ type: z.literal("outfit_buy"), partId: PartIdSchema }),
+  /**
+   * Put a part from the wardrobe on the user's figure or on a team member (`null` takes the slot off). A member is dressed
+   * in the HR office, the user anywhere. Answered with `outfits`, or `error` `outfit_error` with the reason (nothing changes).
+   */
+  z.object({ type: z.literal("outfit_wear"), who: WearWhoSchema, slot: OutfitSlotSchema, partId: PartIdSchema.nullable() }),
   /**
    * Catch the wisp that is on the screen (waiting-fun). A click on a wisp that is not there, was too late or belongs to
    * another floor pays nothing and is answered with `wisp_gone` (`caught: false`). A catch pays through `wallet`.
@@ -374,6 +380,11 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
    * hotel has no wardrobe (no economy, or no outfits file).
    */
   z.object({ type: z.literal("wardrobe"), state: WardrobeStateSchema }),
+  /**
+   * What the user and each team member wear (ghost-skins). Sent after the `wardrobe` at every welcome and after every change.
+   * Never sent when the hotel has no wardrobe: everybody keeps the default look.
+   */
+  z.object({ type: z.literal("outfits"), state: WornStateSchema }),
   /** A badge unlocked an outfit part (toast). Sent once per part. */
   z.object({ type: z.literal("part_unlocked"), partId: PartIdSchema, name: z.string().min(1).max(30), slot: OutfitSlotSchema, badge: z.string().min(1).max(30) }),
   /**

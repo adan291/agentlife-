@@ -131,6 +131,92 @@ export function unlockedBy(parts: readonly OutfitPart[], owned: readonly string[
   return parts.filter((p) => p.badge !== undefined && badgeIds.has(p.badge) && !owned.includes(p.id));
 }
 
+// ---- wearing (data/outfits.json) ----
+
+/** What a figure wears: at most one part per slot. */
+export const OutfitSchema = z.object({ hat: PartIdSchema.optional(), top: PartIdSchema.optional(), accessory: PartIdSchema.optional() }).strict();
+export type Outfit = z.infer<typeof OutfitSchema>;
+
+/** Most team members whose outfits are kept (8 members a team). */
+export const WORN_MEMBERS_MAX = 400;
+
+const WornProjectSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,59}$/);
+const WornMemberSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,29}$/);
+const WORN_KEY_RE = /^[a-z0-9][a-z0-9-]{0,59}\/[a-z0-9][a-z0-9-]{0,29}$/;
+
+/** Who is dressed: the user, or a member of a project's team. */
+export const WearWhoSchema = z.union([z.literal("user"), z.object({ project: WornProjectSchema, member: WornMemberSchema }).strict()]);
+export type WearWho = z.infer<typeof WearWhoSchema>;
+
+/** The key of a member in `data/outfits.json` (same shape as the progress key). */
+export function wornKey(project: string, member: string): string {
+  return `${project}/${member}`;
+}
+
+export function outfitIsEmpty(o: Outfit): boolean {
+  return o.hat === undefined && o.top === undefined && o.accessory === undefined;
+}
+
+/** The outfit with one slot changed; `null` takes it off. An outfit with nothing left is `{}`. */
+export function withSlot(o: Outfit, slot: OutfitSlot, partId: string | null): Outfit {
+  const next: Outfit = { ...o };
+  if (partId === null) delete next[slot];
+  else next[slot] = partId;
+  return next;
+}
+
+/** `data/outfits.json`: what the user and each team member wear. Empty outfits are not stored. */
+export const WornFileSchema = z
+  .object({
+    version: z.literal(1),
+    user: OutfitSchema,
+    members: z
+      .record(z.string().regex(WORN_KEY_RE), OutfitSchema)
+      .refine((m) => Object.keys(m).length <= WORN_MEMBERS_MAX, "too many members")
+      .refine((m) => Object.values(m).every((o) => !outfitIsEmpty(o)), "an empty outfit is not stored"),
+  })
+  .strict();
+export type WornFile = z.infer<typeof WornFileSchema>;
+
+export function emptyWorn(): WornFile {
+  return { version: 1, user: {}, members: {} };
+}
+
+/** What the server tells the client: the user's outfit and every member's. */
+export const WornStateSchema = z.object({
+  user: OutfitSchema,
+  members: z.array(z.object({ project: WornProjectSchema, member: WornMemberSchema, outfit: OutfitSchema })).max(WORN_MEMBERS_MAX),
+});
+export type WornState = z.infer<typeof WornStateSchema>;
+
+export function wornState(file: WornFile): WornState {
+  return {
+    user: { ...file.user },
+    members: Object.entries(file.members).map(([key, outfit]) => {
+      const i = key.indexOf("/");
+      return { project: key.slice(0, i), member: key.slice(i + 1), outfit: { ...outfit } };
+    }),
+  };
+}
+
+export const OUTFIT_WEAR_CODES = ["unknown_part", "not_owned", "wrong_slot"] as const;
+export type OutfitWearCode = (typeof OUTFIT_WEAR_CODES)[number];
+
+export type OutfitWearResult = { ok: true; outfit: Outfit } | { ok: false; code: OutfitWearCode; reason: string };
+
+/**
+ * Puts a part on (or takes the slot off with `null`). The first rule that fails answers and nothing changes: the part
+ * must exist, must be in the wardrobe and must belong to the slot asked. Taking a slot off is always allowed.
+ */
+export function applyWear(parts: readonly OutfitPart[], owned: readonly string[], outfit: Outfit, slot: OutfitSlot, partId: string | null): OutfitWearResult {
+  if (partId === null) return { ok: true, outfit: withSlot(outfit, slot, null) };
+  const part = parts.find((p) => p.id === partId);
+  if (!part) return { ok: false, code: "unknown_part", reason: "That outfit is not in the shop." };
+  if (!owned.includes(part.id)) return { ok: false, code: "not_owned", reason: `You do not own the ${part.name} yet. Buy it at the shop counter in the lobby.` };
+  if (part.slot !== slot) return { ok: false, code: "wrong_slot", reason: `The ${part.name} is a ${SLOT_LABELS[part.slot].toLowerCase()}, not a ${SLOT_LABELS[slot].toLowerCase()}.` };
+  return { ok: true, outfit: withSlot(outfit, slot, part.id) };
+}
+
 // ---- what the server tells the client ----
 
 export const WardrobeBadgeSchema = z.object({ id: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), name: z.string().min(1).max(30) });

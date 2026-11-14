@@ -168,7 +168,9 @@ const waistcoat: PartRecipe = (c) => {
     line(c, cx - 3.5, chest, cx, chest + 6, c.c.shade);
     line(c, cx + 3.5, chest, cx, chest + 6, c.c.shade);
     circle(c, cx, chest + 7.3, 0.9, c.c.accent);
-    rect(c, cx + 3.5, chest + 5, 3, 1, c.c.shade);
+    // The pocket flap stays on the body, which is narrow in a side view of the user's figure.
+    const room = c.hx + c.bw - 1 - (cx + 3.5);
+    if (room >= 1) rect(c, cx + 3.5, chest + 5, Math.min(3, room), 1, c.c.shade);
   } else {
     line(c, c.hx, chest, c.hx, hem, c.c.shade);
     rect(c, c.hx - 2, chest + 5.5, 4, 1.5, c.c.shade);
@@ -229,8 +231,10 @@ const labCoat: PartRecipe = (c) => {
     line(c, cx + 1, chest, cx + 2, chest + 5, c.c.shade);
     line(c, cx, chest + 5, cx, hem, c.c.shade);
     circle(c, cx + 1.2, chest + 6.2, 0.7, c.c.accent);
-    rect(c, cx + 4, chest + 5, 4, 3, c.c.light);
-    rect(c, cx + 5, chest + 3.8, 1, 2, c.c.accent);
+    // The breast pocket sits at the right of the chest but never past the edge of the body.
+    const pocket = Math.min(cx + 8, c.hx + c.bw - 1) - 4;
+    rect(c, pocket, chest + 5, 4, 3, c.c.light);
+    rect(c, pocket + 1, chest + 3.8, 1, 2, c.c.accent);
   } else {
     line(c, c.hx, chest, c.hx, hem, c.c.shade);
     rect(c, c.hx - 3, chest + 1, 6, 1, c.c.shade);

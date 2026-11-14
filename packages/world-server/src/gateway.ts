@@ -15,6 +15,7 @@ import {
   SEATED_ROLES,
   ServerMsgSchema,
   WISP_REWARD,
+  applyWear,
   memberKey,
   morningReportId,
   morningTitle,
@@ -29,6 +30,7 @@ import type {
   AgentWork,
   Approval,
   ArrangeResult,
+  ClientMsg,
   ErrorCode,
   FloorStatus,
   GuestId,
@@ -62,6 +64,7 @@ import type { LayoutStore } from "./layout-store.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
 import type { Economy, UnlockedPart } from "./economy-store.ts";
+import type { WornStore } from "./outfit-store.ts";
 import { GrantTracker } from "./grants.ts";
 import { ProgressTracker } from "./progress-tracker.ts";
 import type { TrackedFact } from "./progress-tracker.ts";
@@ -121,6 +124,11 @@ export interface GatewayOptions {
    * is counted. `main.ts` passes one only for a real engine, because the fake engine's jobs are not real work.
    */
   progress?: Pick<ProgressStore, "record" | "view" | "payouts" | "settle">;
+  /**
+   * What the user and the team members wear (ghost-skins). Only used together with an economy that has a wardrobe: without
+   * both, no `outfits` message is sent and every wear request is refused.
+   */
+  outfits?: Pick<WornStore, "state" | "outfitOf" | "set" | "pruneProject">;
 }
 
 export interface Gateway {
@@ -340,6 +348,45 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     if (!economy?.hasWardrobe) return;
     toastUnlocked(ws, economy.unlockParts(earnedBadgeIds()));
     sendWardrobe(ws);
+    sendOutfits(ws);
+  };
+
+  // ---- outfits: what the user and the team members wear (ghost-skins) ----
+
+  const worn = options.outfits;
+  const OUTFITS_CLOSED = "The hotel has no wardrobe: it needs the real engine.";
+
+  /** The whole outfits file: the user's and every member's. Nothing is sent when the hotel has no wardrobe. */
+  function sendOutfits(ws: WebSocket): void {
+    if (worn && economy?.hasWardrobe) send(ws, { type: "outfits", state: worn.state() });
+  }
+
+  /**
+   * Puts a part on the user or on a team member, or takes the slot off. The shared rules decide (the part exists, is in
+   * the wardrobe, belongs to the slot); a member must be on the project's team and is dressed in the HR office, the user
+   * anywhere. A refusal says why and changes nothing; a change answers with the new outfits.
+   */
+  const wearOutfit = async (ws: WebSocket, msg: Extract<ClientMsg, { type: "outfit_wear" }>): Promise<void> => {
+    const wardrobe = economy?.wardrobe();
+    if (!worn || !wardrobe) return sendError(ws, "outfit_error", OUTFITS_CLOSED);
+    const who = msg.who;
+    if (who !== "user") {
+      if (userRoom() !== HR_ROOM) return sendError(ws, "outfit_error", "Team members are dressed at the HR desk.");
+      const hr = engine?.hr;
+      if (!hr) return sendError(ws, "outfit_error", "The HR office needs the real engine.");
+      let ids: string[];
+      try {
+        ids = (await hr.team(who.project)).members.map((m) => m.id);
+      } catch {
+        return sendError(ws, "outfit_error", "Could not read that project's team.");
+      }
+      if (!ids.includes(who.member)) return sendError(ws, "outfit_error", "That team member is not on this project's team.");
+    }
+    const result = applyWear(wardrobe.parts, wardrobe.owned, worn.outfitOf(who), msg.slot, msg.partId);
+    if (!result.ok) return sendError(ws, "outfit_error", result.reason);
+    const kept = worn.set(who, result.outfit);
+    if (!kept.ok) return sendError(ws, "outfit_error", kept.reason);
+    sendOutfits(ws);
   };
 
   // ---- wisps: something to catch while a job runs (waiting-fun) ----
@@ -989,6 +1036,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     }
     const next = seatsOf(team.members, seatsNow.get(projectId));
     seatsNow.set(projectId, next);
+    // A member who is not on the team any more (let go here or elsewhere) does not keep the outfit.
+    if (worn?.pruneProject(projectId, new Set(team.members.map((m) => m.id))) && current) sendOutfits(current.ws);
     const shown = seatsShown.get(projectId);
     if (!shown) {
       seatsShown.set(projectId, new Map(next));
@@ -1790,6 +1839,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
         askWardrobe(ws);
       } else if (msg.type === "outfit_buy") {
         buyOutfit(ws, msg.partId);
+      } else if (msg.type === "outfit_wear") {
+        void wearOutfit(ws, msg);
       } else if (msg.type === "wisp_catch") {
         catchWisp(ws, msg.wispId);
       } else {

@@ -53,6 +53,8 @@ export class PanelState {
   shopError: string | null = null;
   /** The outfit parts and the wardrobe (Outfits page of the shop). Null in the recorded demo and without a wardrobe. */
   wardrobe: WardrobeState | null = null;
+  /** Why the last change of a Look picker was refused. Cleared by the next `outfits`, and when the HR desk or the Profile opens. */
+  lookError: string | null = null;
   /** XP, levels, badges and quests (Profile panel, HR cards). Null when the hotel has no progress. */
   progress: ProgressView | null = null;
 
@@ -95,6 +97,7 @@ export class PanelState {
         if (msg.panel === "library") this.memoryError = null;
         if (msg.panel === "board") this.pipelineError = null;
         if (msg.panel === "shop") this.shopError = null;
+        if (msg.panel === "hr" || msg.panel === "profile") this.lookError = null;
         if (msg.panel === "hr") {
           this.hrError = null;
           this.suggestion = null;
@@ -115,7 +118,12 @@ export class PanelState {
       case "wardrobe":
         this.wardrobe = msg.state;
         this.shopError = null;
-        return this.open === "shop";
+        // The Look pickers list what the user owns.
+        return this.open === "shop" || this.open === "hr" || this.open === "profile";
+      case "outfits":
+        // The pickers and their pictures follow what everybody wears now; a refusal that was on screen is over.
+        this.lookError = null;
+        return this.open === "hr" || this.open === "profile";
       case "progress":
         // The HR cards and the Profile panel show it; the HR cards read their level through a hook.
         this.progress = msg.state;
@@ -217,6 +225,10 @@ export class PanelState {
         if (msg.code === "shop_error") {
           this.shopError = msg.message;
           return this.open === "shop";
+        }
+        if (msg.code === "outfit_error") {
+          this.lookError = msg.message;
+          return this.open === "hr" || this.open === "profile";
         }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;
