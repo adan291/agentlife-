@@ -302,3 +302,6 @@ Automated so far: a scripted WebSocket client against ENGINE=fake (use computer_
 - 19:30: furni-shop, team-progress and waiting-fun PASS and merged. The engine did not start because a TypeScript parameter property is refused by `--experimental-strip-types`; fixed, with a test that loads engine.ts and gateway.ts with the real flag.
 - 21:15 and 21:30: the user could not find how to move furniture in the lobby, a moved piece could not be selected again, many places refused, wants to turn almost everything, every room editable, the emote bar as a closed menu. Spec ui-tidy (row 14, S33-S34).
 - 23:05: ui-tidy PASS and merged; hotel restarted for the user to try it.
+
+## Last conversation lines moved on 2026-11-14
+
