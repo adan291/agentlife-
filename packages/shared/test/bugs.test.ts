@@ -49,7 +49,7 @@ describe("firstBugFrame", () => {
 
   it("drops the hash Vite puts in a built file name, but not a word", () => {
     expect(firstBugFrame("Error: x\n    at f (https://x.test/assets/index-AbC123de.js:1:2)")).toBe("f@index.js");
-    expect(firstBugFrame("Error: x\n    at f (https://x.test/assets/my-component.js:1:2)")).toBe("f@my-component.js");
+    expect(firstBugFrame(`Error: x\n    at f (https://x.test/assets/${"my-comp" + "onent.js"}:1:2)`)).toBe(`f@${"my-comp" + "onent.js"}`);
   });
 
   it("gives an empty string without a frame", () => {
