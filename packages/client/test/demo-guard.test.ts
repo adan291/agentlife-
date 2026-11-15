@@ -29,6 +29,11 @@ describe("demo guard", () => {
     ]);
   });
 
+  it("flags the Bug sack's grabber and form, which belong to the live hotel", () => {
+    expect(findLiveEndpoints("a.js", "The server sent a message the client does not understand: x").map((f) => f.rule)).toEqual(["Bug sack grabber"]);
+    expect(findLiveEndpoints("a.js", "label='What went wrong?'").map((f) => f.rule)).toEqual(["Report a bug form"]);
+  });
+
   it("does not match port numbers inside longer numbers", () => {
     expect(findLiveEndpoints("a.js", "const n = 187879;")).toEqual([]);
   });

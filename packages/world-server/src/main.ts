@@ -1,4 +1,5 @@
 import { Hotel, RoomValidationError } from "@agentlife/shared";
+import { BugStore } from "./bug-store.ts";
 import { FakeEngineLink } from "./fake-engine.ts";
 import type { EngineLink } from "./engine-link.ts";
 import { Economy, defaultWalletFile, defaultWardrobeFile, loadEconomyConfig, loadOutfits } from "./economy-store.ts";
@@ -31,6 +32,24 @@ const host = process.env["HOST"] ?? "127.0.0.1";
 const allowedOrigins = parseAllowedOrigins(process.env["WORLD_ALLOWED_ORIGINS"]);
 
 const engineKind = process.env["ENGINE"] ?? "fake";
+
+// The Bug sack keeps what went wrong (spec bug-sack). Like the wallet and the progress file it exists only for the real
+// engine, or when a file is named in the environment (tests, Playwright): the scripted engine never writes into `data/`.
+let bugs: BugStore | undefined;
+if (engineKind === "http" || process.env["AGENTLIFE_BUGS_FILE"]) {
+  bugs = new BugStore({ onLog: (m) => console.warn(m) });
+  const keeper = bugs;
+  // Only observes: the process still dies of an uncaught error as it always did. An unhandled rejection comes here too.
+  process.on("uncaughtExceptionMonitor", (error, origin) => {
+    keeper.recordError(origin === "unhandledRejection" ? "unhandled-rejection" : "uncaught", error);
+    keeper.flush();
+  });
+  process.on("exit", () => {
+    keeper.flush();
+  });
+  keeper.startDraining();
+}
+
 let engine: EngineLink;
 if (engineKind === "fake") {
   engine = new FakeEngineLink({ hr: process.env["FAKE_HR"] === "1", deliver: process.env["FAKE_DELIVER"] === "1", panels: process.env["FAKE_PANELS"] === "1" });
@@ -40,6 +59,7 @@ if (engineKind === "fake") {
     baseUrl,
     token: process.env["ENGINE_TOKEN"],
     onLog: (m) => console.warn(m),
+    ...(bugs ? { onError: (e: unknown) => bugs?.recordError("engine-link", e) } : {}),
   });
   console.log(`using agent-engine at ${baseUrl}`);
 } else {
@@ -122,6 +142,7 @@ const gateway = await startGateway({
   ...(economy ? { economy } : {}),
   ...(worn ? { outfits: worn } : {}),
   ...(progress ? { progress } : {}),
+  ...(bugs ? { bugs } : {}),
   ...(wispOptions ? { wisps: wispOptions } : {}),
 });
 console.log(`world-server listening on ws://${host}:${gateway.port} (allowed origins: ${allowedOrigins.join(", ")})`);

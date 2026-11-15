@@ -37,6 +37,8 @@ export interface LiveTransportOptions {
   createSocket?: (url: string) => SocketLike;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /** A server message failed the protocol schema and was dropped (the Bug sack grabber reports it). `issue` names the message type and the first problem. */
+  onInvalid?: (issue: string) => void;
 }
 
 const OPEN = 1;
@@ -46,6 +48,7 @@ export class LiveTransport implements Transport {
   private readonly createSocket: (url: string) => SocketLike;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
+  private readonly onInvalid: ((issue: string) => void) | undefined;
   private readonly messageListeners = new Set<(msg: ServerMsg) => void>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private socket: SocketLike | null = null;
@@ -59,6 +62,7 @@ export class LiveTransport implements Transport {
     this.createSocket = options.createSocket ?? ((u) => new WebSocket(u) as unknown as SocketLike);
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
+    this.onInvalid = options.onInvalid;
     this.connect();
   }
 
@@ -149,6 +153,11 @@ export class LiveTransport implements Transport {
     const parsed = ServerMsgSchema.safeParse(json);
     if (!parsed.success) {
       console.warn("dropped invalid server message", parsed.error.issues[0]?.message);
+      try {
+        this.onInvalid?.(`${typeof (json as { type?: unknown } | null)?.type === "string" ? (json as { type: string }).type : "unknown"}: ${parsed.error.issues[0]?.message ?? "invalid"}`);
+      } catch {
+        // A listener that fails must not stop the connection.
+      }
       return;
     }
     for (const cb of this.messageListeners) cb(parsed.data);

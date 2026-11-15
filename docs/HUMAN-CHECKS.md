@@ -11,7 +11,7 @@ Tick an item when checked; tell Kiro about anything that fails.
 - [ ] A real night shift and the Librarian's note in the Library.
 - [ ] Long real runs: furniture moved during a real job, the coffee machine serving a tired agent in 60 real minutes, the Builder ghost going idle 10 minutes after a stopped `pnpm session`.
 - [ ] A touch screen (tap an item in the tray, then the floor) and a browser other than Edge (the tests and baselines are Edge).
-- [ ] Look once through the baseline images in `packages/client/e2e/__visuals__/win32/` (rooms and panels, 109 images) and say if anything looks wrong, cramped or ugly. A wrong baseline is fixed and rewritten with `e2e:update-visuals`; from then on the suite keeps screens from changing by accident.
+- [ ] Look once through the baseline images in `packages/client/e2e/__visuals__/win32/` (rooms and panels, 127 images) and say if anything looks wrong, cramped or ugly. A wrong baseline is fixed and rewritten with `e2e:update-visuals`; from then on the suite keeps screens from changing by accident.
 - [ ] Art: the 25 furniture previews and the 23 outfit parts read as what they are, on every role colour, in the cheer and glum poses and on the user's taller figure.
 - [ ] Motion a screenshot cannot show: the level-up ring, the wisp blink and catch ring, the poses (sit, wave, dance, cheer, the sitter's depth against a sofa), the mood face, the outfit parts staying in place while a figure walks in all four directions.
 - [ ] Edit room look: the green and red overlay, the cross, the selected outline, the standing-spot dots, a wall piece turned on the north and west walls, the room the "Editing" banner takes at a small height.

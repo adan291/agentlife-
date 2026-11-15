@@ -166,6 +166,27 @@ describe("HttpEngineLink commands", () => {
 });
 
 describe("HttpEngineLink events", () => {
+  it("tells onError each time the stream fails and keeps retrying, and a hook that throws changes nothing", async () => {
+    const mock = new MockEngine();
+    await mock.start();
+    const url = mock.url;
+    await mock.stop();
+    const errors: unknown[] = [];
+    const link = new HttpEngineLink({
+      baseUrl: url,
+      reconnectMs: 10,
+      maxReconnectMs: 20,
+      onError: (e) => {
+        errors.push(e);
+        throw new Error("a bad hook");
+      },
+    });
+    links.push(link);
+    link.events()[Symbol.asyncIterator]();
+    await waitFor(() => errors.length >= 2);
+    expect(errors[0]).toBeInstanceOf(Error);
+  });
+
   it("with an older engine (no restoreSeq) starts at the head: old events are not replayed, new ones arrive in order", async () => {
     const { mock, link } = await setup();
     mock.push(say(1), say(2), say(3));

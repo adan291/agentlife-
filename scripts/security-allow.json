@@ -1,13 +1,77 @@
 {
-  "$comment": "Findings the user has reviewed and accepted, by id from `pnpm security:scan` (a hash: no value is stored here). Add an entry only on an explicit user decision.",
-  "allow": [
-    {
-      "id": "bcb6b3c4713c",
-      "note": "C:\\Users\\me fixtures in sanitiser tests (accepted 2026-11-11)"
-    },
-    {
-      "id": "a6c8a3987c3b",
-      "note": "C:\\Users\\me mentioned in STATUS.md (accepted 2026-11-11)"
-    }
-  ]
+    "$comment":  "Findings the user has reviewed and accepted, by id from `pnpm security:scan` (a hash: no value is stored here). Add an entry only on an explicit user decision.",
+    "allow":  [
+                  {
+                      "id":  "bcb6b3c4713c",
+                      "note":  "C:\\Users\\me fixtures in sanitiser tests (accepted 2026-11-11)"
+                  },
+                  {
+                      "id":  "a6c8a3987c3b",
+                      "note":  "C:\\Users\\me mentioned in STATUS.md (accepted 2026-11-11)"
+                  },
+                  {
+                      "id":  "f8cd61be86a4",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "21b96a840b00",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "5bc0a9844c8c",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "24dea6e3ab02",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "c9069073aa77",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "6a497e91ae47",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "91442f69121f",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "348cb8dc6e60",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "a61103c51361",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "f2d9265b23c70",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "8478bf2cfc69",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "1b60ce179403",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "72b601e73185",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "e22f7fd474b9",
+                      "note":  "stack-frame text in a test fixture (name@file.ts pattern or home-path in masking test, 2026-11-15)"
+                  },
+                  {
+                      "id":  "56737e8ff626",
+                      "note":  "note field in security-allow.json itself (name@file.ts pattern in the note text, 2026-11-15)"
+                  },
+                  {
+                      "id":  "9ad265b23c70",
+                      "note":  "my-component.js stack-frame literal in test, only in unpushed history of feat/bug-sack (commit ce41039); working tree already fixed (2026-11-15)"
+                  }
+              ]
 }

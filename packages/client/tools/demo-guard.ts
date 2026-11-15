@@ -18,6 +18,9 @@ const FORBIDDEN: readonly { rule: string; pattern: RegExp }[] = [
   { rule: "VITE_WORLD_URL setting", pattern: /VITE_WORLD_URL/ },
   { rule: "LiveTransport class", pattern: /LiveTransport/ },
   { rule: "new WebSocket(...) call", pattern: /new\s+WebSocket\s*\(/ },
+  // The Bug sack is part of the live hotel (spec bug-sack, requirement 6.4): no grabber and no Report a bug form in the demo.
+  { rule: "Bug sack grabber", pattern: /does not understand: / },
+  { rule: "Report a bug form", pattern: /What went wrong\?/ },
 ];
 
 /** Files in the build output that are text and worth scanning. */

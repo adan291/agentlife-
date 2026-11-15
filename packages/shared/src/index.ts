@@ -25,6 +25,7 @@ export * from "./engine-api.ts";
 export * from "./crew.ts";
 export * from "./build.ts";
 export * from "./sanitize.ts";
+export * from "./bugs.ts";
 export * from "./projects.ts";
 export * from "./floors.ts";
 export * from "./overview.ts";

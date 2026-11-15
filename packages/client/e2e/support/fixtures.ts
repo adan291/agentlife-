@@ -15,6 +15,11 @@ interface Fixtures {
 interface Options {
   /** What the hotel starts with besides the defaults (`test.use({ hotelSeed: ... })`). */
   hotelSeed: HotelSeed;
+  /**
+   * Page errors and console errors this test causes on purpose (the Bug sack tests throw errors to see them caught). Matched
+   * against the text of the error; nothing else is accepted.
+   */
+  causedErrors: RegExp[];
 }
 
 /**
@@ -23,6 +28,7 @@ interface Options {
  */
 export const test = base.extend<Fixtures & Options>({
   hotelSeed: [{}, { option: true }],
+  causedErrors: [[], { option: true }],
   hotel: async ({ hotelSeed }, use) => {
     const hotel = await startHotel(hotelSeed);
     try {
@@ -31,15 +37,18 @@ export const test = base.extend<Fixtures & Options>({
       await hotel.stop();
     }
   },
-  page: async ({ page, hotel }, use, testInfo) => {
+  page: async ({ page, hotel, causedErrors }, use, testInfo) => {
     await page.addInitScript(installClickProbe);
     await hotel.attach(page);
     const errors: string[] = [];
-    page.on("pageerror", (e) => errors.push(`page error: ${e.message}`));
+    const caused = (text: string): boolean => causedErrors.some((c) => c.test(text));
+    page.on("pageerror", (e) => {
+      if (!caused(e.message)) errors.push(`page error: ${e.message}`);
+    });
     page.on("console", (m) => {
       if (m.type() !== "error") return;
       const accepted = ACCEPTED_MESSAGES.some((a) => a.text.test(m.text()) && (a.url === undefined || a.url.test(m.location().url)));
-      if (!accepted) errors.push(`console error: ${m.text()} (${m.location().url})`);
+      if (!accepted && !caused(m.text())) errors.push(`console error: ${m.text()} (${m.location().url})`);
     });
     await use(page);
     // A test that failed already reports its own failure; a second one about the console would only be noise.

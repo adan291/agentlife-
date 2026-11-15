@@ -1,7 +1,7 @@
 import type { ConnectionStatus } from "../transport.ts";
 import { FONT_MAX, FONT_MIN, UI_COLOURS } from "./theme.ts";
 import { createMenu } from "./menu.ts";
-import { isEditKey, isHelpKey, isNarrow, menuItems } from "./menu-model.ts";
+import { isBugKey, isEditKey, isHelpKey, isNarrow, menuItems } from "./menu-model.ts";
 import type { EditButtonState, MenuItemId } from "./menu-model.ts";
 import { inTextField, isPaletteKey, isViewKey } from "./view-mode.ts";
 import { balanceText } from "./wallet.ts";
@@ -34,6 +34,8 @@ const CSS = `
 .al-edit[aria-pressed="true"]:hover:not(:disabled) { background: ${UI_COLOURS.accentText}; color: ${UI_COLOURS.inputBg}; }
 .al-toast { position: absolute; z-index: 12; bottom: var(--al-s4); left: 50%; transform: translateX(-50%); max-width: calc(100% - var(--al-s4)); background: ${UI_COLOURS.panelBg}; border: 1px solid var(--al-accent); border-radius: var(--al-radius); padding: var(--al-s2) var(--al-s4); box-shadow: var(--al-shadow); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .al-toast[data-show="true"] { opacity: 1; }
+/* A new bug was caught: a small dot on the corner of the Menu button, which holds "Bugs". It takes no room. */
+.al-menu-button[data-dot="true"]::after { content: ""; position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: ${UI_COLOURS.accentText}; border: 1px solid ${UI_COLOURS.inputBg}; pointer-events: none; }
 `;
 
 /** Text size controls (A− / A+), in the Menu. `size` tells when the limits are reached. */
@@ -68,6 +70,10 @@ export interface HudActions {
   edit(fromKey: boolean): void;
   /** Opens the Profile panel. */
   profile(): void;
+  /** Opens the Bug sack panel. */
+  bugs(): void;
+  /** Opens the Report a bug form (the Menu item and the F8 key). */
+  reportBug(): void;
 }
 
 export interface Hud {
@@ -88,6 +94,8 @@ export interface Hud {
   setView(view: ViewMode): void;
   /** The Edit room button: its words, whether it is pressed and whether it can be used. */
   setEdit(state: EditButtonState): void;
+  /** The Bug sack in the Menu: its open count and whether a new bug is waiting (the dot). `null` leaves the bug items out (the recorded demo, a server with no Bug sack). */
+  setBugs(state: { open: number; dot: boolean } | null): void;
 }
 
 /** Top bar controls and stage messages: elevator, view toggle, Edit room, chips and Menu, connection status, notice and toast. */
@@ -114,6 +122,7 @@ export function createHud(mounts: HudMounts, actions: HudActions, font?: FontCon
   let edit: EditButtonState = { text: "Edit room", pressed: false, disabled: true, title: "" };
   let balanceValue: number | null = null;
   let levelValue: string | null = null;
+  let bugsValue: number | null = null;
   let narrow = isNarrow(window.innerWidth);
 
   const elevator = button("Elevator", "Take the elevator to another floor");
@@ -165,6 +174,7 @@ export function createHud(mounts: HudMounts, actions: HudActions, font?: FontCon
       editable: !edit.disabled,
       balance: balanceValue,
       level: levelValue,
+      bugs: bugsValue,
       fontMin: font ? font.size <= FONT_MIN : true,
       fontMax: font ? font.size >= FONT_MAX : true,
     });
@@ -178,6 +188,10 @@ export function createHud(mounts: HudMounts, actions: HudActions, font?: FontCon
         return actions.profile();
       case "commands":
         return actions.palette();
+      case "bugs":
+        return actions.bugs();
+      case "report-bug":
+        return actions.reportBug();
       case "zoom":
         return actions.zoom();
       case "text-smaller":
@@ -244,6 +258,7 @@ export function createHud(mounts: HudMounts, actions: HudActions, font?: FontCon
     else if (e.key === "z" || e.key === "Z") actions.zoom();
     else if (isEditKey(e, inTextField)) actions.edit(true);
     else if (isHelpKey(e, inTextField)) actions.help();
+    else if (isBugKey(e, inTextField)) actions.reportBug();
   });
 
   let timer: number | undefined;
@@ -289,6 +304,11 @@ export function createHud(mounts: HudMounts, actions: HudActions, font?: FontCon
       editButton.title = state.title;
       editButton.setAttribute("aria-pressed", String(state.pressed));
       editButton.dataset["active"] = String(state.pressed);
+    },
+    setBugs(state) {
+      bugsValue = state === null ? null : state.open;
+      menu.button.dataset["dot"] = String(state?.dot === true);
+      menu.button.title = state?.dot ? "A new bug was caught. Open the Menu, then Bugs" : "Commands, zoom, text size and help";
     },
     setBalance(value) {
       balanceValue = value;

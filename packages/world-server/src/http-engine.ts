@@ -64,6 +64,8 @@ export interface HttpEngineOptions {
   maxReconnectMs?: number;
   /** Receives short diagnostics (never secrets). */
   onLog?: (message: string) => void;
+  /** Called with the error each time the event stream fails (the engine is down, a bad answer). For the Bug sack. */
+  onError?: (error: unknown) => void;
 }
 
 /**
@@ -77,6 +79,7 @@ export class HttpEngineLink implements EngineLink {
   private readonly reconnectMs: number;
   private readonly maxReconnectMs: number;
   private readonly log: (message: string) => void;
+  private readonly onError: ((error: unknown) => void) | undefined;
   private readonly queue = new EventQueue<AgentEvent>();
   private readonly closer = new AbortController();
   private lastSeq: number | undefined;
@@ -150,6 +153,7 @@ export class HttpEngineLink implements EngineLink {
     this.reconnectMs = opts.reconnectMs ?? 500;
     this.maxReconnectMs = opts.maxReconnectMs ?? 5000;
     this.log = opts.onLog ?? (() => {});
+    this.onError = opts.onError;
   }
 
   // ---- commands ----
@@ -318,6 +322,11 @@ export class HttpEngineLink implements EngineLink {
       } catch (e) {
         if (this.closer.signal.aborted) break;
         this.log(`engine stream: ${e instanceof Error ? e.message : String(e)}`);
+        try {
+          this.onError?.(e);
+        } catch {
+          // A hook never changes how the link reconnects.
+        }
       }
       if (this.closer.signal.aborted) break;
       await new Promise<void>((resolve) => {

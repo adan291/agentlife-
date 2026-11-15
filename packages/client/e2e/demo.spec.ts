@@ -26,6 +26,20 @@ test("the demo build replays the recorded run without a server", async ({ page }
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.locator('[data-agent="developer"]:not([data-agent-state="idle"])')).toHaveCount(1, { timeout: 45_000 });
 
+  // The Bug sack belongs to the live hotel: the demo's Menu has no Bugs and no Report a bug, and F8 opens no form.
+  await page.getByRole("button", { name: "Menu" }).click();
+  await expect(page.getByRole("menu", { name: "Menu" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /^(Bugs|Report a bug)/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("F8");
+  await expect(page.getByRole("dialog", { name: /Report a bug|Bug sack/ })).toHaveCount(0);
+  // An error in the page is only an error in the page: nothing is sent anywhere.
+  await page.evaluate(() => {
+    setTimeout(() => {
+      throw new Error("Bug sack test: an error in the demo");
+    }, 0);
+  });
+
   expect(sockets).toEqual([]);
-  expect(errors).toEqual([]);
+  expect(errors.filter((e) => !e.includes("Bug sack test"))).toEqual([]);
 });

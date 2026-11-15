@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describeE2e, summarizeE2e, type E2eSummary } from "./e2e-report.ts";
+import { createBugReporter } from "../packages/shared/src/bugs-node.ts";
 
 interface Item { spec: string; sessions: string[]; live: boolean; status: string }
 
@@ -25,6 +26,8 @@ const TASKMAP = join(ROOT, "docs", "TASKMAP.md");
 const NOREPLY = "14869836+adan291@users.noreply.github.com";
 const GIT_ENV = { ...process.env, GIT_AUTHOR_NAME: "adan291", GIT_AUTHOR_EMAIL: NOREPLY, GIT_COMMITTER_NAME: "adan291", GIT_COMMITTER_EMAIL: NOREPLY };
 const args = new Set(process.argv.slice(2));
+/** The Bug sack's inbox (spec bug-sack): the world-server reads it when it runs. Never throws. */
+const bugs = createBugReporter({ process: "conductor" });
 
 function sh(cmd: string, a: string[], inherit = false, extraEnv: Record<string, string> = {}): { code: number; out: string } {
   // Only pnpm needs a shell on Windows (it is a .cmd shim). kiro-cli is a real executable: through a shell its
@@ -53,8 +56,11 @@ function notify(msg: string): void {
   sh(process.execPath, ["--experimental-strip-types", "--no-warnings", join(ROOT, "scripts", "notify.ts"), "--auto", `AGENT LIFE conductor: ${msg}`]);
 }
 
-function stop(msg: string): never {
+function stop(msg: string, opts: { record?: boolean } = {}): never {
   say(`STOP: ${msg}`);
+  // The Bug sack keeps what stopped the conductor. Not a planned stop (a dirty tree) and not a stop whose cause was already
+  // recorded by the session itself.
+  if (opts.record !== false) bugs.report({ kind: "conductor-stop", message: msg, ...(currentSpec ? { context: { spec: currentSpec } } : {}) });
   reportPhase(`stopped: ${msg}`);
   notify(`parado. ${msg}`);
   process.exit(1);
@@ -85,7 +91,7 @@ function specDone(spec: string): boolean {
 }
 
 function onMain(): void {
-  if (sh("git", ["status", "--porcelain"]).out.trim()) stop("the working tree has uncommitted changes");
+  if (sh("git", ["status", "--porcelain"]).out.trim()) stop("the working tree has uncommitted changes", { record: false });
   if (sh("git", ["switch", "main"]).code !== 0) stop("could not switch to main");
 }
 
@@ -97,7 +103,7 @@ function runSession(id: string): void {
     const r = sh("pnpm", ["-s", "session", id], true);
     if (r.code === 0) return;
     if (r.code === 2) continue;
-    stop(`session ${id} did not finish cleanly (see data/sessions/log.md and docs/STATUS.md)`);
+    stop(`session ${id} did not finish cleanly (see data/sessions/log.md and docs/STATUS.md)`, { record: false });
   }
 }
 

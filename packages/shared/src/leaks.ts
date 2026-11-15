@@ -60,6 +60,27 @@ export function envSecretValues(env: NodeJS.ProcessEnv = process.env): string[] 
   return [...new Set(out.filter((s) => s.length >= MIN_KNOWN_SECRET_CHARS))];
 }
 
+/**
+ * Text with everything the scanner would report taken out: keys and tokens become `[kind]`, emails `[email]`, a user's
+ * home folder `<home>`, a private key block `[private-key]` and the exact values of `secrets` `[secret]`. Used for text that
+ * is stored (the Bug sack). Masking a masked text changes nothing.
+ */
+export function maskLeaks(text: string, opts: { secrets?: readonly string[] } = {}): string {
+  let out = text;
+  const secrets = (opts.secrets ?? []).filter((s) => s.length >= MIN_KNOWN_SECRET_CHARS).sort((a, b) => b.length - a.length);
+  for (const s of secrets) out = out.split(s).join("[secret]");
+  // The whole block, not only its first line.
+  out = out.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, "[private-key]");
+  for (const p of LEAK_PATTERNS) {
+    out = out.replace(p.re, (m: string) => {
+      if (p.kind === "email") return SAFE_EMAIL.test(m) ? m : "[email]";
+      if (p.kind === "user-home-path") return SAFE_PATH.test(m) ? m : "<home>";
+      return `[${p.kind}]`;
+    });
+  }
+  return out;
+}
+
 export interface LeakScannerOptions {
   /** Exact secret values to look for. Values shorter than 12 characters are ignored. */
   secrets?: readonly string[];

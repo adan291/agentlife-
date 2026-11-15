@@ -16,6 +16,7 @@ import { LevelUpMsgSchema } from "./progress.ts";
 import { ProgressViewSchema } from "./progress-rules.ts";
 import { PipelineResponseSchema, PipelineSchema } from "./pipeline.ts";
 import { CatalogueItemIdSchema, ShopStateSchema } from "./shop.ts";
+import { BugGroupSchema, BugIdSchema, BugOpenCountSchema, BugReportFieldsSchema, BugSampleIdSchema, BugStatusSchema, BugSummarySchema, BugComponentSchema, BugUploadIdSchema, BUG_CHUNK_CHARS, BUG_CHUNKS_MAX, BUG_SHOT_BASE64_MAX } from "./bugs.ts";
 import { OutfitSlotSchema, PartIdSchema, WardrobeStateSchema, WearWhoSchema, WornStateSchema } from "./outfits.ts";
 import { DeliveryInfoSchema, ProjectSchema, RegisterProjectBodySchema, RegisterProjectResultSchema } from "./projects.ts";
 import { AgentIdSchema, AnchorSchema, GuestIdSchema, PlacedFurniSchema, RoomDefSchema, StaffIdSchema } from "./room.ts";
@@ -33,7 +34,7 @@ export const RoomIdSchema = z.string().regex(/^(lobby|hr|project:[a-z0-9][a-z0-9
 /** Task ids are `task-` plus hex; any safe identifier is accepted so the engine decides what exists. */
 export const TaskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 
-export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop", "profile", "coffee"]);
+export const PanelNameSchema = z.enum(["computer", "mailbox", "board", "reception", "elevator", "directory", "door", "build", "review", "tests", "library", "night", "hr", "shop", "profile", "coffee", "bugs"]);
 export type PanelName = z.infer<typeof PanelNameSchema>;
 
 /** User avatar id is a positive integer; agent and guest ids are strings, so they never collide. */
@@ -149,6 +150,7 @@ export const ErrorCodeSchema = z.enum([
   "shop_error",
   "seat_taken",
   "outfit_error",
+  "bug_error",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
@@ -270,6 +272,24 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
    * sits there (`use`). Answered with a walk and `sit`, or `error` `seat_taken`.
    */
   z.object({ type: z.literal("sit_toggle") }),
+  /** Bug sack: a bug seen by the browser or reported by hand. The server decides component and process. Answered with `bug_saved`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_report"), ...BugReportFieldsSchema.shape }),
+  /** Bug sack: ask for the list of groups. Answered with `bugs`. */
+  z.object({ type: z.literal("bugs_state") }),
+  /** Bug sack: the details of one group. Answered with `bug_detail`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_get"), id: BugIdSchema }),
+  /** Bug sack: mark a group fixed, ignored or open again. Answered with `bugs`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_status"), id: BugIdSchema, status: BugStatusSchema }),
+  /**
+   * Bug sack: one piece of a screenshot for the report that follows (`bug_report.upload` names `id`). The PNG is cut in base64
+   * pieces of at most `BUG_CHUNK_CHARS`, numbered from 0 in order, the last one marked. A bad piece drops the upload and is
+   * answered with `error` `bug_error`.
+   */
+  z.object({ type: z.literal("bug_upload"), id: BugUploadIdSchema, seq: z.number().int().min(0).max(BUG_CHUNKS_MAX), last: z.boolean(), data: z.string().min(1).max(BUG_CHUNK_CHARS) }),
+  /** Bug sack: the screenshot of a stored sample. Answered with `bug_shot`, or `error` `bug_error`. */
+  z.object({ type: z.literal("bug_shot_get"), sample: BugSampleIdSchema }),
+  /** Bug sack: Markdown of one group (`id`) or of the open groups of a component (newest first, at most 25). Answered with `bug_text`. */
+  z.object({ type: z.literal("bug_copy"), id: BugIdSchema.optional(), component: BugComponentSchema.optional() }).refine((m) => (m.id === undefined) !== (m.component === undefined), "name one group or one component"),
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 
@@ -421,6 +441,21 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     roomId: z.string().min(1).max(100),
     moods: z.partialRecord(AgentIdSchema, MoodSchema),
   }),
+  /** Bug sack: the report was kept (`count` is how many times its group has been seen). */
+  z.object({ type: z.literal("bug_saved"), id: BugIdSchema, count: z.number().int().positive() }),
+  /** Bug sack: every group without its samples, newest first, and how many are open per component. */
+  z.object({ type: z.literal("bugs"), groups: z.array(BugSummarySchema).max(500), open: BugOpenCountSchema }),
+  /** Bug sack: one group with its samples. */
+  z.object({ type: z.literal("bug_detail"), group: BugGroupSchema }),
+  /**
+   * Bug sack: how many groups are open, sent when the connection starts (it tells the client the Bug sack exists) and after every
+   * change. `change` says what happened and `id` is the group; `state` is the start of a connection.
+   */
+  z.object({ type: z.literal("bug_news"), open: BugOpenCountSchema, change: z.enum(["state", "new", "repeat", "reopened", "status"]), id: BugIdSchema.optional() }),
+  /** Bug sack: the screenshot of a sample, a PNG in base64. */
+  z.object({ type: z.literal("bug_shot"), sample: BugSampleIdSchema, png: z.string().min(1).max(BUG_SHOT_BASE64_MAX) }),
+  /** Bug sack: the Markdown asked for with `bug_copy`, and how many groups it holds. */
+  z.object({ type: z.literal("bug_text"), text: z.string().max(400_000), count: z.number().int().nonnegative() }),
   z.object({ type: z.literal("error"), code: ErrorCodeSchema, message: z.string().max(500) }),
 ]);
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;

@@ -1,10 +1,30 @@
+import { createBugReporter } from "@agentlife/shared/bugs-node";
 import { startEngine } from "./engine.ts";
 import { collectSecrets, createJsonLogger, createRedactor } from "./log.ts";
 import { allowedRoots, ensureRoots } from "./projects/roots.ts";
 
 // Secrets from the environment never reach logs, events, artifacts, run logs or exports.
-const redact = createRedactor(collectSecrets());
+const secrets = collectSecrets();
+const redact = createRedactor(secrets);
 const logger = createJsonLogger({ redact });
+
+// The Bug sack (spec bug-sack): errors go to an inbox the world-server reads. The reporter masks every text, adds to what
+// the engine logs and never throws.
+const bugs = createBugReporter({
+  process: "agent-engine",
+  mask: {
+    secrets,
+    projectRoots: (() => {
+      try {
+        return allowedRoots();
+      } catch {
+        return []; // a broken hotel.json is reported at start; any other absolute path is masked down to its tail anyway
+      }
+    })(),
+  },
+});
+// Only observes: the engine still dies of an uncaught error as it always did. An unhandled rejection comes here too.
+process.on("uncaughtExceptionMonitor", (error, origin) => bugs.error(origin === "unhandledRejection" ? "unhandled-rejection" : "uncaught", error));
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
@@ -28,6 +48,7 @@ try {
     token: token || undefined,
     fakeDelayMs: Number(process.env["FAKE_DELAY_MS"] ?? 800),
     night: { run: true },
+    onBug: (input) => bugs.report(input),
   });
   const stop = (): void => {
     void engine.close().then(() => process.exit(0));
@@ -36,5 +57,6 @@ try {
   process.on("SIGTERM", stop);
 } catch (e) {
   logger.error("engine failed to start", { error: e instanceof Error ? e.message : String(e) });
+  bugs.error("startup", e);
   process.exit(1);
 }

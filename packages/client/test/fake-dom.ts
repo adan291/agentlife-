@@ -57,6 +57,8 @@ export class FakeElement extends FakeNode {
     this.attributes.delete(name);
   }
   focus(): void {}
+  select(): void {}
+  setSelectionRange(_start: number, _end: number): void {}
   /** Runs the listeners of an event, as the browser does when the user types (`input`). `ev` is what the listeners get. */
   fire(type: string, ev: unknown = {}): void {
     for (const fn of this.handlers.get(type) ?? []) fn(ev);

@@ -18,6 +18,7 @@ import {
   type SemanticAnchor,
 } from "@agentlife/shared";
 import { testResultLine, type ActivityEmitter } from "../activity.ts";
+import { classifyStepError, describeError, type BugSink } from "../bugs.ts";
 import type { LimitsConfig } from "../config.ts";
 import { DEFAULT_MAX_CONCURRENT_JOBS } from "../config.ts";
 import { ConflictError, DiffRejectedError, JobCancelledError, NotFoundError, StepTimeoutError } from "../errors.ts";
@@ -100,6 +101,11 @@ export interface RunnerOptions {
    * the saved pipeline no longer fits the team. Without it every `change` job runs the default pipeline.
    */
   pipelines?: { forJob(projectId: string): readonly PipelineStep[] };
+  /**
+   * The Bug sack (spec bug-sack): called with every step error that is a bug (not a cancel, not a rejected diff, never a QA
+   * FAIL verdict), in addition to the log line. A throw is swallowed and never changes the job.
+   */
+  onBug?: BugSink;
 }
 
 interface Active {
@@ -173,6 +179,7 @@ export class JobRunner {
   private readonly limits: LimitsConfig;
   private readonly log: Logger;
   private readonly ambient: AgentRuntime | undefined;
+  private readonly onBug: BugSink | undefined;
   private readonly newId: () => string;
   private readonly reportTimeoutMs: number;
   private readonly activity: ActivityEmitter | undefined;
@@ -191,6 +198,7 @@ export class JobRunner {
     this.limits = opts.limits;
     this.log = opts.logger ?? noopLogger;
     this.ambient = opts.ambient;
+    this.onBug = opts.onBug;
     this.newId = opts.newId ?? (() => `task-${randomUUID().slice(0, 8)}`);
     this.reportTimeoutMs = opts.reportTimeoutMs ?? DEFAULT_REPORT_TIMEOUT_MS;
     this.activity = opts.activity;
@@ -466,6 +474,17 @@ export class JobRunner {
     });
   }
 
+  /** Hands a step error to the Bug sack when it is a bug. Never throws. */
+  private reportBug(a: Active, e: unknown): void {
+    const kind = classifyStepError(e);
+    if (!kind || !this.onBug) return;
+    try {
+      this.onBug({ kind, ...describeError(e), context: { task: a.id, ...(a.lastStep ? { step: a.lastStep } : {}) } });
+    } catch {
+      // The Bug sack must never change how a job ends.
+    }
+  }
+
   private async handleError(a: Active, goal: string, e: unknown): Promise<void> {
     const id = a.id;
     if (a.ac.signal.aborted && a.ac.signal.reason instanceof JobCancelledError) {
@@ -492,6 +511,7 @@ export class JobRunner {
       }
     }
     this.log.error("job failed", { taskId: id, ...(a.lastStep ? { step: a.lastStep } : {}), error: reason });
+    this.reportBug(a, e);
     if (this.state(id) !== "failed" && this.state(id) !== "report_ready") {
       this.transition(id, "failed", reason);
       this.store.appendEvent({ type: "task.failed", taskId: id, reason });

@@ -1,6 +1,7 @@
 import type http from "node:http";
 import path from "node:path";
 import { createActivityEmitter } from "./activity.ts";
+import type { BugSink } from "./bugs.ts";
 import { loadConfig, type EngineConfig } from "./config.ts";
 import { installAgents, ROLES } from "./agents.ts";
 import { dataPaths, PROJECT_ROOT } from "./paths.ts";
@@ -75,6 +76,8 @@ export interface EngineOptions {
   heartbeatMs?: number;
   /** Allowed project roots. Default: `AGENTLIFE_PROJECT_ROOTS` or config/hotel.json. */
   projectRoots?: string[];
+  /** The Bug sack (spec bug-sack): where step errors and 500s go. The real process passes the inbox writer; tests pass their own or none. */
+  onBug?: BugSink;
   /** Where registered projects are stored. Default: `AGENTLIFE_PROJECTS_FILE` or `<dataDir>/projects.json`. */
   projectsFile?: string;
   /** A ready registry (tests that build their own pipeline steps share it with the engine). */
@@ -343,6 +346,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     logger,
     activity,
     pipelines,
+    ...(opts.onBug ? { onBug: opts.onBug } : {}),
     ...(learner ? { onFinished: (job: FinishedJob) => learner.start(job) } : {}),
     ...(ambient ? { ambient } : {}),
     ...(opts.reportTimeoutMs ? { reportTimeoutMs: opts.reportTimeoutMs } : {}),
@@ -393,6 +397,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     logger,
     token: opts.token,
     projects,
+    ...(opts.onBug ? { onBug: opts.onBug } : {}),
     branches: async (repoId) => {
       const out = await listBranches({ registry: projects, paths, repoId });
       return { current: out.current, branches: [...out.branches] };

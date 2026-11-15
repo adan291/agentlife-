@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, test as hotelTest } from "./support/fixtures.ts";
 import type { Hotel, SeedPiece } from "./support/hotel.ts";
 import { FROZEN_AT, expectLooksLike, freezeForScreenshots, missingBaselines, timeMasks } from "./support/visual.ts";
+import { SEEDED_BUGS } from "./support/bugs.ts";
 import { COMPUTER, FLOOR_NAME, SIZES, canvasHit, goTo, mailbox, openHotel, runCommand, tilePoint, useFurniture } from "./support/world.ts";
 import type { Size } from "./support/world.ts";
 
@@ -362,6 +363,46 @@ for (const size of SIZES) {
         expect(inventory.stock).toEqual({});
         await expectLooksLike(page, "floor-coffee-machine", size);
       });
+    });
+
+    test.describe("a Bug sack with entries", () => {
+      // Groups with fixed times (`SEEDED_BUGS`); the browser runs in UTC, so the times read the same on every machine.
+      test.use({ hotelSeed: { bugs: SEEDED_BUGS } });
+
+      test("bug sack: game, code, details and the report form", async ({ page }) => {
+        await open(page, size);
+        await menuButton(page).click();
+        await expect(menu(page)).toBeVisible();
+        await expectLooksLike(page, "menu-bugs", size);
+        await menu(page).getByRole("menuitem", { name: /^Bugs/ }).click();
+        const sack = page.getByRole("dialog", { name: "Bug sack" });
+        await expect(sack).toBeVisible();
+        await expect(sack.locator("[data-bug]")).toHaveCount(2);
+        await expectLooksLike(page, "bug-sack-game", size);
+        await sack.getByRole("tab", { name: "Code (2)" }).click();
+        await expect(sack.locator("[data-bug]")).toHaveCount(2);
+        await expectLooksLike(page, "bug-sack-code", size);
+        await sack.locator("[data-bug]").first().click();
+        await expect(sack.locator("[data-bug-detail]")).toBeVisible();
+        await expectLooksLike(page, "bug-sack-detail", size);
+        await page.keyboard.press("Escape");
+        await expect(sack).toBeHidden();
+
+        await page.keyboard.press("F8");
+        const form = page.getByRole("dialog", { name: "Report a bug" });
+        await expect(form).toBeVisible();
+        await expect(form.getByRole("checkbox", { name: "Attach a screenshot of the room" })).toBeEnabled();
+        await expectLooksLike(page, "bug-form", size);
+      });
+    });
+
+    test("bug sack: nothing caught yet", async ({ page }) => {
+      await open(page, size);
+      await menuButton(page).click();
+      await menu(page).getByRole("menuitem", { name: /^Bugs/ }).click();
+      await expect(page.getByRole("dialog", { name: "Bug sack" })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Bug sack" })).toContainText("Nothing caught yet");
+      await expectLooksLike(page, "bug-sack-empty", size);
     });
 
     test.describe("a decorated floor", () => {

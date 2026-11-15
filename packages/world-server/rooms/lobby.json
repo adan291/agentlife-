@@ -35,6 +35,7 @@
     { "itemId": "desk_builder", "defId": "agent_desk", "x": 11, "y": 6, "dir": 6 },
     { "itemId": "chair_builder", "defId": "chair", "x": 10, "y": 6, "dir": 6 },
     { "itemId": "elevator_1", "defId": "elevator", "x": 0, "y": 8, "dir": 2 },
+    { "itemId": "bug_jar_1", "defId": "bug_jar", "x": 0, "y": 5, "dir": 2 },
     { "itemId": "sofa_1", "defId": "sofa", "x": 6, "y": 9, "dir": 0 },
     { "itemId": "jack_lamp_1", "defId": "jack_o_lantern_lamp", "x": 11, "y": 8, "dir": 6 }
   ]
