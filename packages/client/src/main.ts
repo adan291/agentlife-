@@ -1,4 +1,4 @@
-import { Application } from "pixi.js";
+import { Application, Rectangle } from "pixi.js";
 import { FURNI_CATALOG, RunExportSchema, isSeatDef, levelText, unlockText, validateRoom } from "@agentlife/shared";
 import type { FloorStatus, OverviewFloor, PlacedFurni, RunExport, ServerMsg } from "@agentlife/shared";
 import { PALETTE } from "./palette.ts";
@@ -42,6 +42,12 @@ import { ProgressModel, levelUpText, progressLines } from "./ui/progress.ts";
 import { createWispButton } from "./ui/wisp.ts";
 import { createActionsMenu, emoteKey } from "./ui/emotes.ts";
 import { editButtonState } from "./ui/menu-model.ts";
+import { BugGrabber } from "./bugs/grabber.ts";
+import { withoutBugJar } from "./bugs/demo-room.ts";
+import type { Where } from "./bugs/grabber.ts";
+import { newUploadId, sendUpload, shootUnderLimit, uploadMessages } from "./bugs/screenshot.ts";
+import { BugState } from "./ui/bug-state.ts";
+import { createBugForm, manualMessage } from "./ui/bug-form.ts";
 
 /**
  * True when the bundle was built with `VITE_MODE=demo`. Vite replaces the value at build time, so the live branch
@@ -59,7 +65,8 @@ async function loadDemo(): Promise<[RunExport, ReplayRooms]> {
     import("../../world-server/rooms/hr.json"),
     import("../../world-server/rooms/project-template.json"),
   ]);
-  return [exp, { lobby: validateRoom(lobby), hr: validateRoom(hr), template: validateRoom(template) }];
+  // The recorded demo has no bug jar: it opens the Bug sack, which needs the live hotel.
+  return [exp, { lobby: withoutBugJar(validateRoom(lobby)), hr: validateRoom(hr), template: validateRoom(template) }];
 }
 
 const theme = createTheme();
@@ -90,6 +97,9 @@ const mode = currentMode();
 let live: LiveTransport | undefined;
 /** Replay of the recorded run (demo mode only). In demo mode no `LiveTransport` is ever built. */
 let replay: ReplayTransport | undefined;
+/** The Game grabber of the Bug sack (live mode only) and whether the connection is open, so an early error waits for it. */
+let bugGrabber: BugGrabber | undefined;
+let bugConnected = false;
 let transport: Transport;
 if (DEMO_BUILD || mode === "demo") {
   const [exp, rooms] = await loadDemo();
@@ -106,8 +116,16 @@ if (DEMO_BUILD || mode === "demo") {
     });
   }
 } else {
-  live = new LiveTransport(import.meta.env.VITE_WORLD_URL ?? "ws://127.0.0.1:8787");
+  live = new LiveTransport(import.meta.env.VITE_WORLD_URL ?? "ws://127.0.0.1:8787", { onInvalid: (issue) => bugGrabber?.protocol(issue) });
   transport = live;
+  // Only the live hotel has a Bug sack: the recorded demo builds no grabber and sends no report.
+  const liveLink = live;
+  bugGrabber = new BugGrabber({
+    send: (report) => liveLink.send({ type: "bug_report", ...report }),
+    ready: () => bugConnected,
+    where: () => bugWhere(),
+  });
+  bugGrabber.install();
 }
 const sprites = new ProceduralSprites(app.renderer);
 /** Pictures of furniture for the shop panel and the inventory tray: the room's own sprites. */
@@ -165,6 +183,8 @@ const hud = createHud(
       toggleArrange();
     },
     profile: () => panels.open("profile"),
+    bugs: () => openBugSack(),
+    reportBug: () => reportBug(),
   },
   theme,
 );
@@ -267,6 +287,81 @@ const toasts = createToasts(
   shell.banners,
 );
 
+// ---- the Bug sack (spec bug-sack): the Menu count and dot, Report a bug with a picture of the room ----
+
+const bugState = new BugState();
+/** A report written by hand is on its way: the answer (saved or refused) is said in a toast. */
+let manualBugPending = false;
+const BUGS_OFF = "The Bug sack is off on this server. It needs the real engine.";
+
+function refreshBugHud(): void {
+  hud.setBugs(bugState.available ? { open: bugState.total, dot: bugState.dot } : null);
+}
+
+/** Where the user is, for a bug report: the floor, the open panel and the view. */
+function bugWhere(): Where {
+  return { ...(currentRoom ? { floor: currentRoom } : {}), ...(panels.state.open ? { panel: panels.state.open } : {}), view };
+}
+
+/** A PNG of the stage as base64, at most 1 MiB (smaller scales are tried when it is bigger). */
+function takeStagePicture(): Promise<string | undefined> {
+  return shootUnderLimit((scale) =>
+    app.renderer.extract.base64({
+      target: app.stage,
+      frame: new Rectangle(0, 0, app.screen.width, app.screen.height),
+      resolution: app.renderer.resolution * scale,
+      clearColor: PALETTE.background,
+    }),
+  );
+}
+
+/** Report a bug: the picture goes first, in pieces, then the report that names it. */
+async function sendManualBug(note: string, picture: string | undefined): Promise<void> {
+  manualBugPending = true;
+  let upload: string | undefined;
+  if (picture) {
+    upload = newUploadId();
+    await sendUpload((m) => transport.send(m), uploadMessages(upload, picture));
+  }
+  const where = bugWhere();
+  transport.send({
+    type: "bug_report",
+    kind: "manual",
+    message: manualMessage(note),
+    ...(note ? { note } : {}),
+    ...(where.floor ? { floor: where.floor } : {}),
+    ...(where.panel ? { panel: where.panel } : {}),
+    ...(where.view ? { view: where.view } : {}),
+    clientTime: Date.now(),
+    ...(upload ? { upload } : {}),
+  });
+}
+
+const bugForm = DEMO_BUILD
+  ? undefined
+  : createBugForm(document, stageEl, {
+      capture: takeStagePicture,
+      submit: (note, picture) => void sendManualBug(note, picture),
+    });
+
+/** The Menu item "Bugs" and the jar in the lobby. */
+function openBugSack(): void {
+  if (live === undefined) return;
+  bugState.see();
+  refreshBugHud();
+  panels.open("bugs");
+}
+
+/** The Menu item "Report a bug" and the F8 key. The recorded demo has none. */
+function reportBug(): void {
+  if (live === undefined || bugForm === undefined || bugForm.isOpen) return;
+  if (!bugState.available) {
+    hud.toast(BUGS_OFF);
+    return;
+  }
+  bugForm.open();
+}
+
 // ---- list view and command palette (list-mode): the same hotel, without walking ----
 
 const navigator = createNavigator({ send: (msg) => transport.send(msg), toast: (text) => hud.toast(text) });
@@ -327,7 +422,7 @@ function hasSeat(furni: readonly PlacedFurni[]): boolean {
 }
 window.addEventListener("keydown", (e) => {
   // A panel that is open owns the keyboard, and so does arrange mode.
-  const action = emoteKey(e, arranging || panels.state.open !== null || view === "list");
+  const action = emoteKey(e, arranging || panels.state.open !== null || view === "list" || bugForm?.isOpen === true);
   if (!action) return;
   transport.send(action.kind === "emote" ? { type: "emote", emote: action.emote } : { type: "sit_toggle" });
 });
@@ -440,6 +535,9 @@ function floorsChanged(floors: FloorStatus[]): void {
 
 transport.onStatus((s) => {
   hud.setStatus(s);
+  // Errors that happened while the page was starting wait for the connection (Bug sack).
+  bugConnected = s === "open";
+  if (bugConnected) bugGrabber?.flush();
   // A new connection starts without the overview: ask for it for the whole session, so the palette has its data at once.
   if (s === "open" && live) transport.send({ type: "overview_watch", on: true });
   // A new connection starts in the lobby again: go back to the floor the user was on.
@@ -461,6 +559,8 @@ transport.onMessage((msg) => {
   if (!blocked && mailbox.apply(msg, panels.state.open)) {
     world.setMailboxBadge(mailbox.pendingCount, mailbox.unseenReport);
   }
+  // Same for the Bug sack: a bug that arrives while its panel is open is not news.
+  if (!blocked && bugState.apply(msg, panels.state.open)) refreshBugHud();
   panels.handle(msg);
   teamBar.handle(msg);
   replayBar?.handle(msg);
@@ -500,6 +600,12 @@ transport.onMessage((msg) => {
     terminal.push(msg.line);
   } else if (msg.type === "job_update") {
     stepper.update(msg.job);
+  } else if (msg.type === "bug_saved" && manualBugPending) {
+    manualBugPending = false;
+    hud.toast("Bug saved. Open the Bug sack to see it.");
+  } else if (msg.type === "error" && msg.code === "bug_error" && manualBugPending) {
+    manualBugPending = false;
+    hud.toast(msg.message);
   } else if (msg.type === "error" && msg.code === "layout_error") {
     arrange.onRefused(msg.message);
   } else if (msg.type === "room_layout") {

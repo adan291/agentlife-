@@ -131,3 +131,36 @@ One block per group: id, `[component/process] kind`, status, `x<count>`, first a
 
 ## Decisions to record
 - The inbox instead of the engine writing the file or sending the errors over its SSE stream: the conductor and the session run without any service, and two writers of one file would race. Recorded in `docs/risks-and-decisions.md` as D17.
+
+# Task 2: the client, the news and the screenshot
+
+## Messages added (`protocol.ts`)
+| Direction | Message | Answer |
+|---|---|---|
+| client to server | `bug_upload { id, seq, last, data }`: one piece of a screenshot, base64 of at most `BUG_CHUNK_CHARS` (12 000), numbered from 0 in order | nothing, or `error` `bug_error` and the upload is dropped |
+| client to server | `bug_report.upload`: the id of the upload to attach | `bug_saved` |
+| client to server | `bug_shot_get { sample }` | `bug_shot { sample, png }` (base64), or `bug_error` |
+| client to server | `bug_copy { id }` or `bug_copy { component }` (exactly one) | `bug_text { text, count }` |
+| world-server to client | `bug_news { open, change, id? }`: sent when a connection starts (`change: "state"`, it tells the client the Bug sack exists) and on every change of the store (`new`, `repeat`, `reopened`, `status`) | |
+
+Screenshot transport is D18: pieces over the same WebSocket, paced 80 ms apart (the server allows 20 messages a second). `ShotUpload` (`world-server/src/bug-upload.ts`) keeps one upload per connection; piece 0 starts again, a piece out of order, from another id, not base64, or past 1.4 M characters drops it; a finished upload waits 60 s for its report and is used once. A report that names a missing upload is kept without a picture. `BugStore.readScreenshot` answers only for a sample that exists and has `shot`. `BugStore.exportMarkdown` makes Copy for Kiro: one group, or the open groups of a component, newest first, at most 25 (the title says "newest 25 of N").
+
+## The bug jar
+`bug_jar` (1x1, interaction `bugs`, a lobby piece, never for sale) in `lobby.json` at tile 0,5 facing east. Recipe `bugJar` in `scene/recipes.ts`: a stone base, a glass body drawn dark with the two lit faces on top, a brass lid, a paper label and three small ghost bugs inside. Using it opens panel `bugs`; the server sends `bugs` before `open_panel`. The recorded demo draws its lobby with `withoutBugJar` (`bugs/demo-room.ts`). On a server with no Bug sack the jar still opens the panel, which says "The Bug sack is off on this server."
+
+## Client
+- `bugs/grabber.ts` `BugGrabber`: `error` (capture, so a failed image or script is heard), `unhandledrejection`, `console.error` (wrapped; the original still runs) and `LiveTransport`'s new `onInvalid` (a server message that fails the schema, kind `protocol`). Kinds: `uncaught`, `unhandled-rejection`, `console-error`, `asset-load` (an element that did not load, or a rejection that says so), `pixi` (the message or stack names PixiJS), `protocol`. Limits: 20 a minute, 8 KB (the stack is halved until it fits), an identical report (same kind, normalised message, first frame) inside 10 s is counted in `skipped`, not sent. Reports made before the connection opens wait (the first 20) and `flush` sends them. A report never throws, and one made while another is being sent is ignored (no loop through `console.error`). Built only in live mode (`bugGrabber` in `main.ts`).
+- `bugs/screenshot.ts`: `shootUnderLimit` (Pixi `extract.base64` of the stage at full size, then half, then a quarter, until the PNG is at most 1 MiB), `uploadMessages`, `sendUpload`.
+- `ui/bug-form.ts`: the Report a bug dialog (note up to 500 characters, "Attach a screenshot of the room" on by default). The picture is taken when the form opens, so it shows what the user was looking at; saving before it is ready sends the report without it. Message of the report: the first line of the note. Esc closes it and is not passed on to the panel behind. `DEMO_BUILD` removes it from the demo bundle.
+- `ui/bug-state.ts` `BugState`: whether the server has a Bug sack, the open counts and the dot (lit by `new` and `reopened` while the panel is not open; put out by opening the panel).
+- `ui/bug-sack.ts`: the panel. Tabs Game and Code (with open counts), filters Open, Fixed, Ignored (with counts), a search, the list (kind, count, first and last time, where), the details (facts, Mark fixed, Ignore, Open again, Copy for Kiro, the last 5 reports with stack, note and a Show screenshot button), a foot button "Copy all open <component> bugs for Kiro". Every text of a bug goes in with `textContent`. The tab, filter and search survive re-renders and start over (`reset`) each time the panel opens. While it is open the panel asks for the list again 400 ms after a `bug_news`. When the browser refuses the clipboard, the text is shown in a box to select by hand.
+- Menu: `Bugs (n)` and `Report a bug` (F8) follow Commands, only when the server has a Bug sack (`bugs` in `MenuState`). A dot sits on the corner of the Menu button.
+- The demo build has none of it: no grabber, no form, no jar, no menu items. `tools/demo-guard.ts` fails the build if the grabber's or the form's text is in the bundle.
+
+## Tests added
+- shared: the new messages and limits, the jar. world-server: `bug-upload.test.ts` (property: any bytes in pieces come back; order, id, base64, size, time limit) and `bug-sack-gateway.test.ts` (news, upload and report, screenshot back, copy, the jar opens the panel). client: grabber, screenshot, state, form, panel (fake DOM), menu items and key, demo room, demo guard.
+- Playwright: `bug-sack.spec.ts` (an error thrown in the page lands in the Game tab with a dot; F8 with a note saves a manual bug and a PNG reaches the disk; Fixed, Open again and both Copy for Kiro buttons with the real clipboard; a bug that arrives while the panel is open; search; the jar; the Code tab with seeded groups), the layout rules (`expectScreen`) on the panel, the details and the form at three sizes, `visuals.spec.ts` (empty sack, Game, Code, details, form and the Menu with the bug items at three sizes; the lobby baselines changed because of the jar), `demo.spec.ts` (no menu items, F8 opens nothing, no socket). `ui-tidy.spec.ts` counts the two new Menu items. Every test server has a scratch `AGENTLIFE_BUGS_FILE`; `startHotel` takes `bugs` to seed groups.
+
+## Not covered
+- A real Pixi failure and a real asset that fails to load were not provoked: the classification is tested with stand-in events.
+- Not looked at in a browser by the user.

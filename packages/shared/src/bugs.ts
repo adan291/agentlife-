@@ -22,6 +22,16 @@ export const BUG_SAVE_DEBOUNCE_MS = 500;
 export const BUG_DRAIN_MS = 2000;
 /** The group message shown in a list. */
 export const BUG_LIST_MESSAGE_MAX = 300;
+/** Base64 characters in one `bug_upload` chunk: the screenshot travels in pieces because a message may be 16 KB. */
+export const BUG_CHUNK_CHARS = 12_000;
+/** Base64 characters of the biggest screenshot (a PNG of `BUG_SHOT_MAX_BYTES`). */
+export const BUG_SHOT_BASE64_MAX = Math.ceil(BUG_SHOT_MAX_BYTES / 3) * 4;
+/** Most chunks one screenshot may have. */
+export const BUG_CHUNKS_MAX = Math.ceil(BUG_SHOT_BASE64_MAX / BUG_CHUNK_CHARS);
+/** A finished upload waits this long for the `bug_report` that uses it. */
+export const BUG_UPLOAD_TTL_MS = 60_000;
+/** Copy for Kiro puts at most this many groups in one text (newest first). */
+export const BUG_COPY_GROUPS_MAX = 25;
 
 // ---- schemas ----
 export const BugComponentSchema = z.enum(["game", "code"]);
@@ -114,6 +124,10 @@ export function bugSummary(g: BugGroup): BugSummary {
 export const BugOpenCountSchema = z.object({ game: z.number().int().nonnegative(), code: z.number().int().nonnegative() });
 export type BugOpenCount = z.infer<typeof BugOpenCountSchema>;
 
+/** Id the browser gives to a screenshot it uploads in chunks, and the id of a stored sample (what `bug_shot_get` names). */
+export const BugUploadIdSchema = z.string().regex(/^[a-z0-9]{6,24}$/);
+export const BugSampleIdSchema = z.string().regex(/^b[0-9a-z]{1,24}$/);
+
 /** The fields a browser may send in a `bug_report` message (the server decides component and process). */
 export const BugReportFieldsSchema = z.object({
   kind: GameBugKindSchema,
@@ -124,6 +138,8 @@ export const BugReportFieldsSchema = z.object({
   panel: FieldSchema.optional(),
   view: z.enum(["hotel", "list"]).optional(),
   clientTime: z.number().int().nonnegative().optional(),
+  /** Id of a screenshot that was uploaded with `bug_upload` just before (manual reports). */
+  upload: BugUploadIdSchema.optional(),
 });
 export type BugReportFields = z.infer<typeof BugReportFieldsSchema>;
 

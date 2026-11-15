@@ -14,6 +14,7 @@ import { createNightPanel } from "./night-board.ts";
 import { createPipelineEditor } from "./pipeline-editor.ts";
 import { createShopPanel } from "./shop.ts";
 import { createProfilePanel } from "./profile.ts";
+import { createBugSackPanel } from "./bug-sack.ts";
 import { createHrPanel } from "./hr.ts";
 import { createLookPicker } from "./look-picker.ts";
 import type { RoleKey } from "../palette.ts";
@@ -160,6 +161,20 @@ const CSS = `
 .al-quest { padding: var(--al-s2); border: 1px solid var(--al-border); border-radius: var(--al-radius); }
 .al-quest[data-done="true"] { border-color: ${UI_COLOURS.add}; }
 .al-quest .al-row { margin-top: 0; align-items: center; }
+.al-bug-list { list-style: none; margin: var(--al-s2) 0 0; padding: 0; }
+.al-bug-list > li { margin: var(--al-s1) 0; }
+.al-bug-item { display: flex; flex-direction: column; gap: var(--al-s1); width: 100%; padding: var(--al-s2); text-align: left; background: none; color: inherit; font: inherit; cursor: pointer; border: 1px solid var(--al-border); border-radius: var(--al-radius); box-sizing: border-box; }
+.al-bug-item:hover, .al-bug-item:focus-visible { border-color: var(--al-accent); background: ${UI_COLOURS.inputBg}; }
+.al-bug-item[data-status="fixed"], .al-bug-item[data-status="ignored"] { opacity: 0.8; }
+.al-bug-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-s2); }
+.al-bug-count { font-weight: bold; color: ${UI_COLOURS.accentText}; }
+.al-bug-message, .al-bug-where, .al-bug-meta, .al-bug-sample-message, .al-bug-note, .al-bug-title { overflow-wrap: anywhere; }
+.al-bug-title { margin: var(--al-s2) 0; }
+.al-bug-search { flex: 1 1 12ch; min-width: 12ch; width: auto; margin-top: 0; }
+.al-bug-notice { margin: 0 0 var(--al-s2); color: ${UI_COLOURS.add}; }
+.al-bug-fallback { font: inherit; resize: vertical; }
+.al-bug-shot { display: block; max-width: 100%; margin: var(--al-s2) 0; border: 1px solid var(--al-border); image-rendering: pixelated; }
+.al-bug-sample { margin: var(--al-s2) 0; }
 `;
 
 const TITLES: Record<PanelName, string> = {
@@ -178,6 +193,7 @@ const TITLES: Record<PanelName, string> = {
   hr: "HR desk",
   shop: "Shop",
   profile: "Profile",
+  bugs: "Bug sack",
   // The coffee machine is not a panel: the world-server serves the coffee when the user arrives, and never sends this.
   coffee: "Coffee machine",
 };
@@ -201,6 +217,20 @@ const LIBRARY_LOCKED = "The Library is off in the recorded demo. Run AGENT LIFE 
 
 /** The pipeline editor needs the real engine: the recorded demo shows this instead of the editor. */
 const PIPELINE_LOCKED = "The pipeline editor is off in the recorded demo. Run AGENT LIFE on your computer to choose the steps of your jobs.";
+
+/** After a change in the Bug sack the open panel waits this long before it asks for the list again (a burst is read once). */
+export const BUG_REFRESH_MS = 400;
+
+/** Copies text with the browser's clipboard; false when there is none or the browser refuses. */
+async function defaultCopyText(text: string): Promise<boolean> {
+  try {
+    if (!navigator.clipboard) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** The door panel is never shown in practice: the server turns a door into a floor change. */
 function doorNote(doc: Document): HTMLElement {
@@ -248,6 +278,8 @@ export interface PanelHooks {
   lookPreview?(role: RoleKey, look: OutfitLook | undefined): string | undefined;
   /** Level and stats of a team member (team-progress), for the HR card; undefined when the hotel has no progress. */
   memberProgress?(projectId: string, memberId: string): EntityView | undefined;
+  /** Puts text on the clipboard (Copy for Kiro). Resolves false when the browser refuses. The default uses the browser's clipboard. */
+  copyText?(text: string): Promise<boolean>;
 }
 
 /**
@@ -348,6 +380,56 @@ export function createPanels(
       })
     : undefined;
   const profilePanel = createProfilePanel(document, look);
+
+  const bugSackPanel = createBugSackPanel(document, {
+    open: (id) => {
+      state.bugSelected = id;
+      state.bugDetail = null;
+      state.bugError = null;
+      send({ type: "bug_get", id });
+      render();
+    },
+    back: () => {
+      state.bugSelected = null;
+      state.bugDetail = null;
+      state.bugError = null;
+      render();
+    },
+    setStatus: (id, status) => {
+      state.bugError = null;
+      send({ type: "bug_status", id, status });
+      // The list answers on its own; the group being read needs its details again.
+      if (state.bugSelected === id) send({ type: "bug_get", id });
+    },
+    shot: (sample) => send({ type: "bug_shot_get", sample }),
+    copy: (what) => {
+      state.bugNotice = null;
+      state.bugFallback = null;
+      state.bugError = null;
+      send({ type: "bug_copy", ...what });
+      render();
+    },
+  });
+  const copyText = hooks.copyText ?? defaultCopyText;
+  /** The text of Copy for Kiro came back: put it on the clipboard, or leave it to select by hand when the browser says no. */
+  const copyBugText = (text: string, count: number): void => {
+    void copyText(text).then((ok) => {
+      state.bugNotice = ok ? `Copied ${count} bug${count === 1 ? "" : "s"} for Kiro.` : null;
+      state.bugFallback = ok ? null : text;
+      if (state.open === "bugs") render();
+    });
+  };
+  let bugRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Something changed in the Bug sack while its panel is open: read the list again (and the group being read), once for a burst. */
+  const scheduleBugRefresh = (): void => {
+    if (bugRefreshTimer !== undefined) return;
+    bugRefreshTimer = setTimeout(() => {
+      bugRefreshTimer = undefined;
+      if (state.open !== "bugs") return;
+      send({ type: "bugs_state" });
+      if (state.bugSelected !== null) send({ type: "bug_get", id: state.bugSelected });
+    }, BUG_REFRESH_MS);
+  };
 
   const hrAct = (act: HrAction): void => {
     state.hrError = null;
@@ -507,7 +589,7 @@ export function createPanels(
     root.hidden = false;
     title.textContent = TITLES[state.open];
     root.setAttribute("aria-label", TITLES[state.open]);
-    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || state.open === "hr" || state.open === "shop" || (state.open === "mailbox" && state.viewing !== null));
+    root.dataset["wide"] = String(state.open === "board" || state.open === "build" || state.open === "night" || state.open === "hr" || state.open === "shop" || state.open === "bugs" || (state.open === "mailbox" && state.viewing !== null));
     const content: PanelContent =
       state.open === "computer"
         ? computer(state.data, state.engineError)
@@ -553,6 +635,19 @@ export function createPanels(
                         ? shopPanel({ shop: state.shop, wardrobe: state.wardrobe, error: state.shopError, ...(locked ? { locked: SHOP_LOCKED } : {}) }, render)
                         : state.open === "profile"
                           ? profilePanel({ progress: state.progress, lookAvailable: hooks.outfits?.available ?? false }, render)
+                          : state.open === "bugs"
+                            ? bugSackPanel(
+                                {
+                                  list: state.bugs,
+                                  selected: state.bugSelected,
+                                  detail: state.bugDetail,
+                                  shots: state.bugShots,
+                                  error: state.bugError,
+                                  notice: state.bugNotice,
+                                  fallbackText: state.bugFallback,
+                                },
+                                render,
+                              )
                     : state.open === "door"
                   ? { body: doorNote(document) }
                   : { body: boardBody() };
@@ -611,14 +706,20 @@ export function createPanels(
     },
     open(panel) {
       if (arranging) return;
+      if (panel === "bugs") bugSackPanel.reset();
       if (state.apply({ type: "open_panel", panel })) render();
       if (panel === "board") requestDetails();
+      // Opened from the Menu: no walk to the jar, so no data from the server either; ask for it.
+      if (panel === "bugs") send({ type: "bugs_state" });
     },
     openReport,
     handle(msg) {
       // Arranging the floor: a panel the server wants to open (the avatar arrived at some furniture) stays shut.
       if (arranging && msg.type === "open_panel") return;
+      if (msg.type === "open_panel" && msg.panel === "bugs") bugSackPanel.reset();
       const changed = state.apply(msg);
+      if (msg.type === "bug_text") copyBugText(msg.text, msg.count);
+      else if (msg.type === "bug_news" && state.open === "bugs" && msg.change !== "state") scheduleBugRefresh();
       if (state.open === "build" && isBuilderMessage(msg)) scheduleBuildRefresh();
       if (state.open === "board") {
         if (msg.type === "open_panel" || msg.type === "job_update") requestDetails();

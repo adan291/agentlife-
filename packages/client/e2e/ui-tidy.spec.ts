@@ -37,11 +37,13 @@ test.describe("the Menu", () => {
     await expect(menu(page)).toBeVisible();
     await expect(menuButton(page)).toHaveAttribute("aria-expanded", "true");
     const items = menu(page).getByRole("menuitem");
-    await expect(items).toHaveText([/^Commands\s*Ctrl\+K$/, /^Zoom [12]×\s*Z$/, /^Text smaller$/, /^Text larger$/, /^Help and guide\s*\?$/]);
-    // The first item has the focus; one arrow down is Zoom.
+    await expect(items).toHaveText([/^Commands\s*Ctrl\+K$/, /^Bugs$/, /^Report a bug\s*F8$/, /^Zoom [12]×\s*Z$/, /^Text smaller$/, /^Text larger$/, /^Help and guide\s*\?$/]);
+    // The first item has the focus; three arrows down (past Bugs and Report a bug) is Zoom.
     await expect(items.first()).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await expect(items.nth(3)).toBeFocused();
     await page.keyboard.press("Enter");
 
     // The menu closed, the focus is back on its button, and the zoom changed.
@@ -202,10 +204,11 @@ for (const [width, height] of [
       await open(page, width, height);
       await menuButton(page).click();
       const items = menu(page).getByRole("menuitem");
+      // The five items every hotel has, and the two of the Bug sack (Bugs, Report a bug) that the test server has too.
       if (width >= 900) {
-        await expect(items).toHaveCount(5);
+        await expect(items).toHaveCount(7);
       } else {
-        await expect(items).toHaveCount(8);
+        await expect(items).toHaveCount(10);
         await expect(items.nth(0)).toHaveText(/Show the list/);
         await expect(items.nth(1)).toHaveText(/Edit room/);
       }

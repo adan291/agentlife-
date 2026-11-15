@@ -150,3 +150,10 @@
 - **Por qué:** el conductor y las sesiones corren sin ningún servicio levantado, y dos escritores sobre un mismo fichero se pisan. Mandar los errores del motor por su SSE no sirve para el conductor y obliga a añadir un tipo de evento que el motor guardaría en su registro de eventos.
 - **Compromiso:** un error del motor aparece en el panel hasta 2 s tarde. Con el world-server parado el buzón crece (tope 1 MiB; pasado el tope se descartan los nuevos con un aviso por stderr). El `BugStore` no existe sin `ENGINE=http` o `AGENTLIFE_BUGS_FILE` (como la cartera y el progreso), así que el motor simulado de Playwright no escribe en `data/`.
 - **Descartadas:** que el motor escriba `bugs.jsonl` (carrera de escritura), un endpoint del motor que el world-server consulte (el conductor no pasa por él) y un bloqueo de fichero (frágil en Windows).
+
+### D18. La captura de pantalla de un bug viaja por el WebSocket en trozos (spec bug-sack, tarea 2)
+
+- **Decisión (de Kiro, 2026-11-15):** el navegador envía el PNG (máx. 1 MiB) como mensajes `bug_upload` en base64 de hasta 12 000 caracteres, numerados desde 0 y en orden, a un ritmo de 12 por segundo; después envía `bug_report` con `upload: <id>`. El world-server reúne los trozos (`ShotUpload`, uno por conexión, tope 1,4 M de caracteres, caduca a los 60 s) y se los pasa al `BugStore`, que ya comprueba la firma PNG y el tamaño. La imagen vuelve con `bug_shot_get` y `bug_shot` (sin límite de tamaño en ese sentido).
+- **Por qué:** el cliente solo habla con el world-server por un WebSocket con tope de 16 KB por mensaje. Un endpoint HTTP aparte obligaría a abrir el servidor `ws` a rutas HTTP, a CORS y a repetir la comprobación de origen.
+- **Compromiso:** una captura grande tarda unos segundos en llegar (300 KB, unos 2 s). Una captura de más de 1 MiB se repite a la mitad y a un cuarto de tamaño antes de rendirse; sin imagen el informe se guarda igual.
+- **Descartadas:** subir por HTTP (ver arriba) y reducir la captura a una miniatura de 16 KB (no sirve para ver el fallo).

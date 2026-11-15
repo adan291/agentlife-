@@ -1,4 +1,4 @@
-import type { Approval, BranchesResponse, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, ProgressView, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion, WardrobeState } from "@agentlife/shared";
+import type { Approval, BranchesResponse, BugGroup, BugOpenCount, BugSummary, BuildBoard, BuildReport, FloorStatus, HrState, JobDetails, JobView, MemoryState, NightState, PanelName, PipelineResponse, Project, ProgressView, RegisterProjectResult, Repo, Report, ServerMsg, ShopState, TeamSuggestion, WardrobeState } from "@agentlife/shared";
 
 export interface PanelData {
   repos: Repo[];
@@ -57,6 +57,15 @@ export class PanelState {
   lookError: string | null = null;
   /** XP, levels, badges and quests (Profile panel, HR cards). Null when the hotel has no progress. */
   progress: ProgressView | null = null;
+  /** The Bug sack: the list of groups (without samples) and the open counts, the group being read, its details and screenshots. */
+  bugs: { groups: BugSummary[]; open: BugOpenCount } | null = null;
+  bugSelected: string | null = null;
+  bugDetail: BugGroup | null = null;
+  bugShots: Record<string, string> = {};
+  /** Why the Bug sack refused something (it may be off on this server), what Copy for Kiro did, and the text a refused copy leaves to select by hand. */
+  bugError: string | null = null;
+  bugNotice: string | null = null;
+  bugFallback: string | null = null;
 
   /** Returns true when the message changed something the panels show. */
   apply(msg: ServerMsg): boolean {
@@ -98,6 +107,14 @@ export class PanelState {
         if (msg.panel === "board") this.pipelineError = null;
         if (msg.panel === "shop") this.shopError = null;
         if (msg.panel === "hr" || msg.panel === "profile") this.lookError = null;
+        if (msg.panel === "bugs") {
+          this.bugSelected = null;
+          this.bugDetail = null;
+          this.bugShots = {};
+          this.bugError = null;
+          this.bugNotice = null;
+          this.bugFallback = null;
+        }
         if (msg.panel === "hr") {
           this.hrError = null;
           this.suggestion = null;
@@ -162,6 +179,19 @@ export class PanelState {
         this.pipelineError = null;
         return !same && this.open === "board";
       }
+      case "bugs":
+        this.bugs = { groups: msg.groups, open: msg.open };
+        this.bugError = null;
+        return this.open === "bugs";
+      case "bug_detail":
+        // An answer for a group the user is no longer reading (a slow reply after Back) is dropped.
+        if (this.bugSelected !== msg.group.id) return false;
+        this.bugDetail = msg.group;
+        this.bugError = null;
+        return this.open === "bugs";
+      case "bug_shot":
+        this.bugShots = { ...this.bugShots, [msg.sample]: msg.png };
+        return this.open === "bugs";
       case "build_board":
         this.build = msg.board;
         this.buildError = null;
@@ -229,6 +259,10 @@ export class PanelState {
         if (msg.code === "outfit_error") {
           this.lookError = msg.message;
           return this.open === "hr" || this.open === "profile";
+        }
+        if (msg.code === "bug_error") {
+          this.bugError = msg.message;
+          return this.open === "bugs";
         }
         if (msg.code === "engine_unavailable") {
           this.engineError = msg.message;

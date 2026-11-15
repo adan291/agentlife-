@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BREAK_MENU_PX, editButtonState, isEditKey, isHelpKey, isNarrow, menuItems, nextEnabled, profileLabel } from "../src/ui/menu-model.ts";
+import { BREAK_MENU_PX, editButtonState, isBugKey, isEditKey, isHelpKey, isNarrow, menuItems, nextEnabled, profileLabel } from "../src/ui/menu-model.ts";
 import type { MenuState } from "../src/ui/menu-model.ts";
 import { BREAK_SIDE_PX } from "../src/ui/shell.ts";
 import { inTextField } from "../src/ui/view-mode.ts";
@@ -76,6 +76,41 @@ describe("menu items", () => {
     expect(profileLabel(5, null)).toBe("Profile: 5 Ecto");
     expect(profileLabel(null, "Lv 1")).toBe("Profile: Lv 1");
     expect(profileLabel(null, null)).toBe("Profile");
+  });
+
+  it("the Bug sack items are left out where there is no Bug sack (the recorded demo, a server without one)", () => {
+    expect(ids(wide)).not.toContain("bugs");
+    expect(ids({ ...wide, bugs: null })).not.toContain("report-bug");
+    expect(ids({ ...wide, narrow: true, bugs: null })).toEqual(["view", "edit", "profile", "commands", "zoom", "text-smaller", "text-larger", "help"]);
+  });
+
+  it("with a Bug sack, Bugs and Report a bug follow Commands, and the count is in the label", () => {
+    const items = menuItems({ ...wide, bugs: 3 });
+    expect(items.map((i) => i.id)).toEqual(["commands", "bugs", "report-bug", "zoom", "text-smaller", "text-larger", "help"]);
+    expect(items.find((i) => i.id === "bugs")?.label).toBe("Bugs (3)");
+    expect(items.find((i) => i.id === "report-bug")).toMatchObject({ label: "Report a bug", shortcut: "F8" });
+    expect(menuItems({ ...wide, bugs: 0 }).find((i) => i.id === "bugs")?.label).toBe("Bugs");
+    expect(ids({ ...wide, narrow: true, bugs: 1 })).toEqual(["view", "edit", "profile", "commands", "bugs", "report-bug", "zoom", "text-smaller", "text-larger", "help"]);
+  });
+});
+
+describe("the bug key", () => {
+  const key = (over: Record<string, unknown>) => isBugKey({ key: "F8", ...over }, inTextField);
+
+  it("is F8 on its own", () => {
+    expect(key({})).toBe(true);
+    expect(key({ key: "F7" })).toBe(false);
+    expect(key({ key: "b" })).toBe(false);
+  });
+
+  it("is ignored with Ctrl, Alt or Meta, when held down, and inside text fields", () => {
+    expect(key({ ctrlKey: true })).toBe(false);
+    expect(key({ altKey: true })).toBe(false);
+    expect(key({ metaKey: true })).toBe(false);
+    expect(key({ repeat: true })).toBe(false);
+    expect(key({ target: { tagName: "TEXTAREA" } })).toBe(false);
+    expect(key({ target: { tagName: "INPUT" } })).toBe(false);
+    expect(key({ target: { tagName: "BUTTON" } })).toBe(true);
   });
 });
 

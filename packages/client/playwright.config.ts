@@ -47,6 +47,14 @@ const WEAR_INVENTORY_FILE = join(tmpdir(), "agentlife-e2e-wear-inventory.json");
 const WEAR_WARDROBE_FILE = join(tmpdir(), "agentlife-e2e-wear-wardrobe.json");
 const WEAR_OUTFITS_FILE = join(tmpdir(), "agentlife-e2e-wear-outfits.json");
 const WEAR_LAYOUTS_FILE = join(tmpdir(), "agentlife-e2e-wear-layouts.json");
+/**
+ * Every test server has a Bug sack (spec bug-sack) in a scratch file, so the bug jar and the Menu items work as they do for a user.
+ * Each starts empty; the folder next to the file holds the screenshots.
+ */
+const BUGS_FILE = join(tmpdir(), "agentlife-e2e-bugs.jsonl");
+const PROGRESS_BUGS_FILE = join(tmpdir(), "agentlife-e2e-progress-bugs.jsonl");
+const FUN_BUGS_FILE = join(tmpdir(), "agentlife-e2e-fun-bugs.jsonl");
+const WEAR_BUGS_FILE = join(tmpdir(), "agentlife-e2e-wear-bugs.jsonl");
 /** The other servers never put anything on anybody, but they must not read or write the real `data/outfits.json` either. */
 const OUTFITS_FILE = join(tmpdir(), "agentlife-e2e-outfits.json");
 const PROGRESS_OUTFITS_FILE = join(tmpdir(), "agentlife-e2e-progress-outfits.json");
@@ -87,6 +95,11 @@ if (process.env["TEST_WORKER_INDEX"] === undefined) {
   seed(WEAR_INVENTORY_FILE, { version: 1, stock: {}, placed: {}, seq: 0 });
   seed(WEAR_WARDROBE_FILE, { version: 1, owned: [] });
   for (const file of [WEAR_OUTFITS_FILE, OUTFITS_FILE, PROGRESS_OUTFITS_FILE, FUN_OUTFITS_FILE, WEAR_LAYOUTS_FILE]) rmSync(file, { force: true });
+  // Each Bug sack starts empty (the screenshots of an earlier run stay in their folder, which a new group never reads).
+  for (const file of [BUGS_FILE, PROGRESS_BUGS_FILE, FUN_BUGS_FILE, WEAR_BUGS_FILE]) {
+    rmSync(file, { force: true });
+    rmSync(file.replace(/\.jsonl$/, ""), { recursive: true, force: true });
+  }
   seed(QUESTS_FILE, { version: 1, quests: QUEST_POOL });
   rmSync(PROGRESS_FILE, { force: true });
 }
@@ -136,6 +149,7 @@ export default defineConfig({
         AGENTLIFE_INVENTORY_FILE: INVENTORY_FILE,
         AGENTLIFE_WARDROBE_FILE: WARDROBE_FILE,
         AGENTLIFE_OUTFITS_FILE: OUTFITS_FILE,
+        AGENTLIFE_BUGS_FILE: BUGS_FILE,
         // The page is served from WEB_PORT, so the Origin check must allow it.
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`,
       },
@@ -159,6 +173,7 @@ export default defineConfig({
         AGENTLIFE_INVENTORY_FILE: PROGRESS_INVENTORY_FILE,
         AGENTLIFE_WARDROBE_FILE: PROGRESS_WARDROBE_FILE,
         AGENTLIFE_OUTFITS_FILE: PROGRESS_OUTFITS_FILE,
+        AGENTLIFE_BUGS_FILE: PROGRESS_BUGS_FILE,
         AGENTLIFE_PROGRESS_FILE: PROGRESS_FILE,
         AGENTLIFE_QUESTS_FILE: QUESTS_FILE,
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${PROGRESS_WEB_PORT},http://localhost:${PROGRESS_WEB_PORT}`,
@@ -183,6 +198,7 @@ export default defineConfig({
         AGENTLIFE_INVENTORY_FILE: FUN_INVENTORY_FILE,
         AGENTLIFE_WARDROBE_FILE: FUN_WARDROBE_FILE,
         AGENTLIFE_OUTFITS_FILE: FUN_OUTFITS_FILE,
+        AGENTLIFE_BUGS_FILE: FUN_BUGS_FILE,
         AGENTLIFE_WISP_MS: "300,500",
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${FUN_WEB_PORT},http://localhost:${FUN_WEB_PORT}`,
       },
@@ -207,6 +223,7 @@ export default defineConfig({
         AGENTLIFE_INVENTORY_FILE: WEAR_INVENTORY_FILE,
         AGENTLIFE_WARDROBE_FILE: WEAR_WARDROBE_FILE,
         AGENTLIFE_OUTFITS_FILE: WEAR_OUTFITS_FILE,
+        AGENTLIFE_BUGS_FILE: WEAR_BUGS_FILE,
         WORLD_ALLOWED_ORIGINS: `http://127.0.0.1:${WEAR_WEB_PORT},http://localhost:${WEAR_WEB_PORT}`,
       },
       reuseExistingServer: !process.env["CI"],

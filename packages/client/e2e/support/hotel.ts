@@ -6,6 +6,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BugGroup } from "@agentlife/shared";
+import { serializeBugFile } from "@agentlife/shared/bugs-node";
 
 /** The address the client was built with by the Vite server of the main test server (`playwright.config.ts`). */
 const BUILT_IN_WORLD_URL = /^ws:\/\/127\.0\.0\.1:8795\/?$/;
@@ -94,6 +96,8 @@ export interface HotelSeed {
   noWisps?: boolean;
   /** The progress clock fixed at this time (epoch ms): the day that picks the quests is the same on every run. */
   progressNow?: number;
+  /** Groups the Bug sack holds when the hotel starts (the visual comparisons need entries with fixed times). */
+  bugs?: readonly BugGroup[];
 }
 
 /**
@@ -116,6 +120,8 @@ export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
     seed("inventory", { version: 1, stock: {}, placed, seq }),
     seed("wardrobe", { version: 1, owned: [] }),
     seed("quests", { version: 1, quests: QUEST_POOL }),
+    // The Bug sack's file: empty unless the test seeds groups. Its screenshots go in the folder next to it.
+    writeFile(join(dir, "bugs.jsonl"), serializeBugFile([...(options.bugs ?? [])], 0), "utf8"),
   ]);
 
   const port = await freePort();
@@ -137,6 +143,7 @@ export async function startHotel(options: HotelSeed = {}): Promise<Hotel> {
       AGENTLIFE_OUTFITS_FILE: file("outfits"),
       AGENTLIFE_PROGRESS_FILE: file("progress"),
       AGENTLIFE_QUESTS_FILE: file("quests"),
+      AGENTLIFE_BUGS_FILE: join(dir, "bugs.jsonl"),
     ...(options.progressNow ? { AGENTLIFE_PROGRESS_NOW: String(options.progressNow) } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],

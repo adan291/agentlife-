@@ -3,7 +3,7 @@ import type { ViewMode } from "./view-mode.ts";
 /** Width below which the controls of the top bar's collapsible group move into the Menu. The side bar collapses at the same width. */
 export const BREAK_MENU_PX = 900;
 
-export type MenuItemId = "view" | "edit" | "profile" | "commands" | "zoom" | "text-smaller" | "text-larger" | "help";
+export type MenuItemId = "view" | "edit" | "profile" | "commands" | "bugs" | "report-bug" | "zoom" | "text-smaller" | "text-larger" | "help";
 
 /** An entry of a dropdown. The Menu of the top bar uses `MenuItemId`; the Actions menu has its own ids. */
 export interface MenuItem<Id extends string = MenuItemId> {
@@ -31,6 +31,8 @@ export interface MenuState {
   balance: number | null;
   /** "Lv 3", or null when there is no progress. */
   level: string | null;
+  /** Open bugs in the Bug sack, or null when there is none (the recorded demo, a server without one): the two bug items are left out. */
+  bugs?: number | null;
   fontMin: boolean;
   fontMax: boolean;
 }
@@ -61,6 +63,10 @@ export function menuItems(s: MenuState): MenuItem[] {
     last.separatorAfter = true;
   }
   items.push({ id: "commands", label: "Commands", shortcut: "Ctrl+K" });
+  if (s.bugs !== undefined && s.bugs !== null) {
+    items.push({ id: "bugs", label: s.bugs > 0 ? `Bugs (${s.bugs})` : "Bugs", note: "Open the Bug sack" });
+    items.push({ id: "report-bug", label: "Report a bug", shortcut: "F8" });
+  }
   const other = s.zoom === 1 ? 2 : 1;
   items.push({ id: "zoom", label: `Zoom ${s.zoom}×`, shortcut: "Z", note: `Switch to ${other}×` });
   items.push({ id: "text-smaller", label: "Text smaller", ...(s.fontMin ? { disabled: true } : {}) });
@@ -91,6 +97,13 @@ export function editButtonState(live: boolean, available: boolean, active: boole
 /** Whether a key press is the edit shortcut: `E` on its own, not inside a text field and not with Ctrl, Alt or Meta. */
 export function isEditKey(e: { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; target?: unknown; repeat?: boolean }, inField: (t: unknown) => boolean): boolean {
   if (e.key !== "e" && e.key !== "E") return false;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return false;
+  return !inField(e.target);
+}
+
+/** Whether a key press is the bug report shortcut: F8 on its own, outside text fields. */
+export function isBugKey(e: { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; target?: unknown; repeat?: boolean }, inField: (t: unknown) => boolean): boolean {
+  if (e.key !== "F8") return false;
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return false;
   return !inField(e.target);
 }

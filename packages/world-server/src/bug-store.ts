@@ -1,11 +1,14 @@
-import { existsSync, renameSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
+  BUG_COPY_GROUPS_MAX,
   BUG_DRAIN_MS,
   BUG_SAVE_DEBOUNCE_MS,
   BUG_SHOT_MAX_BYTES,
   BugBook,
   bugSummary,
+  groupsToMarkdown,
+  type BugComponent,
   type BugContext,
   type BugGroup,
   type BugInput,
@@ -98,6 +101,32 @@ export class BugStore {
 
   openCount(): BugOpenCount {
     return this.book.openCount();
+  }
+
+  /** The PNG of a sample, or undefined when the sample is not kept, has no screenshot, or the file is gone. */
+  readScreenshot(sampleId: string): Uint8Array | undefined {
+    const known = this.book.all().some((g) => g.samples.some((s) => s.id === sampleId && s.shot));
+    if (!known) return undefined;
+    try {
+      return readFileSync(this.screenshotPath(sampleId));
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Markdown for "Copy for Kiro": one group, or the open groups of a component (newest first, at most `BUG_COPY_GROUPS_MAX`).
+   * Undefined when the group does not exist.
+   */
+  exportMarkdown(what: { id: string } | { component: BugComponent }): { text: string; count: number } | undefined {
+    if ("id" in what) {
+      const group = this.book.get(what.id);
+      return group ? { text: groupsToMarkdown([group], "Bug"), count: 1 } : undefined;
+    }
+    const open = this.book.list({ component: what.component, status: "open" });
+    const shown = open.slice(0, BUG_COPY_GROUPS_MAX);
+    const title = open.length > shown.length ? `Open ${what.component} bugs, newest ${shown.length} of ${open.length}` : `Open ${what.component} bugs`;
+    return { text: groupsToMarkdown(shown, title), count: shown.length };
   }
 
   onChange(listener: (change: BugChange) => void): () => void {

@@ -64,6 +64,7 @@ import type {
 import type { EngineLink, StartJobOptions } from "./engine-link.ts";
 import type { LayoutStore } from "./layout-store.ts";
 import type { BugStore } from "./bug-store.ts";
+import { ShotUpload } from "./bug-upload.ts";
 import { checkOrigin, normalizeOrigin, parseAllowedOrigins } from "./origin.ts";
 import { floorStatusOf, overviewOf } from "./overview.ts";
 import type { Economy, UnlockedPart } from "./economy-store.ts";
@@ -136,7 +137,7 @@ export interface GatewayOptions {
    * The Bug sack (spec bug-sack). Without it a `bug_report` is answered with `bug_error` and an error in the gateway is
    * only swallowed as before. `main.ts` passes one only for the real engine or when `AGENTLIFE_BUGS_FILE` is set.
    */
-  bugs?: Pick<BugStore, "record" | "recordError" | "setStatus" | "get" | "summaries" | "openCount">;
+  bugs?: Pick<BugStore, "record" | "recordError" | "setStatus" | "get" | "summaries" | "openCount" | "readScreenshot" | "exportMarkdown" | "onChange">;
 }
 
 export interface Gateway {
@@ -429,23 +430,52 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     send(ws, { type: "bugs", groups: bugs.summaries(), open: bugs.openCount() });
   };
   /** A report from the browser. The server decides who it came from: a client cannot claim to be the engine. */
-  const saveBugReport = (ws: WebSocket, msg: Extract<ClientMsg, { type: "bug_report" }>, bytes: number, window: SlidingWindow): void => {
+  const saveBugReport = (ws: WebSocket, msg: Extract<ClientMsg, { type: "bug_report" }>, bytes: number, window: SlidingWindow, shots: ShotUpload): void => {
     if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
     if (bytes > BUG_REPORT_BYTES) return sendError(ws, "bug_error", "That bug report is too big.");
     if (!window.take()) return sendError(ws, "bug_error", "Too many bug reports; try again in a minute.");
     const floor = msg.floor ?? userRoom();
-    const result = bugs.record({
-      component: "game",
-      process: "client",
-      kind: msg.kind,
-      message: msg.message,
-      ...(msg.stack ? { stack: msg.stack } : {}),
-      ...(msg.note ? { note: msg.note } : {}),
-      context: { ...(floor ? { floor } : {}), ...(msg.panel ? { panel: msg.panel } : {}), ...(msg.view ? { view: msg.view } : {}) },
-      ...(msg.clientTime === undefined ? {} : { clientTime: msg.clientTime }),
-    });
+    // The screenshot was uploaded before the report; without it the report is still kept.
+    const screenshot = msg.upload ? shots.take(msg.upload) : undefined;
+    const result = bugs.record(
+      {
+        component: "game",
+        process: "client",
+        kind: msg.kind,
+        message: msg.message,
+        ...(msg.stack ? { stack: msg.stack } : {}),
+        ...(msg.note ? { note: msg.note } : {}),
+        context: { ...(floor ? { floor } : {}), ...(msg.panel ? { panel: msg.panel } : {}), ...(msg.view ? { view: msg.view } : {}) },
+        ...(msg.clientTime === undefined ? {} : { clientTime: msg.clientTime }),
+      },
+      screenshot ? { screenshot } : {},
+    );
     send(ws, { type: "bug_saved", id: result.group.id, count: result.group.count });
   };
+  const takeBugUpload = (ws: WebSocket, msg: Extract<ClientMsg, { type: "bug_upload" }>, shots: ShotUpload): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    const problem = shots.push(msg);
+    if (problem) sendError(ws, "bug_error", problem);
+  };
+  const sendBugShot = (ws: WebSocket, sample: string): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    const png = bugs.readScreenshot(sample);
+    if (!png) return sendError(ws, "bug_error", "That screenshot is not kept any more.");
+    send(ws, { type: "bug_shot", sample, png: Buffer.from(png).toString("base64") });
+  };
+  const sendBugText = (ws: WebSocket, msg: Extract<ClientMsg, { type: "bug_copy" }>): void => {
+    if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
+    const made = bugs.exportMarkdown(msg.id !== undefined ? { id: msg.id } : { component: msg.component ?? "game" });
+    if (!made) return sendError(ws, "bug_error", "No such bug.");
+    send(ws, { type: "bug_text", text: made.text, count: made.count });
+  };
+  /** The user's client hears about every change at once, so the Menu count and the dot stay right. */
+  const stopBugNews = bugs
+    ? bugs.onChange((change) => {
+        if (!current) return;
+        send(current.ws, { type: "bug_news", open: bugs.openCount(), change: change.kind, id: change.group.id });
+      })
+    : undefined;
   const sendBugDetail = (ws: WebSocket, id: string): void => {
     if (!bugs) return sendError(ws, "bug_error", BUGS_OFF);
     const group = bugs.get(id);
@@ -881,6 +911,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     } else if (panel === "shop") {
       sendShop(ws);
       sendWardrobe(ws);
+    } else if (panel === "bugs") {
+      sendBugs(ws);
     }
   };
 
@@ -896,6 +928,8 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     const lines = f?.activity ?? [];
     send(ws, { ...welcome, agents, ...(models ? { models } : {}), ...(lines.length > 0 ? { activity: [...lines] } : {}) });
     if (economy) send(ws, { type: "wallet", balance: economy.balance });
+    // The Bug sack tells the client it exists (the Menu item and the count) as soon as the connection starts.
+    if (bugs) send(ws, { type: "bug_news", open: bugs.openCount(), change: "state" });
     welcomeWardrobe(ws);
     if (progress) send(ws, { type: "progress", state: progress.view() });
     // The mood of the desk agents of a project floor, for the tags over their heads and their tooltips.
@@ -1808,6 +1842,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
 
     const bucket = new TokenBucket(MAX_MESSAGES_PER_SECOND, clock);
     const bugWindow = new SlidingWindow(BUG_RATE_PER_MINUTE, 60_000, clock);
+    const bugShots = new ShotUpload(clock);
 
     ws.on("message", (data: RawData, isBinary: boolean) => {
       if (!bucket.take()) return sendError(ws, "rate_limited", "too many messages");
@@ -1914,7 +1949,13 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       } else if (msg.type === "wisp_catch") {
         catchWisp(ws, msg.wispId);
       } else if (msg.type === "bug_report") {
-        saveBugReport(ws, msg, Buffer.byteLength(rawToString(data)), bugWindow);
+        saveBugReport(ws, msg, Buffer.byteLength(rawToString(data)), bugWindow, bugShots);
+      } else if (msg.type === "bug_upload") {
+        takeBugUpload(ws, msg, bugShots);
+      } else if (msg.type === "bug_shot_get") {
+        sendBugShot(ws, msg.sample);
+      } else if (msg.type === "bug_copy") {
+        sendBugText(ws, msg);
       } else if (msg.type === "bugs_state") {
         sendBugs(ws);
       } else if (msg.type === "bug_get") {
@@ -1949,6 +1990,7 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
           new Promise<void>((done) => {
             clearInterval(tick);
             clearInterval(nightPoll);
+            stopBugNews?.();
             clearTimeout(overviewTimer);
             clearTimeout(wispTimer);
             clearTimeout(wispExpiry);

@@ -759,6 +759,42 @@ const shopCounter: Recipe = (g, c) => {
   ]);
 };
 
+/**
+ * The bug jar in the lobby (bug-sack): a glass jar with a brass lid, a label, and a few small ghost bugs inside. It stays the
+ * same in every facing (it is round to the eye), and it is read as "the place where the hotel keeps its errors".
+ */
+const bugJar: Recipe = (g) => {
+  drawBoxes(g, [
+    piece(around(0, 0, 0.27), 0, 0.22, C.stoneDark),
+    piece(around(0, 0, 0.21), 0.22, 2.2, C.glassDark),
+    piece(around(0, 0, 0.24), 2.2, 2.5, C.brass),
+    piece(around(0, 0, 0.05), 2.5, 2.7, C.brass),
+  ]);
+  // The lit glass on the two faces the camera sees, so the jar reads as glass and not as a dark block.
+  fillPoly(g, [P(-0.21, 0.21, 0.4), P(0.21, 0.21, 0.4), P(0.21, 0.21, 2.1), P(-0.21, 0.21, 2.1)], C.glass, 0.3);
+  fillPoly(g, [P(0.21, -0.21, 0.4), P(0.21, 0.21, 0.4), P(0.21, 0.21, 2.1), P(0.21, -0.21, 2.1)], C.glass, 0.16);
+  // A paper label on the south face.
+  fillPoly(g, [P(-0.12, 0.215, 0.5), P(0.12, 0.215, 0.5), P(0.12, 0.215, 0.95), P(-0.12, 0.215, 0.95)], C.parchment);
+  fillPoly(g, [P(-0.07, 0.22, 0.68), P(0.07, 0.22, 0.68), P(0.07, 0.22, 0.74), P(-0.07, 0.22, 0.74)], C.lava);
+  // Three ghost bugs in the jar: a rounded head, a wavy hem, two eyes and two feelers.
+  const [cx, cy] = P(0, 0, 1.0);
+  const bug = (dx: number, dy: number, body: number): void => {
+    const x = cx + dx;
+    const y = cy + dy;
+    g.moveTo(x - 1.5, y - 6).lineTo(x - 3, y - 9).stroke({ color: body, width: 1 });
+    g.moveTo(x + 1.5, y - 6).lineTo(x + 3, y - 9).stroke({ color: body, width: 1 });
+    g.circle(x, y - 2.5, 3.4).fill(body);
+    g.rect(x - 3.4, y - 2.5, 6.8, 4).fill(body);
+    for (const hx of [-2.4, 0, 2.4]) g.circle(x + hx, y + 1.5, 1.2).fill(body);
+    g.circle(x - 1.3, y - 2.8, 0.9).fill(C.ink);
+    g.circle(x + 1.3, y - 2.8, 0.9).fill(C.ink);
+  };
+  bug(-3, 2, C.web);
+  bug(3, -5, C.screen);
+  bug(-2, -12, C.lava);
+  g.rect(cx - 7, cy - 24, 2, 9).fill({ color: C.glass, alpha: 0.5 });
+};
+
 export const RECIPES: Readonly<Record<string, Recipe>> = {
   computer_desk: desk(C.deskArchitect),
   agent_desk: desk(C.wood),
@@ -781,6 +817,7 @@ export const RECIPES: Readonly<Record<string, Recipe>> = {
   jack_o_lantern_lamp: jackOLanternLamp,
   cobweb,
   shop_counter: shopCounter,
+  bug_jar: bugJar,
   armchair,
   bench,
   beanbag,
