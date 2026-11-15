@@ -1,4 +1,4 @@
-﻿# Status
+# Status
 
 Updated: 2026-11-15 (bug-sack tasks 1-2 done on branch feat/bug-sack, not merged; rows 1-16 are in main)
 
@@ -20,14 +20,13 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-15 (IDE): user: clicking to move sometimes made the avatar go back. Cause: a new walk started from the last whole tile, while the avatar was drawn halfway into the next one. Fixed in `WorldSim.walkTo` (finish the current step, keep its start time), with a fast-check property. While testing, a visual baseline failed only because the run was after midnight (toast "Night owl", a badge that depends on the hour): toasts are now masked in the screenshots, baselines rewritten. `pnpm check`, e2e 144/144, e2e:demo pass.
 - 2026-11-15 (IDE): user asked for a BugSack / BugGrabber like in games, with a Game part (visual) and a Code part, where errors are kept and can be read any time. Spec bug-sack (grabbers in client, world-server, engine, conductor; F8 Report a bug with a screenshot; lobby bug jar and Bug sack panel with Game and Code tabs, Fixed/Ignored, Copy for Kiro; data/bugs.jsonl through the leak scanner), TASKMAP row 17, sessions S40-S41. Before the user's test round. Hotel stopped; conductor started (log data/sessions/conduct-run14.txt).
 - 2026-11-15 (IDE): task 2 of bug-sack done (S41 work): client grabber, Report a bug, panel, jar drawn in code, screenshot upload in pieces (D18). `pnpm check`, e2e 164/164 with Edge and `--retries=1`, e2e:demo and check:demo-build pass; 29 baselines written or rewritten (lobby, menus, bug screens). Security scan not clean (see Open problems). Pending: merge and the user's look.
-- 2026-11-15 (IDE): bug-sack PASS (manual verification after the verifier ran out of credits). Scan findings: stack-frame literals (name@file.ts) accepted in security-allow.json; one in unpushed history accepted too (commit ce41039). Visual baseline for mailbox-report rewritten twice (a badge toast appeared at different hours). 164 e2e passed, 1 flaky. Merged. Next: arranco el hotel para las pruebas del usuario; los bugs que salgan quedan en el Bug sack.
+- 2026-11-15 (IDE): user said "revisa si queda algo y preparemos para la entrega". README rewritten with the full feature list. STATUS Next updated. TASKMAP bug-sack marked needs-check. `pnpm check` and security scan pass; pushed. Hotel running for the user's test round.
 
 ## Next
-1. Review and merge `feat/bug-sack`; then the user looks at the Bug sack in a browser (jar, Menu, F8, panel) with the real engine.
-2. With the user: the short "Needs a human" list in docs/HUMAN-CHECKS.md, using the hotel with DiscordIA; Kiro fixes what comes up (the regression suite runs on every merge).
-3. final-demo: re-record the replay with several floors and the game layer, README, video script, Devpost. Freeze 2026-12-01, submit by 2026-12-03.
-4. After the submission: docs/roadmap-after-kiroween.md (Tickets room, Jira first).
-5. Flaky: journeys.spec.ts "one run through the hotel" at 360x640 failed once and passed on the retry (conductor run 13).
+1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.
+2. final-demo: re-record the replay with several floors and the game layer, video script, Devpost. Freeze 2026-12-01, submit by 2026-12-03.
+3. After submission: docs/roadmap-after-kiroween.md (Tickets room, Jira first).
+4. Flaky to watch: journeys.spec.ts at 360x640 (conductor run 13); mailbox-report visual at 800x600 (badge toast, baselines rewritten 2026-11-15).
 
 ## Specs
 | Spec | Tasks | State | Notes |

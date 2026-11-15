@@ -1,26 +1,42 @@
 # AGENT LIFE
 
-AGENT LIFE is an isometric virtual hotel whose residents are real AI agents. Click the computer, describe a change, and watch an Architect, a Developer and a QA agent plan it, write it in an isolated worktree, run the tests in Docker, and review the result. The report arrives in the mailbox.
+AGENT LIFE is an isometric virtual hotel whose residents are real AI agents doing verifiable software work. Register a git project, describe a change, and watch an Architect, a Developer and a QA agent plan it, write it in an isolated worktree, run the tests in Docker, and deliver the result as a branch. The report arrives in the mailbox.
 
-Kiroween 2026 entry, category: **Resurrection**.
+Kiroween 2026 entry — category: **Resurrection**.
 
 ## Demo
 
 **Live demo:** https://adan291.github.io/agentlife-/
 
-The demo runs in the browser with no backend. It replays a real run that was recorded from the agent engine (`packages/client/public/demo/run-001.json`): an Architect plan, a Developer diff, the test log and a QA review. A banner marks it as a replay, and the speed buttons offer 1×, 4× and 16×. Approve the plan in the mailbox to continue the replay.
+The demo runs in the browser with no backend. It replays a recorded real run: an Architect plan, a Developer diff, the test log and a QA review. Approve the plan in the mailbox to continue. Speed buttons: 1×, 4×, 16×.
+
+## What the hotel has
+
+- **Lobby** with a Reception (register projects under `D:\AgentHotel`), a shop counter, a construction board (TASKMAP live from the conductor) and an elevator with floor status.
+- **A floor per project.** Each team has an Architect desk, a Developer desk and a QA desk, plus up to six standing spots for extra members (reviewer, researcher, intern). The stepper, the team bar, the terminal and the mailbox scope to the floor.
+- **Job kinds:** change (default), review a branch, write tests, document, audit dependencies, plus a night-shift scheduler with pre-approved scoped changes and a morning summary.
+- **HR office.** Hire, rename, change model and fire from a catalogue of 11 templates. Import external agent personas from an allowlisted URL (reviewed before they can be hired). An Ollama intern works for free.
+- **Pipeline editor.** Choose the roles and the optional research and second-review steps per project.
+- **Library.** After a job the librarian (Ollama first, then Kiro) proposes notes; accepted ones go into the next job's prompts.
+- **List view and command palette.** `L` and `Ctrl+K` let you act on any floor without walking to the elevator.
+- **Housing and game layer.**
+  - *Ecto* is earned only from verified work (a passed job, a delivered branch, a note kept). Spend it in the shop on furniture and outfits.
+  - *Outfits* (hat, top, accessory) for every ghost and the user avatar, bought or unlocked by badges, worn from the HR desk or the Profile.
+  - *XP, levels and badges* from real stats (jobs, pass rate, average step time). Badges: First delivery, Ten deliveries, Night owl, Librarian, Clean streak and more.
+  - *Daily quests* from real work: approve a plan, deliver a branch, accept a note.
+  - *Edit room.* Move and rotate furniture on any floor; the server checks every move for reachability.
+  - *Wisps* to catch while jobs run, emotes (keys 1–4) and a coffee machine for tired agents.
+- **Bug sack.** Every unhandled error (browser, PixiJS, world-server, agent-engine, Docker, conductor) is grouped and kept in `data/bugs.jsonl`. F8 or Menu → "Report a bug" saves a note with a screenshot. The panel has Game and Code tabs, Fixed / Ignored status and "Copy for Kiro".
 
 ## What happens in a job
 
-1. **Computer**: choose the repository (from an allowlist) and write a goal.
-2. **Architect** (read-only) reads the repository and proposes a plan with tasks.
-3. **You** approve or reject the plan in the mailbox. Nothing changes before approval.
-4. **Developer** edits files inside its own git worktree. It has no shell and no network tools.
-5. The **engine** checks the diff (paths inside the worktree, no binaries, size limit), then runs the target repository's tests in a Docker container with no network and CPU, memory and time limits.
-6. **QA** (read-only) reviews the diff and the test log.
-7. The **report** is delivered to the mailbox. The **board** shows the job timeline.
-
-The model never runs the tests. The engine decides pass or fail from the container exit code.
+1. **Computer**: choose the project and write a goal.
+2. **Architect** reads the repository and proposes a plan.
+3. **You** approve or reject the plan in the mailbox. Nothing is written before approval.
+4. **Developer** edits files in its own git worktree. No shell, no network.
+5. The **engine** validates the diff, then runs the project's tests in a Docker container with `--network none`, CPU, memory and time limits, and a non-root user.
+6. **QA** reviews the diff and the test log.
+7. The **report** arrives in the mailbox. Press "Deliver as branch" to get a new branch in your repository. Your working copy is never touched.
 
 ## Architecture
 
@@ -29,57 +45,64 @@ flowchart LR
     Client["packages/client<br/>Vite + PixiJS<br/>live or replay"] -- "WebSocket" --> WS["packages/world-server<br/>room state, gateway"]
     WS -- "HTTP commands<br/>SSE events" --> Engine["packages/agent-engine<br/>job state machine<br/>SQLite event log"]
     Engine -- "kiro-cli --v3" --> Agents["Architect, Developer, QA<br/>(headless Kiro agents)"]
-    Engine -- "docker run --network none" --> Runner["Test container<br/>(fixture repository)"]
+    Engine -- "docker run --network none" --> Runner["Test container<br/>(project image)"]
     Demo["Demo build<br/>VITE_MODE=demo"] -. "replays run-001.json<br/>no network" .-> Client
 ```
 
 | Path | What |
 |---|---|
-| `packages/shared` | Protocol and event schemas (zod), isometric geometry |
-| `packages/client` | Vite + PixiJS front end, live transport and replay transport |
-| `packages/world-server` | Room state, WebSocket gateway, forwards commands to the engine |
-| `packages/agent-engine` | Job state machine, `kiro-cli` runtime, diff checks, Docker test runner |
-| `fixtures/repos/haunted-todo` | The allowlisted test repository used by the jobs |
+| `packages/shared` | Protocol and event schemas (zod), geometry, game rules |
+| `packages/client` | Vite + PixiJS front end, live and replay transports |
+| `packages/world-server` | Room state, WebSocket gateway, economy, progress, bugs |
+| `packages/agent-engine` | Job state machine, `kiro-cli` runtime, diff validation, Docker runner |
+| `config/` | Allowed project roots, catalogue, economy, outfits, badges, quests, pipelines |
 | `docs/` | Design decisions and the status log (mostly in Spanish) |
 | `.kiro/` | Kiro steering, specs, hooks and custom agents |
 
-The client talks only to the world-server. The world-server never calls a model. The engine speaks semantic anchors (`desk`, `board`, `computer`, `mailbox`) and knows nothing about tiles or sprites. Model providers sit behind the `AgentRuntime` interface.
+The client talks only to the world-server. The world-server never calls a model. Model providers sit behind the `AgentRuntime` interface; switching provider requires no change to the client or the world-server.
 
 ## Safety model
 
-- Repositories come from an allowlist. No arbitrary URLs.
+- Projects come from `D:\AgentHotel` only (configurable in `config/hotel.json`). No arbitrary URLs.
 - Architect and QA are read-only. Developer writes only inside its task worktree.
 - Agents never push, merge, open pull requests, or touch `.git`, CI files or env files. Kiro custom agents enforce this with `permissions.rules`.
-- The engine validates every diff before any other step uses it.
-- Tests run only in Docker with `--network none`, read-only source mounts, a non-root user, and CPU, memory and time limits.
-- Repository contents and model output are untrusted data. They never become instructions to the engine.
-- Secrets (`KIRO_API_KEY`, tokens) come from environment variables or a git-ignored `.env`. They are never logged or sent to the client.
-- The publishing gate: `pnpm security:scan` must report no high or medium findings before anything leaves the machine. A Kiro hook and a git pre-push hook enforce it.
+- The engine validates every diff (paths, no binaries, size limit) before any other step uses it.
+- Tests run only in Docker with `--network none`, a read-only source mount, a non-root user, and CPU, memory and time limits.
+- Repository contents and model output are untrusted data, never instructions to the engine.
+- Secrets (`KIRO_API_KEY`, tokens) come from environment variables or a git-ignored `.env`. Never logged or sent to the client.
+- Publishing gate: `pnpm security:scan` must report no high or medium findings before anything leaves the machine. A Kiro hook and a git pre-push hook enforce it.
 
 ## Run live mode
 
-Requirements: Node.js 22+, pnpm, and for real jobs Docker Desktop and a `KIRO_API_KEY` with a Kiro plan that allows headless use.
+Requirements: Node.js 22+, pnpm 11+, Docker Desktop, a `KIRO_API_KEY` from a Kiro plan that allows headless use, and Ollama (optional, for the ambient phrases and the library intern).
 
 ```bash
 pnpm install
-pnpm check                                   # typecheck and tests
-pnpm --filter @agentlife/agent-engine runner:build   # test image, needed for real jobs
+pnpm check                                           # typecheck and tests
+pnpm --filter @agentlife/agent-engine runner:build   # build the test image (needed for real jobs)
 ```
 
-Open three terminals from the repository root:
+Create `D:\AgentHotel` and copy a small git project there. Then open three terminals:
 
-```bash
-# 1. Engine. Use RUNTIME=fake for scripted agents that need no Kiro credentials.
-pnpm --filter @agentlife/agent-engine start
+```powershell
+# 1. Engine
+cd packages\agent-engine
+$env:KIRO_API_KEY = "..."          # or put it in .env
+$env:LLM_BASE_URL = "http://127.0.0.1:11434/v1"   # Ollama (optional)
+$env:LLM_MODEL    = "qwen3.5:4b"                   # Ollama model (optional)
+node --experimental-strip-types --no-warnings src/main.ts   # port 8788
 
-# 2. World server (PowerShell: $env:ENGINE='http')
-ENGINE=http pnpm --filter @agentlife/world-server start
+# 2. World-server (start after the engine)
+$env:ENGINE = "http"
+node --experimental-strip-types --no-warnings packages/world-server/src/main.ts   # port 8787
 
-# 3. Client, then open http://localhost:5173/
-pnpm --filter @agentlife/client dev
+# 3. Client
+pnpm --filter @agentlife/client dev    # open http://localhost:5173/
 ```
 
-To play the recorded run without the engine, open http://localhost:5173/?mode=demo after starting only the client.
+Use `$env:RUNTIME='fake'` for the engine to run with scripted agents that need no credentials.
+
+To play the recorded run without the engine, open `http://localhost:5173/?mode=demo` after starting only the client.
 
 ## Build the demo
 
@@ -88,22 +111,26 @@ VITE_MODE=demo pnpm --filter @agentlife/client build --base=/agentlife-/
 pnpm --filter @agentlife/client check:demo-build   # fails if the build references a live endpoint
 ```
 
-The `pages.yml` workflow runs the checks, the Playwright smoke test (`pnpm --filter @agentlife/client e2e:demo`) and deploys the build to GitHub Pages on every push to `main`.
+The `pages.yml` workflow builds and deploys to GitHub Pages on every push to `main`.
 
 ## Tests
 
 ```bash
-pnpm check                                          # typecheck and unit tests of every package
-pnpm --filter @agentlife/client e2e                 # the browser suite (Playwright, scripted engine, scratch data files)
-pnpm --filter @agentlife/client e2e:update-visuals  # rewrite the screenshot baselines of this platform on purpose
+pnpm check                                          # typecheck and unit tests (all packages)
+$env:E2E_CHANNEL='msedge'                           # Windows: use installed Edge
+pnpm --filter @agentlife/client e2e                 # browser suite (Playwright, scripted engine)
+pnpm --filter @agentlife/client e2e:update-visuals  # rewrite screenshot baselines for this platform
 pnpm --filter @agentlife/client e2e:demo            # smoke test of the demo build
+pnpm run bugs                                       # list open bug groups from data/bugs.jsonl
 ```
 
-The browser suite has user journeys through the hotel, layout and interface rules checked on every screen at 360x640, 800x600 and 1366x768, and screenshot comparisons. It starts its own servers on ports 8795 to 8798 and 5196 to 5199 and writes only scratch files in the temp folder, never the hotel's `data/`. Stop any server left on those ports before a run. On Windows set `E2E_CHANNEL=msedge` (PowerShell: `$env:E2E_CHANNEL='msedge'`) to use the installed Edge; elsewhere run `pnpm --filter @agentlife/client exec playwright install chromium` once. A failed run keeps its report in `packages/client/playwright-report` (`pnpm --filter @agentlife/client exec playwright show-report`), with the expected, actual and diff images of a failed screenshot.
+The browser suite (164 tests) has user journeys through the whole hotel, layout and interface rules at 360×640, 800×600 and 1366×768, and 127 screenshot comparisons. It starts its own servers and writes only scratch files; it never touches the hotel's `data/`.
 
-Screenshot baselines are in `packages/client/e2e/__visuals__/<platform>/`. A platform without a folder skips the screenshot comparisons and says so. Review the PNG diff in the commit after `e2e:update-visuals`.
+Stop any server on ports 8795–8798 or 5196–5199 before a run. On Linux run `pnpm --filter @agentlife/client exec playwright install chromium` once.
 
-The conductor (`pnpm conduct`) runs the whole browser suite and `e2e:demo` on `main` after every merge and stops if one fails; a test that fails and passes on one immediate retry is written to `data/sessions/log.md` as flaky. CI runs the suite on Linux and Windows on every push and pull request, without the screenshot comparisons, and keeps the Playwright report as an artifact when it fails.
+Screenshot baselines live in `packages/client/e2e/__visuals__/<platform>/`. A platform without a folder skips comparisons. After `e2e:update-visuals` review the PNG diff in the commit. A failed run keeps its report at `packages/client/playwright-report/`.
+
+The conductor (`pnpm conduct`) runs the browser suite and `e2e:demo` after every spec merge. CI runs the suite on Linux and Windows on every push, without screenshot comparisons, and keeps the report on failure.
 
 ## Assets and attribution
 
