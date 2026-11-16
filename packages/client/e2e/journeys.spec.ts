@@ -109,7 +109,8 @@ for (const size of SIZES) {
       const START = 500;
       const FERN = 14;
       const CAP = 40;
-      expect(await balance(page)).toBe(START);
+      // balance() reads from the DOM so it may still show the old value if the wallet update races the page render.
+      await expect.poll(() => balance(page)).toBe(START);
 
       // The shop counter: buy a fern and the flat cap; the balance falls by the prices.
       const counter = await tilePoint(page, "lobby", 4, 4);

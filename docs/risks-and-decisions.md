@@ -69,6 +69,7 @@
 
 - **Decisión:** la revisión de inyección de prompts de una plantilla importada la hace `agentlife-import-review`, un agente con el tier `read-only`, ejecutado en un directorio vacío (`team/service-agents.ts`, `team/import-review.ts`). El requisito 3.3 decía `agentlife-security`; se actualizó el requisito.
 - **Por qué:** `agentlife-security` puede escribir en `data/security` y ejecutar git, y no debe recibir texto de internet. Con el tier de solo lectura, un texto malicioso no puede producir efectos aunque engañe al revisor.
+- **Ratificado por el usuario (2026-11-16).**
 - **Compromiso:** hay dos agentes de seguridad que mantener. Además de la revisión del agente, el motor aplica patrones fijos de inyección, topes de tamaño y el escáner de secretos.
 - **Pendiente del usuario:** ratificar este cambio (se tomó durante la implementación sin consultarlo). Si prefiere el agente original, hay que dar a `agentlife-security` un tier de solo lectura para esta tarea.
 

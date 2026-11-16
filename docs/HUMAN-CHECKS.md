@@ -17,7 +17,7 @@ Tick an item when checked; tell Kiro about anything that fails.
 - [ ] Edit room look: the green and red overlay, the cross, the selected outline, the standing-spot dots, a wall piece turned on the north and west walls, the room the "Editing" banner takes at a small height.
 - [ ] A floor with a full team (six ghosts): overlapping name tags, the spots beside the QA desk, a hire walking in and a fired member walking out.
 - [ ] The recorded demo at the public URL: elevator to the lobby and back, no Edit room button, the default look, no levels.
-- [ ] Decisions for you: hr-desk D10 (import review by `agentlife-import-review`); three outfit slots, so a ghost wears the neckerchief or the carnation, not both; the HR ghost and the Builder cannot be dressed; a hotel with the plain scripted engine and no wallet file has no wisps; waiting-fun and furni-move are "first to cut if late"; regression-suite: CI skips the visual comparisons, four bug fixes in product code (design.md "Bugs found"), and the Construction board is not compared at 360x640 (it lies outside the stage and no command opens it).
+- [x] Decision D10 ratified (2026-11-16): import review uses `agentlife-import-review` (read-only tier). Remaining: three outfit slots, so a ghost wears the neckerchief or the carnation, not both; the HR ghost and the Builder cannot be dressed; a hotel with the plain scripted engine and no wallet file has no wisps; waiting-fun and furni-move are "first to cut if late"; regression-suite: CI skips the visual comparisons, four bug fixes in product code (design.md "Bugs found"), and the Construction board is not compared at 360x640 (it lies outside the stage and no command opens it).
 
 ## Covered by tests (ticked)
 

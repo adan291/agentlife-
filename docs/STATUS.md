@@ -1,4 +1,4 @@
-# Status
+﻿# Status
 
 Updated: 2026-11-15 (bug-sack tasks 1-2 done on branch feat/bug-sack, not merged; rows 1-16 are in main)
 
@@ -21,6 +21,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-15 (IDE): user asked for a BugSack / BugGrabber like in games, with a Game part (visual) and a Code part, where errors are kept and can be read any time. Spec bug-sack (grabbers in client, world-server, engine, conductor; F8 Report a bug with a screenshot; lobby bug jar and Bug sack panel with Game and Code tabs, Fixed/Ignored, Copy for Kiro; data/bugs.jsonl through the leak scanner), TASKMAP row 17, sessions S40-S41. Before the user's test round. Hotel stopped; conductor started (log data/sessions/conduct-run14.txt).
 - 2026-11-15 (IDE): task 2 of bug-sack done (S41 work): client grabber, Report a bug, panel, jar drawn in code, screenshot upload in pieces (D18). `pnpm check`, e2e 164/164 with Edge and `--retries=1`, e2e:demo and check:demo-build pass; 29 baselines written or rewritten (lobby, menus, bug screens). Security scan not clean (see Open problems). Pending: merge and the user's look.
 - 2026-11-15 (IDE): user said "revisa si queda algo y preparemos para la entrega". README rewritten with the full feature list. STATUS Next updated. TASKMAP bug-sack marked needs-check. `pnpm check` and security scan pass; pushed. Hotel running for the user's test round.
+- 2026-11-16 (IDE): implemented all actionable items from the kiroween-review document: (1) D10 ratified — import review uses agentlife-import-review (read-only tier), recorded in risks-and-decisions.md, cleaned from STATUS and HUMAN-CHECKS; (2) journeys.spec.ts flaky at 360x640 fixed (synchronous balance() call changed to expect.poll, so a racing wallet update can no longer fail the assertion); (3) .env.example, ASSETS.md and video-script.md already done in the previous session. README, TASKMAP and STATUS already up to date. `pnpm check` and security scan pass. Next: re-record the replay and the video for final-demo.
 
 ## Next
 1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.
@@ -39,7 +40,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | build-board | 2 / 2 | main | Not looked at in a browser |
 | job-types | 4 / 4 | main | Review desk checked live; tests and docs kinds not run live |
 | night-shift | 4 / 4 | main | No live night yet |
-| hr-desk | 5 / 5 | main | D10 waits for the user's yes; Ollama intern not run live |
+| hr-desk | 5 / 5 | main | D10 ratified 2026-11-16; Ollama intern not run live |
 | project-memory | 3 / 3 | main | Librarian not run live |
 | list-mode | 3 / 3 | main | Used once by the user (Deliver button) |
 | pipeline-editor | 3 / 3 | main | Researcher and second review not run live |
@@ -58,7 +59,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - bug-sack: `pnpm bugs` as the requirement names it is a built-in pnpm command, so the script runs as `pnpm run bugs` (design.md "Terminal"). The user may want another name (for example `bugsack`). The scratch folder `data/tmp-smoke` (a smoke test of the world-server) could not be deleted by the session (git-ignored).
 - ui-tidy: a piece that is not selected and stands behind a taller one is picked by pressing on its drawing above the tile (design.md of ui-tidy). `pnpm check` failed once under load in two world-server timing tests (`fun-gateway`, `wisp-gateway`) and passed alone and on the second run.
 - Playwright's own Chromium is not installed on this machine. Run `$env:E2E_CHANNEL='msedge'` first to use the installed Edge. Not installed by a session (global tool).
-- hr-desk D10 (docs/risks-and-decisions.md): import review by the read-only `agentlife-import-review` instead of `agentlife-security`. Explained to the user twice; waiting for a yes.
+- hr-desk D10 (docs/risks-and-decisions.md): import review by the read-only `agentlife-import-review` â€” ratified by the user 2026-11-16.
 - Flaky tests seen once each: `pipeline-editor.spec.ts` "board shows the editor above the job card" (e2e timing; passes alone), `pnpm check` under load while the services restart.
 - Playwright config seeds scratch wallets, inventories, wardrobes and quest pools in the temp folder when the runner loads it (`agentlife-e2e-*.json`), and deletes the progress file of the second test server. With `reuseExistingServer` an already running test world-server keeps its own in-memory state, so stop the four test servers (ports 8795 to 8798) before a run that buys furniture or outfits or checks XP.
 - team-progress: the pass/fail of a job comes from the engine's `verdict:` reason and the failed state (same as Ecto); XP of a replayed step goes to whoever holds the desk now. The recorded demo shows no levels.
