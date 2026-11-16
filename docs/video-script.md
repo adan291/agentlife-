@@ -1,24 +1,30 @@
 # Video script (under 3 minutes)
 
-Target length: 2 min 40 s, so the cut stays under the 3-minute limit. Record the screen with the demo build and the live engine. Music must be CC0 or the author's own and listed in [ASSETS.md](../ASSETS.md).
+Target: 2 min 40 s. Record the screen with the live engine and DiscordIA (or the demo replay for the final cut). Music: CC0 or your own; list it in ASSETS.md.
 
-| Time | Scene | On screen | Narration |
+## Scenes
+
+| Time | Scene | What to show | Narration |
 |---|---|---|---|
-| 0:00 – 0:15 | Problem | Title card, then a plain code editor with a failing test | "Coding agents write code fast, but you still have to trust it. Who checked the plan, the tests, the review?" |
-| 0:15 – 0:30 | Idea | The isometric room, AGENT LIFE logo | "AGENT LIFE is a virtual hotel where the residents are AI agents. Furniture is the interface." |
-| 0:30 – 0:50 | Live room | Walk the avatar to the computer, open the panel, pick the haunted-todo repository | "The computer starts a job. I pick a repository from an allowlist and write a goal." |
-| 0:50 – 1:05 | Real run | Replay at 4×: the Architect walks to the board, the plan appears | "Three agents: an Architect that plans, a Developer that edits a worktree, and a QA engineer that reviews. The Architect is read-only." |
-| 1:05 – 1:20 | Human gate | Mailbox opens, the plan is shown, click Approve | "Nothing changes until I approve the plan in the mailbox." |
-| 1:20 – 1:40 | Verification | Board timeline, test step shows the Docker run and pass | "The Developer's diff is checked by the engine, then the tests run in Docker with no network. The model never runs the tests." |
-| 1:40 – 2:00 | Report | Mailbox report: headings, the diff, the test log, QA verdict | "The report comes back to the mailbox with the real diff, the test log and the review." |
-| 2:00 – 2:20 | Kiro usage | Split screen: `.kiro/specs/demo-replay/tasks.md`, `.kiro/steering/workflow.md`, `.kiro/agents/agentlife-builder.json` | "Kiro built this project from specs. Steering keeps every session on the same rules, and custom agents have explicit file and shell permissions." |
-| 2:20 – 2:35 | Kiro in the product | `packages/agent-engine/src/runtimes/kiro-cli.ts` with `--v3`, the agent file with `permissions.rules` | "The product's own agents run as headless kiro-cli processes. No trust flags, and every grant is in an agent file." |
-| 2:35 – 2:40 | Close | Demo URL and repository URL on a plain background | "Try it at the demo link. The code and Kiro usage notes are in the repository." |
+| 0:00–0:12 | Hook | A pull-request queue, a Jira backlog, an empty code editor | "AI agents write code fast. But who checked the plan? Who ran the tests? Who reviewed the diff?" |
+| 0:12–0:22 | The idea | AGENT LIFE logo, the lobby of the hotel with the elevator and the shop counter | "AGENT LIFE is an isometric virtual hotel. The residents are real AI agents. Furniture is the interface." |
+| 0:22–0:35 | Register a project | Reception desk, fill in the path `D:\AgentHotel\DiscordIA`, confirm | "Register a git project. The hotel creates a floor for it." |
+| 0:35–0:50 | Start a job | Elevator → DiscordIA floor, computer desk, type a goal, press Start | "Pick the floor, open the computer, describe the change. That is the whole UI." |
+| 0:50–1:05 | Architect at work | Architect ghost walks to the board, activity terminal fills up | "The Architect reads the repository and writes a plan. It is read-only: it cannot change a file." |
+| 1:05–1:18 | Human gate | Mailbox opens, plan appears, press Approve | "Nothing is built until you approve the plan. This is the only mandatory human step." |
+| 1:18–1:38 | Build and test | Developer ghost at the desk, terminal lines, Docker icon, test log | "The Developer edits a worktree. No shell, no network. The engine validates the diff, then runs the tests in Docker with network disabled and resource limits." |
+| 1:38–1:52 | QA and report | QA ghost at the desk, mailbox badge, open report: diff, test log, QA verdict, Deliver button | "QA reviews the diff and the log. The report arrives in the mailbox. Press Deliver to get a branch in your repository. Your working copy stays untouched." |
+| 1:52–2:08 | The game layer | Shop counter with Ecto balance, buy a hat, put it on the Developer ghost in HR, wisp floating on the floor | "While the agents work you earn Ecto from verified results. Spend it on outfits and furniture. Catch the wisps." |
+| 2:08–2:22 | Kiro as the builder | `.kiro/specs/agent-pipeline/tasks.md`, `.kiro/steering/workflow.md`, the construction board in the lobby | "Kiro built this product from specs. Each session follows steering rules, commits one task at a time and verifies before merging. The construction board shows the live TASKMAP." |
+| 2:22–2:36 | Kiro in the product | `packages/agent-engine/src/runtimes/kiro-cli.ts`, an agent file with `permissions.rules` | "The hotel's own agents run as headless kiro-cli processes. No trust flags. Every permission is in a file you can read." |
+| 2:36–2:40 | Close | Demo URL and repo URL on a dark background | "Try the demo. The code and the Kiro usage notes are in the repository." |
 
-## Notes for recording
+## Recording notes
 
-- Show the banner "Replay of a real run recorded on <date>" at least once, and say it is a replay. Judges must know it is not live.
-- Use the demo build (`?mode=demo`) for the recording so no local services are needed. Keep the speed at 4× outside the report and at 1× for the approval.
-- Cut any waiting. The run takes about 70 to 80 seconds live, so the replay should be trimmed, not sped past the approval.
-- If a scene runs long, cut the Kiro usage scene first. Never cut the approval gate or the Docker check: they are the point of the project.
+- Use the demo replay (`?mode=demo` or `?autostart`) for the final cut so no local services are needed. Record the live run first to get the story, then re-record the UI parts at a good pace.
+- Show the "Replay of a real run" banner at least once so judges know it is a replay.
+- Keep the speed at 4× for the analysis and develop phases, 1× for the approval and the report.
+- If a scene runs long, cut the game-layer scene first. Never cut the approval gate or the Docker check.
+- The Bug sack is a bonus: show it quickly at the end if time allows (F8 → note → panel).
 - Subtitles in English. Keep on-screen text short.
+- Suggested tools: OBS Studio (CC0), DaVinci Resolve free, or Kap (macOS).
