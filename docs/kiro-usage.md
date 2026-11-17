@@ -72,6 +72,14 @@ Kiro Crew is the Discord side of the same workflow. A Crew session can read the 
 
 - Playwright smoke test of the demo: [packages/client/e2e/demo.spec.ts](packages/client/e2e/demo.spec.ts), run in CI by [pages.yml](.github/workflows/pages.yml).
 - The demo build check, [packages/client/tools/check-demo-build.ts](packages/client/tools/check-demo-build.ts), fails if the demo build contains a WebSocket URL or a live endpoint.
+- Regression suite (164 Playwright tests): user journeys through the whole hotel (shop, HR, project floor with a job, delivery, Profile), layout and interface rules at three sizes, and 127 screenshot comparisons. The suite starts its own servers and writes only scratch files; it never touches the hotel's `data/`. Every spec merge runs it; CI runs it on Linux and Windows on every push. See [packages/client/e2e/](packages/client/e2e/).
+
+## 10. What was not built by Kiro
+
+- The `.kiro/specs/` files were written by the developer and by Kiro together (the developer wrote the first draft of requirements; Kiro filled in the design after the first implementation attempt). Requirements in `.kiro/specs/*/requirements.md` and decisions in `.kiro/specs/*/design.md` are the shared design record.
+- The `docs/risks-and-decisions.md` file is maintained by both. Each entry records the decision, the reason, and the alternative that was rejected.
+- Security decisions (history rewrite, allowing a scan finding, D10) were always made by the developer; Kiro recommended but never acted alone.
+- The video and the Devpost submission are the developer's.
 
 ## Limits
 
