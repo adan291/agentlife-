@@ -8,6 +8,6 @@
   - `config/agents.json` provider per role; team member provider; steps resolve the runtime per role or member; second review across providers; provider and model in the report; pipeline tests
   - _Requirements: 3.1, 3.3, 3.4, 3.5, 5.3_
 
-- [ ] 3. HR desk, `pnpm hotel` and docs
+- [x] 3. HR desk, `pnpm hotel` and docs
   - Provider and model pickers in the HR desk with the cloud notice, provider label in team bar and tooltip; `pnpm hotel` passes provider keys and lists available providers, real agents without Kiro; `.env.example`, README, decision record; live check with Ollama
   - _Requirements: 3.2, 3.4, 4.1, 4.2, 4.3, 5.4_

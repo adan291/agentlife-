@@ -3,6 +3,8 @@ import type { RawData, WebSocket } from "ws";
 import {
   ACTIVITY_BUFFER_SIZE,
   BUG_RATE_PER_MINUTE,
+  KIRO_PROVIDER,
+  providerModelLabel,
   BUG_REPORT_BYTES,
   ClientMsgSchema,
   FURNI_CATALOG,
@@ -1010,6 +1012,12 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   type Seats = Map<SlotId, Seat>;
   /** Who works each desk according to the engine, and who the room shows (a ghost that is being replaced keeps its name until the new one walks in). */
   const seatsNow = new Map<string, Seats>();
+  /** Labels of the AI providers (multi-runtime), learnt from the engine; a member's seat shows "model (Label)". */
+  const providerLabels = new Map<string, string>();
+  const learnProviders = (list: readonly { id: string; label: string }[] | undefined): void => {
+    for (const p of list ?? []) providerLabels.set(p.id, p.label);
+  };
+  void engine?.hr?.providers?.().then(learnProviders, () => undefined);
   const seatsShown = new Map<string, Seats>();
   /** `<roomId>|<slot>` of the ghosts that have left by the elevator and are not back yet. */
   const absent = new Set<string>();
@@ -1025,6 +1033,9 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     researcher: ["guest6", "guest5", "guest1"],
   };
 
+  /** "qwen3.5:4b (Ollama)" for a member on another AI provider than Kiro (multi-runtime), the plain model otherwise. */
+  const modelLabel = (m: TeamMember): string =>
+    m.provider && m.provider !== KIRO_PROVIDER ? providerModelLabel(m.model, providerLabels.get(m.provider) ?? m.provider) : m.model;
   /**
    * The seats for a team: the first member of each seated role holds that role's desk, every other member stands at a
    * spot (hr-desk requirement 4.3: everybody hired is on the floor). A member keeps the spot they had (`previous`).
@@ -1035,9 +1046,9 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
     for (const role of SEATED_ROLES) {
       const m = members.find((x) => x.role === role);
       if (m) seated.add(m.id);
-      out.set(role, m ? { memberId: m.id, name: m.displayName, model: m.model, role } : { memberId: "", name: DEFAULT_SEAT_NAME[role], role });
+      out.set(role, m ? { memberId: m.id, name: m.displayName, model: modelLabel(m), role } : { memberId: "", name: DEFAULT_SEAT_NAME[role], role });
     }
-    const seatOf = (m: TeamMember): Seat => ({ memberId: m.id, name: m.displayName, model: m.model, role: m.role });
+    const seatOf = (m: TeamMember): Seat => ({ memberId: m.id, name: m.displayName, model: modelLabel(m), role: m.role });
     const others = members.filter((m) => !seated.has(m.id));
     for (const spot of GUEST_IDS) {
       const kept = previous?.get(spot);
@@ -1172,7 +1183,9 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
   const sendHr = async (ws: WebSocket): Promise<void> => {
     if (!engine?.hr) return sendError(ws, "engine_unavailable", "the HR office needs the real engine");
     try {
-      send(ws, { type: "hr", state: await engine.hr.state() });
+      const state = await engine.hr.state();
+      learnProviders(state.providers);
+      send(ws, { type: "hr", state });
     } catch (e) {
       sendError(ws, "engine_unavailable", errorText(e, "cannot read the HR desk"));
     }
@@ -1188,13 +1201,19 @@ export function startGateway(options: GatewayOptions): Promise<Gateway> {
       if (act.action === "hire" || act.action === "update" || act.action === "fire" || act.action === "apply") await refreshTeam(act.projectId, false);
       switch (act.action) {
         case "hire":
-          await hr.hire(act.projectId, { templateId: act.templateId, displayName: act.displayName, ...(act.model ? { model: act.model } : {}) });
+          await hr.hire(act.projectId, {
+            templateId: act.templateId,
+            displayName: act.displayName,
+            ...(act.model ? { model: act.model } : {}),
+            ...(act.provider ? { provider: act.provider } : {}),
+          });
           await refreshTeam(act.projectId, true);
           break;
         case "update":
           await hr.update(act.projectId, act.memberId, {
             ...(act.displayName === undefined ? {} : { displayName: act.displayName }),
             ...(act.model === undefined ? {} : { model: act.model }),
+            ...(act.provider === undefined ? {} : { provider: act.provider }),
           });
           await refreshTeam(act.projectId, true);
           break;

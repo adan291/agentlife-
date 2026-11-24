@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogueEntry, HrState, ImportView, TeamMember, TeamPick, TeamSuggestion } from "@agentlife/shared";
-import { createHrPanel, importStatusText, nameProblem, reviewText, standing } from "../src/ui/hr.ts";
+import { createHrPanel, importStatusText, modelsFor, nameProblem, providerChoices, providerNote, reviewText, standing } from "../src/ui/hr.ts";
 import type { HrView } from "../src/ui/hr.ts";
 import type { PanelContent } from "../src/ui/computer.ts";
 import { PanelState } from "../src/ui/panel-state.ts";
@@ -55,9 +55,9 @@ function harness(initial: Partial<HrView> = {}) {
   const calls: string[] = [];
   const applied: TeamPick[][] = [];
   const panel = createHrPanel(fakeDoc(), {
-    hire: (p, t, n, m) => calls.push(`hire:${p}:${t}:${n}:${m ?? ""}`),
+    hire: (p, t, n, m, pr) => calls.push(`hire:${p}:${t}:${n}:${m ?? ""}${pr ? `@${pr}` : ""}`),
     rename: (p, id, n) => calls.push(`rename:${p}:${id}:${n}`),
-    setModel: (p, id, m) => calls.push(`model:${p}:${id}:${m}`),
+    setModel: (p, id, m, pr) => calls.push(`model:${p}:${id}:${m}${pr ? `@${pr}` : ""}`),
     fire: (p, id) => calls.push(`fire:${p}:${id}`),
     importFrom: (u) => calls.push(`import:${u}`),
     approve: (id, h) => calls.push(`approve:${id}:${h.slice(0, 4)}`),
@@ -349,5 +349,57 @@ describe("PanelState for the HR desk", () => {
     s.apply({ type: "open_panel", panel: "mailbox" });
     expect(s.apply({ type: "hr", state })).toBe(false);
     expect(s.apply({ type: "error", code: "hr_error", message: "no" })).toBe(false);
+  });
+});
+
+describe("AI providers at the HR desk (multi-runtime)", () => {
+  const providers: HrState["providers"] = [
+    { id: "kiro", label: "Kiro", kind: "kiro-cli", local: false, cloud: false, available: true, models: [] },
+    { id: "ollama", label: "Ollama", kind: "openai-compat", local: true, cloud: false, available: true, models: ["qwen3.5:4b", "llama3.1:latest"] },
+    { id: "xai", label: "xAI Grok", kind: "openai-compat", local: false, cloud: true, available: true, models: ["grok-4"] },
+    { id: "groq", label: "Groq", kind: "openai-compat", local: false, cloud: true, available: false, reason: "Set GROQ_API_KEY in .env to use Groq.", models: ["llama"] },
+  ];
+  const withProviders = () => hrState({ providers });
+
+  it("lists the available providers, Kiro first, and the member's own even when it is not available", () => {
+    expect(providerChoices(withProviders()).map((c) => c.value)).toEqual(["kiro", "ollama", "xai"]);
+    expect(providerChoices(withProviders(), "groq").map((c) => c.label)).toContain("Groq (not available)");
+    expect(providerChoices(hrState())).toEqual([]);
+    expect(modelsFor(withProviders(), "ollama", "qa")).toEqual(["qwen3.5:4b", "llama3.1:latest"]);
+    expect(modelsFor(withProviders(), "kiro", "qa")).toEqual(["auto", "claude-haiku-5.5"]);
+    expect(providerNote(withProviders(), "xai")).toMatch(/sent to xAI Grok/);
+    expect(providerNote(withProviders(), "ollama")).toMatch(/nothing leaves the machine/);
+    expect(providerNote(withProviders(), "kiro")).toBeUndefined();
+  });
+
+  it("hires on a provider with its first model, and says that a cloud provider receives the files", () => {
+    const h = harness({ hr: withProviders() });
+    const select = field(h.body, "hire-provider")[0]!;
+    select.value = "xai";
+    select.fire("change");
+    expect(textOf(h.body)).toContain("the files this agent reads are sent to xAI Grok");
+    type(field(h.body, "hire-name")[0]!, "Grace");
+    byAction(h.body, "hire")[0]!.click();
+    expect(h.calls).toEqual(["hire:alpha:architect:Grace:grok-4@xai"]);
+  });
+
+  it("moves a member to another provider with that provider's first model", () => {
+    const h = harness({ hr: withProviders() });
+    const row = findAll(h.body, (e) => e.dataset["member"] === "qa-2")[0]!;
+    const select = field(row, "provider")[0]!;
+    select.value = "ollama";
+    select.fire("change");
+    expect(h.calls).toEqual(["model:alpha:qa-2:qwen3.5:4b@ollama"]);
+  });
+
+  it("shows a member's provider, and its model list comes from that provider", () => {
+    const state = withProviders();
+    state.teams[0]!.members[3] = { ...state.teams[0]!.members[3]!, provider: "ollama", model: "llama3.1:latest" };
+    const h = harness({ hr: state });
+    const row = findAll(h.body, (e) => e.dataset["member"] === "qa-2")[0]!;
+    expect(textOf(row)).toContain("llama3.1:latest on Ollama");
+    const options = findAll(field(row, "model")[0]!, (e) => e.tagName === "option").map((o) => o.value);
+    expect(options).toEqual(["qwen3.5:4b", "llama3.1:latest"]);
+    expect(textOf(row)).toContain("nothing leaves the machine");
   });
 });

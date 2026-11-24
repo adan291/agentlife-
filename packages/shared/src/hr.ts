@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ProjectSchema } from "./projects.ts";
+import { ProviderIdSchema, ProviderViewSchema } from "./providers.ts";
 import { GuestIdSchema } from "./room.ts";
 import {
   CatalogueEntrySchema,
@@ -72,6 +73,8 @@ export const HrStateSchema = z.object({
   sources: z.array(ImportUrlSchema),
   /** Models each role may use. */
   models: z.partialRecord(TeamRoleSchema, z.array(z.string())),
+  /** The AI providers a member can run on (multi-runtime). Absent: only Kiro, the panel shows no provider picker. */
+  providers: z.array(ProviderViewSchema).max(20).optional(),
 });
 export type HrState = z.infer<typeof HrStateSchema>;
 
@@ -79,13 +82,21 @@ const ProjectIdSchema = z.string().min(1).max(100);
 
 /** What the user can do at the HR desk. */
 export const HrActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("hire"), projectId: ProjectIdSchema, templateId: TemplateIdSchema, displayName: MemberNameSchema, model: ModelIdSchema.optional() }),
+  z.object({
+    action: z.literal("hire"),
+    projectId: ProjectIdSchema,
+    templateId: TemplateIdSchema,
+    displayName: MemberNameSchema,
+    model: ModelIdSchema.optional(),
+    provider: ProviderIdSchema.optional(),
+  }),
   z.object({
     action: z.literal("update"),
     projectId: ProjectIdSchema,
     memberId: z.string().regex(MEMBER_ID_RE),
     displayName: MemberNameSchema.optional(),
     model: ModelIdSchema.optional(),
+    provider: ProviderIdSchema.optional(),
   }),
   z.object({ action: z.literal("fire"), projectId: ProjectIdSchema, memberId: z.string().regex(MEMBER_ID_RE) }),
   z.object({ action: z.literal("import"), url: ImportUrlSchema }),

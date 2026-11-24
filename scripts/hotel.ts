@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HELP, HOTEL_PORTS, decideMode, parseArgs, parseEnvFile } from "./hotel-lib.ts";
+import { HELP, HOTEL_PORTS, PROVIDER_KEYS, decideMode, parseArgs, parseEnvFile, providerOfKey } from "./hotel-lib.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const WIN = process.platform === "win32";
@@ -110,6 +110,25 @@ function run(name: string, cmd: string, args: string[], cwd: string, env: NodeJS
   return child;
 }
 
+/** Prints which AIs the engine can use (`GET /providers` answers names, availability and models, never an address or a key). */
+async function sayProviders(token: string): Promise<void> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${HOTEL_PORTS.engine}/providers`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return;
+    const body = (await res.json()) as { providers?: { label: string; available: boolean; reason?: string }[] };
+    const list = body.providers ?? [];
+    const on = list.filter((p) => p.available).map((p) => p.label);
+    say(`AIs ready for the HR desk: ${on.length ? on.join(", ") : "none"}.`);
+    const off = list.filter((p) => !p.available).map((p) => p.label);
+    if (off.length) say(`Not available: ${off.join(", ")} (add a key to .env or start it; see README, AI providers).`);
+  } catch {
+    // Only information: the hotel works without it.
+  }
+}
+
 async function main(): Promise<void> {
   const { options, unknown } = parseArgs(process.argv.slice(2));
   if (options.help) return void console.log(HELP);
@@ -141,33 +160,52 @@ async function main(): Promise<void> {
   const kiroKey = process.env["KIRO_API_KEY"] ?? fileEnv.KIRO_API_KEY ?? "";
   const engineToken = process.env["ENGINE_TOKEN"] ?? fileEnv.ENGINE_TOKEN ?? "";
 
-  // Docker: real jobs run their tests there. On Windows start Docker Desktop if it is installed and not running.
+
+  // Ollama (optional): ambient phrases, the Library's intern, and the team's AI when there is no Kiro key.
+  const llmBase = process.env["LLM_BASE_URL"] ?? fileEnv.LLM_BASE_URL ?? "http://127.0.0.1:11434/v1";
+  const llmModel = process.env["LLM_MODEL"] ?? fileEnv.LLM_MODEL ?? "qwen3.5:4b";
+  const ollama = await ollamaUp(llmBase);
+  say(ollama ? `Ollama found (${llmModel}).` : "Ollama not found: no ambient phrases (optional, https://ollama.com).");
+
+  // Keys of the other AIs, from the environment or .env. Only the engine gets them; they are masked in the logs.
+  const providerKeys: Record<string, string> = {};
+  const cloudReady: string[] = [];
+  for (const k of PROVIDER_KEYS) {
+    const v = process.env[k] ?? fileEnv[k] ?? "";
+    if (v) (providerKeys[k] = v), cloudReady.push(providerOfKey(k));
+  }
+
+  // Docker: real jobs run their tests there. On Windows start Docker Desktop if it is installed, not running, and
+  // some AI could run the team.
   let docker = options.fake ? false : dockerUp();
-  if (!options.fake && !docker && kiroKey && WIN && existsSync(DOCKER_DESKTOP)) {
+  const someAi = kiroKey !== "" || options.ai !== undefined || ollama || cloudReady.length > 0;
+  if (!options.fake && !docker && someAi && WIN && existsSync(DOCKER_DESKTOP)) {
     say("starting Docker Desktop (real jobs run their tests in Docker)…");
     spawn(DOCKER_DESKTOP, [], { stdio: "ignore", detached: true }).unref();
     docker = await waitFor(async () => dockerUp(), 120_000);
     say(docker ? "Docker is up." : "Docker did not start in 2 minutes.");
   }
 
-  const mode = decideMode({ options, hasKiroKey: kiroKey !== "", dockerUp: docker });
+  const mode = decideMode({ options, hasKiroKey: kiroKey !== "", dockerUp: docker, ollamaUp: ollama, cloudReady });
   for (const n of mode.notes) say(n);
 
-  // Ollama (optional): ambient phrases and the Library's intern.
-  const llmBase = process.env["LLM_BASE_URL"] ?? fileEnv.LLM_BASE_URL ?? "http://127.0.0.1:11434/v1";
-  const llmModel = process.env["LLM_MODEL"] ?? fileEnv.LLM_MODEL ?? "qwen3.5:4b";
-  const ollama = await ollamaUp(llmBase);
-  say(ollama ? `Ollama found (${llmModel}).` : "Ollama not found: no ambient phrases (optional, https://ollama.com).");
-
-  // 1. Engine. Only the engine gets the Kiro key.
-  const engineEnv: NodeJS.ProcessEnv = { ...process.env };
+  // 1. Engine. Only the engine gets the keys.
+  const engineEnv: NodeJS.ProcessEnv = { ...process.env, ...providerKeys };
   delete engineEnv["RUNTIME"];
+  delete engineEnv["AGENTLIFE_PROVIDER"];
+  delete engineEnv["AGENTLIFE_MODEL"];
   if (mode.runtime === "fake") engineEnv["RUNTIME"] = "fake";
   if (kiroKey) engineEnv["KIRO_API_KEY"] = kiroKey;
   if (engineToken) engineEnv["ENGINE_TOKEN"] = engineToken;
   if (ollama) Object.assign(engineEnv, { LLM_BASE_URL: llmBase, LLM_MODEL: llmModel });
+  if (mode.runtime === "real" && mode.ai) {
+    engineEnv["AGENTLIFE_PROVIDER"] = mode.ai;
+    if (options.model) engineEnv["AGENTLIFE_MODEL"] = options.model;
+    else if (mode.ai === "ollama") engineEnv["AGENTLIFE_MODEL"] = llmModel;
+  }
+  const secrets = [kiroKey, engineToken, ...Object.values(providerKeys)];
   say("starting the engine…");
-  run("engine", process.execPath, ["--experimental-strip-types", "--no-warnings", "src/main.ts"], join(ROOT, "packages", "agent-engine"), engineEnv, [kiroKey, engineToken]);
+  run("engine", process.execPath, ["--experimental-strip-types", "--no-warnings", "src/main.ts"], join(ROOT, "packages", "agent-engine"), engineEnv, secrets);
   const engineUp = await waitFor(async () => {
     try {
       return (await fetch(`http://127.0.0.1:${HOTEL_PORTS.engine}/health`, { signal: AbortSignal.timeout(1500) })).ok;
@@ -179,10 +217,11 @@ async function main(): Promise<void> {
     console.error("[hotel] the engine did not answer in 2 minutes; see the [engine] lines above.");
     return stopAll(1);
   }
+  if (mode.runtime === "real") await sayProviders(engineToken);
 
-  // 2. World-server, then 3. client. Neither gets the Kiro key.
+  // 2. World-server, then 3. client. Neither gets a key.
   const shared: NodeJS.ProcessEnv = { ...process.env };
-  delete shared["KIRO_API_KEY"];
+  for (const k of ["KIRO_API_KEY", ...PROVIDER_KEYS, "AGENTLIFE_PROVIDER", "AGENTLIFE_MODEL"]) delete shared[k];
   say("starting the world-server…");
   run("world", process.execPath, ["--experimental-strip-types", "--no-warnings", "src/main.ts"], join(ROOT, "packages", "world-server"), { ...shared, ENGINE: "http", ...(engineToken ? { ENGINE_TOKEN: engineToken } : {}) }, [engineToken]);
   await waitFor(() => portInUse(HOTEL_PORTS.world), 60_000);
@@ -195,7 +234,7 @@ async function main(): Promise<void> {
   }
 
   say("");
-  say(`AGENT LIFE is running at ${URL_CLIENT}  (${mode.runtime === "fake" ? "scripted agents" : "real agents"})`);
+  say(`AGENT LIFE is running at ${URL_CLIENT}  (${mode.runtime === "fake" ? "scripted agents" : `real agents on ${mode.ai ?? "kiro"}`})`);
   say("Ctrl+C stops everything.");
   if (options.open) openBrowser(URL_CLIENT);
 }

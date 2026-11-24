@@ -150,12 +150,58 @@ describe("OpenAICompatRuntime", () => {
     }
   });
 
-  it("stops a model that never stops calling tools", async () => {
-    const replies: Reply[] = Array.from({ length: 5 }, (_, i) => answer("", [toolCall(`c${i}`, "list_files", {})]));
+  it("asks a model that never stops calling tools for its answer, without tools, before the limit", async () => {
+    const replies: Reply[] = Array.from({ length: 5 }, (_, i) => answer("", [toolCall(`c${i}`, "list_files", { dir: `d${i}` })]));
     const s = await chatServer(replies);
     try {
       const rt = new OpenAICompatRuntime({ providerId: "x", label: "X", baseUrl: s.url, maxRounds: 3 });
-      await expect(collect(rt, input())).rejects.toThrow(/3 rounds/);
+      await expect(collect(rt, input())).rejects.toThrow(/no text/);
+      expect(s.seen[0]!.body.tools).toBeDefined();
+      expect(s.seen[1]!.body.tools).toBeUndefined();
+      expect(JSON.stringify(s.seen[1]!.body.messages)).toContain("Stop using tools now");
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("wraps up with the model's answer when it gives one after being asked", async () => {
+    const replies: Reply[] = [...Array.from({ length: 4 }, (_, i) => answer("", [toolCall(`c${i}`, "list_files", { dir: `d${i}` })])), answer("The plan.")];
+    const s = await chatServer(replies);
+    try {
+      const rt = new OpenAICompatRuntime({ providerId: "x", label: "X", baseUrl: s.url, maxRounds: 6 });
+      const events = await collect(rt, input());
+      expect(events.find((e) => e.kind === "output")).toMatchObject({ text: "The plan." });
+      expect(s.seen).toHaveLength(5);
+      expect(s.seen[3]!.body.tools).toBeUndefined();
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("reminds once, without tools, when the task asks for a json block and the answer has none", async () => {
+    const block = "```json\n{\"ok\":true}\n```";
+    const s = await chatServer([answer("Plain prose."), answer(`Plan.\n${block}`)]);
+    try {
+      const rt = new OpenAICompatRuntime({ providerId: "x", label: "X", baseUrl: s.url });
+      const events = await collect(rt, input({ prompt: "Finish your reply with exactly one fenced block tagged json." }));
+      expect(events.find((e) => e.kind === "output")).toMatchObject({ text: `Plan.\n${block}` });
+      expect(s.seen[1]!.body.tools).toBeUndefined();
+      expect(JSON.stringify(s.seen[1]!.body.messages)).toContain("missing the required fenced block");
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("does not run the same call twice, and gives an empty answer one more chance", async () => {
+    const same = { path: "src/a.ts" };
+    const s = await chatServer([answer("", [toolCall("c1", "read_file", same)]), answer("", [toolCall("c2", "read_file", same)]), answer(""), answer("Done.")]);
+    try {
+      const rt = new OpenAICompatRuntime({ providerId: "x", label: "X", baseUrl: s.url });
+      const events = await collect(rt, input());
+      expect(events.find((e) => e.kind === "output")).toMatchObject({ text: "Done." });
+      const toolMsgs = (s.seen[2]!.body.messages as { role: string; content: string }[]).filter((m) => m.role === "tool");
+      expect(toolMsgs[1]!.content).toContain("already made this exact call");
+      expect(s.seen[3]!.body.tools).toBeUndefined();
     } finally {
       await s.close();
     }

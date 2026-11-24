@@ -13,6 +13,13 @@ export const MAX_TOOL_ROUNDS = 40;
 const MAX_CONVERSATION_CHARS = 1_500_000;
 const MAX_ANSWER_CHARS = 100_000;
 const RETRY_DELAYS_MS = [2_000, 6_000];
+/** Rounds before the limit at which the model is asked for its answer, with no more tools. */
+const WRAP_UP_ROUNDS = 3;
+/** Empty answers accepted after the model was asked for its answer, before the step fails. */
+const MAX_EMPTY_AFTER_ASKING = 3;
+const ANSWER_NOW = "Stop using tools now. Write your final answer for this step in plain text, in the format your instructions ask for, based on what you have read.";
+const JSON_NOW = "Your answer is missing the required fenced block tagged json. Reply again with your answer, ending with exactly one fenced block tagged json in the format the task gives, and nothing after it.";
+const ALREADY_DONE = "You already made this exact call; its result is above. Do not repeat it: use what you have, read something else, or give your final answer.";
 
 /** A provider error whose text is safe to show the user (no key, no address). */
 export class ProviderError extends Error {
@@ -122,30 +129,66 @@ export class OpenAICompatRuntime implements AgentRuntime {
       }
     };
     yield { kind: "progress", text: `Thinking on ${this.opts.label} (${model})` };
+    // Small local models can loop on the same read or end with an empty answer: a repeated call is not run again,
+    // a few rounds before the limit the model is asked for its answer, and the last rounds go without tools.
+    const seen = new Set<string>();
+    const wrapUpAt = Math.max(1, this.maxRounds - WRAP_UP_ROUNDS);
+    let askedToAnswer = false;
+    let emptyAfterAsking = 0;
+    const wantsJson = /fenced block tagged json/i.test(input.prompt);
+    let nudgedForJson = false;
     try {
       for (let round = 0; round < this.maxRounds; round++) {
         if (messages.reduce((n, m) => n + (m.content?.length ?? 0), 0) > MAX_CONVERSATION_CHARS) {
           throw new ProviderError(`The step read too much on ${this.opts.label}; it was stopped. Try a smaller goal.`);
         }
-        const res = await this.chat(model, messages, tools, signal);
+        const answerNow = askedToAnswer || round >= wrapUpAt;
+        if (round === wrapUpAt && !askedToAnswer) {
+          messages.push({ role: "user", content: ANSWER_NOW });
+          askedToAnswer = true;
+        }
+        const res = await this.chat(model, messages, answerNow ? undefined : tools, signal);
         log({ round, message: res.choices?.[0]?.message ?? null });
         if (res.usage?.total_tokens !== undefined) yield { kind: "usage", tokens: res.usage.total_tokens };
         const msg = res.choices?.[0]?.message;
         if (!msg) throw new ProviderError(`${this.opts.label} sent an answer with no message.`);
-        const calls = (msg.tool_calls ?? []).filter((c) => c && c.function && typeof c.function.name === "string");
+        const calls = answerNow ? [] : (msg.tool_calls ?? []).filter((c) => c && c.function && typeof c.function.name === "string");
         if (calls.length === 0) {
           const text = stripThinking(msg.content ?? "").slice(0, MAX_ANSWER_CHARS);
-          if (text === "") throw new ProviderError(`${this.opts.label} answered with no text.`);
-          yield { kind: "output", text };
-          return;
+          // The task asks for a json block and the answer has none: one reminder in the same conversation, without
+          // tools, is far cheaper than the step's retry, which starts reading the project again.
+          if (text !== "" && wantsJson && !nudgedForJson && round < this.maxRounds - 1 && !/```+json/i.test(text)) {
+            nudgedForJson = true;
+            messages.push({ role: "assistant", content: text }, { role: "user", content: JSON_NOW });
+            askedToAnswer = true;
+            continue;
+          }
+          if (text !== "") {
+            yield { kind: "output", text };
+            return;
+          }
+          // More chances, without tools: some models put everything in their reasoning and leave the answer empty.
+          if (askedToAnswer && ++emptyAfterAsking >= MAX_EMPTY_AFTER_ASKING) break;
+          if (!askedToAnswer) messages.push({ role: "user", content: ANSWER_NOW });
+          askedToAnswer = true;
+          continue;
         }
         messages.push({ role: "assistant", content: msg.content ?? "", tool_calls: calls });
         for (const call of calls) {
+          const key = `${call.function.name}|${call.function.arguments ?? ""}`;
+          if (seen.has(key)) {
+            messages.push({ role: "tool", tool_call_id: call.id, content: ALREADY_DONE });
+            continue;
+          }
+          // A write changes what a read would return, so after it every read is new again.
+          if (call.function.name === "write_file") seen.clear();
+          else seen.add(key);
           const result = runFileTool(call.function.name, call.function.arguments ?? "", { cwd: input.cwd, write });
           yield { kind: "progress", text: result.progress.text, ...(result.progress.tool ? { tool: result.progress.tool } : {}) };
           messages.push({ role: "tool", tool_call_id: call.id, content: result.text });
         }
       }
+      if (askedToAnswer) throw new ProviderError(`${this.opts.label} answered with no text.`);
       throw new ProviderError(`${this.opts.label} kept calling tools for ${this.maxRounds} rounds without an answer; the step was stopped.`);
     } catch (e) {
       if (input.signal.aborted) throw input.signal.reason ?? e;
@@ -155,11 +198,11 @@ export class OpenAICompatRuntime implements AgentRuntime {
   }
 
   /** One chat-completions request, with two retries on a rate limit or a server error. */
-  private async chat(model: string, messages: ChatMessage[], tools: object[], signal: AbortSignal): Promise<ChatResponse> {
+  private async chat(model: string, messages: ChatMessage[], tools: object[] | undefined, signal: AbortSignal): Promise<ChatResponse> {
     const url = `${this.opts.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (this.opts.apiKey) headers["authorization"] = `Bearer ${this.opts.apiKey}`;
-    const body = JSON.stringify({ model, messages, tools, tool_choice: "auto", stream: false, temperature: 0.2 });
+    const body = JSON.stringify({ model, messages, ...(tools ? { tools, tool_choice: "auto" } : {}), stream: false, temperature: 0.2 });
     for (let attempt = 0; ; attempt++) {
       let res: Response;
       try {

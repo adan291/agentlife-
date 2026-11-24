@@ -93,10 +93,24 @@ function assertInsideProject(repo: RepoConfig): void {
   }
 }
 
-export function loadConfig(dir: string = DEFAULT_CONFIG_DIR): EngineConfig {
-  const agents = loadFile(dir, "agents.json", AgentsConfigSchema);
+export function loadConfig(dir: string = DEFAULT_CONFIG_DIR, env: NodeJS.ProcessEnv = process.env): EngineConfig {
+  const agents = withProviderOverride(loadFile(dir, "agents.json", AgentsConfigSchema), env);
   const repos = loadFile(dir, "repos.json", ReposConfigSchema);
   const limits = loadFile(dir, "limits.json", LimitsConfigSchema);
   repos.forEach(assertInsideProject);
   return { agents, repos, limits };
+}
+
+/**
+ * `AGENTLIFE_PROVIDER=<id>` (and `AGENTLIFE_MODEL`) puts the three roles on that provider for this run, so
+ * `pnpm hotel --ai ollama` works without editing config/agents.json. Team members keep their own provider.
+ */
+export function withProviderOverride(agents: AgentsConfig, env: NodeJS.ProcessEnv): AgentsConfig {
+  const provider = env["AGENTLIFE_PROVIDER"]?.trim();
+  if (!provider) return agents;
+  if (!/^[a-z][a-z0-9-]{0,29}$/.test(provider)) throw new Error(`config: AGENTLIFE_PROVIDER '${provider}' is not a provider id`);
+  if (provider === "kiro") return agents;
+  const model = env["AGENTLIFE_MODEL"]?.trim();
+  const role = (cfg: AgentRuntimeConfig): AgentRuntimeConfig => (cfg.runtime === "fake" ? cfg : { provider, ...(model ? { model } : {}) });
+  return { ...agents, architect: role(agents.architect), developer: role(agents.developer), qa: role(agents.qa) };
 }
