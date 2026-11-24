@@ -10,6 +10,8 @@ import { createEventsRoute } from "./http/sse.ts";
 import { createExportRoute } from "./http/export.ts";
 import { createCrewRelay, createCrewRoute } from "./crew.ts";
 import { createBuildBoardRoutes } from "./build-board.ts";
+import { ProviderRegistry } from "./providers/registry.ts";
+import { createProviderRoutes } from "./providers/routes.ts";
 import { JobRunner } from "./jobs/runner.ts";
 import { createRuntimeSteps } from "./jobs/runtime-steps.ts";
 import type { FinishedJob, Steps } from "./jobs/steps.ts";
@@ -74,6 +76,8 @@ export interface EngineOptions {
   extraRoutes?: Route[];
   /** SSE heartbeat interval in ms (default 15000). */
   heartbeatMs?: number;
+  /** The AI providers (multi-runtime). Default: config/providers.json with the process environment. */
+  providers?: ProviderRegistry;
   /** Allowed project roots. Default: `AGENTLIFE_PROJECT_ROOTS` or config/hotel.json. */
   projectRoots?: string[];
   /** The Bug sack (spec bug-sack): where step errors and 500s go. The real process passes the inbox writer; tests pass their own or none. */
@@ -213,6 +217,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       reposDir: paths.repos,
       agentlifeRoot: PROJECT_ROOT,
     });
+  const providerRegistry = opts.providers ?? new ProviderRegistry();
   const activity = createActivityEmitter({ append: (ev) => store.appendEvent(ev) });
   const real = !steps && usesRealPipeline(config);
   const catalogue = opts.catalogue ?? new Catalogue();
@@ -406,6 +411,7 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
       createEventsRoute(store, opts.heartbeatMs === undefined ? {} : { heartbeatMs: opts.heartbeatMs }),
       createExportRoute(store, { isRegisteredProject: (id) => projects.get(id)?.builtin === false }),
       createCrewRoute(crewRelay),
+      ...createProviderRoutes(providerRegistry),
       ...createBuildBoardRoutes({ root: PROJECT_ROOT, phase: () => crewRelay.phase() }),
       ...createProjectRoutes(projects, runner, store, (id) => {
         team.remove(id);

@@ -35,3 +35,4 @@ export * from "./pipeline.ts";
 export * from "./hr.ts";
 export * from "./memory.ts";
 export * from "./world/hotel.ts";
+export * from "./providers.ts";

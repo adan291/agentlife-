@@ -158,3 +158,9 @@
 - **Por qué:** el cliente solo habla con el world-server por un WebSocket con tope de 16 KB por mensaje. Un endpoint HTTP aparte obligaría a abrir el servidor `ws` a rutas HTTP, a CORS y a repetir la comprobación de origen.
 - **Compromiso:** una captura grande tarda unos segundos en llegar (300 KB, unos 2 s). Una captura de más de 1 MiB se repite a la mitad y a un cuarto de tamaño antes de rendirse; sin imagen el informe se guarda igual.
 - **Descartadas:** subir por HTTP (ver arriba) y reducir la captura a una miniatura de 16 KB (no sirve para ver el fallo).
+
+### D19. El motor es el sandbox de los proveedores que no son Kiro (spec multi-runtime)
+
+- **Decisión (2026-11-16):** un agente que no corre como kiro-cli (Ollama, LM Studio, Groq, xAI Grok, OpenAI, OpenRouter) solo recibe cuatro herramientas que ejecuta el motor dentro de la carpeta del trabajo: listar, leer y buscar ficheros, y escribir (solo el Developer). Las rutas se resuelven dentro de la carpeta, sin enlaces que salgan; los ficheros secretos son los mismos que deniega el tier read-only de kiro-cli. No hay shell ni red.
+- **Por qué:** cualquier API con formato OpenAI y tool calling sirve con un solo runtime, y la frontera de seguridad queda en código propio y probado (test de propiedad sobre rutas) en lugar de en cada proveedor.
+- **Compromiso:** un proveedor en la nube recibe los ficheros que lee su agente, como hoy Kiro. Solo se usa si el usuario pone su clave en .env, y RR. HH. lo avisa al elegirlo. La validación del diff, los tests en Docker y la aprobación del plan no cambian.

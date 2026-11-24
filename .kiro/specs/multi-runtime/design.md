@@ -1,0 +1,18 @@
+# Design notes (multi-runtime)
+
+Built in the Kiro IDE (2026-11-16), not by the conductor: the month's Kiro credits were used up.
+
+## Checked first
+Ollama `qwen3.5:4b` and `llama3.1` both answer a `tools` request on `POST /v1/chat/completions` with a `read_file` tool call (about 11 s each). So one runtime that speaks the OpenAI format covers Ollama, LM Studio, Groq, xAI Grok, OpenAI and OpenRouter.
+
+## Pieces
+- `shared/src/providers.ts`: `ProviderConfigSchema` (a cloud provider must use https; an `openai-compat` one needs `baseUrl`), `ProvidersFileSchema` (ids unique, `kiro` must be there), `ProviderViewSchema` (what the client sees: no address, no key), `providerModelLabel`.
+- `agent-engine/config/providers.json`: kiro, ollama, lmstudio, groq, xai, openai, openrouter. A new compatible API is one entry.
+- `providers/registry.ts`: `ProviderRegistry` loads the file, reads keys from the environment by name, builds one `OpenAICompatRuntime` per provider on first use, and answers `views()` (cached 10 s) for `GET /providers` (`providers/routes.ts`). Availability: kiro needs `kiro-cli --version` to work and `KIRO_API_KEY`; a local provider must have a loopback address (`isLoopbackUrl`, as the Ollama intern) and answer `GET /models`, whose model ids become its list; a cloud provider needs its key variable. `runtime(id)` refuses the same cases, so a misconfigured provider never runs.
+- `runtimes/openai-compat.ts`: the tool loop. System text = the member's persona, then the fixed `ROLE_INSTRUCTIONS` of the role, then how the tools work. Each round sends the conversation with the tools; tool calls are run by the engine and their results sent back; an answer without tool calls is the step's `output` (reasoning blocks stripped as for the intern). Limits: 40 rounds, the step's timeout (`AbortSignal.any` of the job signal and a timeout), 1.5 M characters of conversation, 100 K characters of answer. 429 and 5xx are retried twice (2 s, 6 s). Errors are `ProviderError` texts without key or address; the provider's own message is cut to 200 characters and token-like strings (and the key itself) are masked, because some APIs quote part of a wrong key. Raw responses go to `<step>.raw.jsonl` like kiro-cli's.
+- `runtimes/file-tools.ts`: the sandbox. `list_files`, `read_file` (text only, 2 MB file cap, 60 K characters per answer, line ranges), `search` (case-insensitive, 100 hits, files up to 1 MB), and `write_file` for the Developer only (400 K characters). `resolveInside` accepts relative paths only: no `..`, no drive letter or leading `/`, no Windows-invalid names, and the real path of the file or of its nearest existing parent must be inside the real path of the job folder, so a link cannot lead out. The secret files come from the deny rules of `agents/tiers/read-only.json` (`defaultSecretMatcher`), the same list kiro-cli enforces; walks skip them, links, `node_modules`, `.git` and build folders. A refusal is returned to the model as text ("Refused: ..."), so it can try something else; it is also an activity line.
+
+## Decisions
+- **The engine is the sandbox for non-Kiro providers** (D19 in risks-and-decisions.md). kiro-cli enforces the tier from the agent file; for any other provider the model has only the four tools above, run by the engine with the same deny list. Shell and network do not exist for it. The diff validation, Docker tests and plan approval are unchanged and still decide.
+- **A cloud provider receives what its agent reads**, as Kiro does today. It is used only when the user set its key, and the HR desk says so when it is chosen (task 3).
+- No streaming: one request per round keeps the loop simple and the same for every API.

@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Providers and the OpenAI-compatible runtime
+- [x] 1. Providers and the OpenAI-compatible runtime
   - `config/providers.json`, shared schemas, provider registry and availability, `GET /providers`; `OpenAICompatRuntime` with the engine-run tool loop, tools, limits and errors; tests with a scripted chat server
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 5.1, 5.2_
 
