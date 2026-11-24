@@ -1,4 +1,4 @@
-﻿# Status
+# Status
 
 Updated: 2026-11-15 (bug-sack tasks 1-2 done on branch feat/bug-sack, not merged; rows 1-16 are in main)
 
@@ -8,6 +8,7 @@ Keep this file short (under 15 000 characters): it is loaded into every session 
 TASKMAP rows 1-16 are merged into main (everything up to regression-suite). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 17 bug-sack: both tasks are on `feat/bug-sack`, waiting for review and merge (task 2: Game grabber, Report a bug, the panel and the bug jar). Then final-demo with the user.
 
 ## Run the hotel
+- One command: `pnpm hotel` (or double-click `Start AGENT LIFE.cmd`). Real agents when KIRO_API_KEY and Docker are there, else scripted; `--fake`, `--real`, `--restart`, `--no-open`. Ctrl+C stops all three (scripts/hotel.ts, helpers tested in scripts/test/hotel.test.ts). By hand:
 Real engine (PowerShell, from the repo root; Docker running for tests):
 - Engine: `cd packages\agent-engine`, set `$env:KIRO_API_KEY` from `.env`, `$env:LLM_BASE_URL='http://127.0.0.1:11434/v1'`, `$env:LLM_MODEL='qwen3.5:4b'`, then `node --experimental-strip-types --no-warnings src/main.ts` (port 8788).
 - World-server: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start` (port 8787). Start it after the engine.
@@ -25,6 +26,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-16 (IDE): documentation updated for submission and long-term vision. roadmap-after-kiroween.md rewritten: multi-runtime as priority 1 (Ollama + OpenAI-compat runtimes, design and security decisions), ticket-room, distribution, quality. kiro-usage.md extended: regression suite, what Kiro did vs the developer, 10 sections. STATUS Open problems cleaned. Kiro credits exhausted; motor running with RUNTIME=fake for the demo recording. Credits renew ~Dec 1.
 
  (1) D10 ratified — import review uses agentlife-import-review (read-only tier), recorded in risks-and-decisions.md, cleaned from STATUS and HUMAN-CHECKS; (2) journeys.spec.ts flaky at 360x640 fixed (synchronous balance() call changed to expect.poll, so a racing wallet update can no longer fail the assertion); (3) .env.example, ASSETS.md and video-script.md already done in the previous session. README, TASKMAP and STATUS already up to date. `pnpm check` and security scan pass. Next: re-record the replay and the video for final-demo.
+
+- 2026-11-16 (IDE): user asked for a very easy way to start the hotel. Added `pnpm hotel` (scripts/hotel.ts + hotel-lib.ts with tests) and `Start AGENT LIFE.cmd`: reads .env (known keys only), checks ports, starts Docker Desktop on Windows if needed, falls back to scripted agents with the reason, finds Ollama, starts engine then world-server then client, opens the browser; the Kiro key goes to the engine only and is masked in the logs. Checked live: start, a second run refuses with a hint, --restart, Ctrl+C leaves no process on the ports. README Quick start section.
 
 ## Next
 1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.

@@ -72,7 +72,34 @@ The client talks only to the world-server. The world-server never calls a model.
 - Secrets (`KIRO_API_KEY`, tokens) come from environment variables or a git-ignored `.env`. Never logged or sent to the client.
 - Publishing gate: `pnpm security:scan` must report no high or medium findings before anything leaves the machine. A Kiro hook and a git pre-push hook enforce it.
 
-## Run live mode
+## Quick start
+
+One command starts everything (engine, world-server, client) and opens the hotel in the browser:
+
+```bash
+pnpm install          # first time only
+pnpm hotel            # or double-click "Start AGENT LIFE.cmd" on Windows
+```
+
+`pnpm hotel` checks what is there and picks the mode by itself:
+
+- **Real agents** when `KIRO_API_KEY` is set (in `.env`, see [.env.example](.env.example)) and Docker is running. On Windows it starts Docker Desktop if it is installed and not running.
+- **Scripted agents** otherwise, and it says why. They need no credits and no Docker, so the whole hotel works on any machine.
+- **Ollama** is used for the ambient phrases and the Library intern when it answers on `127.0.0.1:11434` (optional).
+
+| Command | What it does |
+|---|---|
+| `pnpm hotel` | real agents if possible, else scripted |
+| `pnpm hotel --fake` | scripted agents (no credits, no Docker) |
+| `pnpm hotel --real` | real agents even if a check fails |
+| `pnpm hotel --restart` | stop a hotel already running on ports 8787, 8788, 5173 and start again |
+| `pnpm hotel --no-open` | do not open the browser |
+
+The logs of the three processes appear in the same window with a prefix (`[engine]`, `[world]`, `[client]`). Ctrl+C, or closing the window, stops all of them. Only the engine receives the Kiro key; it is never printed.
+
+For real jobs on your own code, create `D:\AgentHotel` (the allowed projects folder, see `config/hotel.json`), copy a small git project there and register it at the Reception desk in the lobby.
+
+## Run live mode by hand
 
 Requirements: Node.js 22+, pnpm 11+, Docker Desktop, a `KIRO_API_KEY` from a Kiro plan that allows headless use, and Ollama (optional, for the ambient phrases and the library intern).
 
