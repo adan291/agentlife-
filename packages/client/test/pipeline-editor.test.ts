@@ -182,7 +182,7 @@ describe("pipeline editor panel", () => {
   it("lets the user choose who does a step, and refuses the same model for the second review", () => {
     const sameModel = { ...REX, model: "m-q" };
     const m = mount(withState(response([...DEFAULT_PIPELINE.slice(0, 5), { kind: "second-review" }, { kind: "report" }], [...MEMBERS, sameModel], true)));
-    expect(textOf(m.root)).toContain("The second review needs a different model than the Review (both use m-q).");
+    expect(textOf(m.root)).toContain("The second review needs a different model or provider than the Review (both use m-q).");
     // Choose Rex as the reviewer of the review step: the saved steps would carry the member.
     const reviewCard = cards(m.root).find((c) => c.dataset["kind"] === "review")!;
     const option = findAll(reviewCard, (e) => e.className === "al-select-option" && e.textContent.startsWith("Rex"))[0]!;

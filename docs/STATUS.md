@@ -1,14 +1,14 @@
-# Status
+﻿# Status
 
-Updated: 2026-11-15 (bug-sack tasks 1-2 done on branch feat/bug-sack, not merged; rows 1-16 are in main)
+Updated: 2026-11-16 (multi-runtime tasks 1-3 done and merged into main; rows 1-18 are in main)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13, the conversation lines up to 2026-11-14 and the long spec rows of 2026-11-14.
 
 ## Phase
-TASKMAP rows 1-16 are merged into main (everything up to regression-suite). First real project done: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job, PASS, delivered as branch `agentlife/task-25942b7f`. Row 17 bug-sack: both tasks are on `feat/bug-sack`, waiting for review and merge (task 2: Game grabber, Report a bug, the panel and the bug jar). Then final-demo with the user.
+TASKMAP rows 1-18 are merged into main (everything up to multi-runtime). Real projects: DiscordIA (`D:\AgentHotel\DiscordIA`) got a job on Kiro (PASS, delivered as branch `agentlife/task-25942b7f`) and one with all three roles on Ollama `qwen3.5:4b` (PASS, 2026-11-16). Next: final-demo with the user.
 
 ## Run the hotel
-- One command: `pnpm hotel` (or double-click `Start AGENT LIFE.cmd`). Real agents when KIRO_API_KEY and Docker are there, else scripted; `--fake`, `--real`, `--restart`, `--no-open`. Ctrl+C stops all three (scripts/hotel.ts, helpers tested in scripts/test/hotel.test.ts). By hand:
+- One command: `pnpm hotel` (or double-click `Start AGENT LIFE.cmd`). Real agents when an AI (Kiro key, else Ollama, else a cloud key in .env) and Docker are there, else scripted; `--ai <provider> --model <model>`, `--fake`, `--real`, `--restart`, `--no-open`. With Kiro credits out: `pnpm hotel --ai ollama --model qwen3.5:4b`. Ctrl+C stops all three (scripts/hotel.ts, helpers tested in scripts/test/hotel.test.ts). By hand:
 Real engine (PowerShell, from the repo root; Docker running for tests):
 - Engine: `cd packages\agent-engine`, set `$env:KIRO_API_KEY` from `.env`, `$env:LLM_BASE_URL='http://127.0.0.1:11434/v1'`, `$env:LLM_MODEL='qwen3.5:4b'`, then `node --experimental-strip-types --no-warnings src/main.ts` (port 8788).
 - World-server: `$env:ENGINE='http'; pnpm --filter @agentlife/world-server start` (port 8787). Start it after the engine.
@@ -18,18 +18,10 @@ Real engine (PowerShell, from the repo root; Docker running for tests):
 
 ## Last conversation with the user
 Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are in docs/STATUS-history.md.
-- 2026-11-15 (IDE): user: clicking to move sometimes made the avatar go back. Cause: a new walk started from the last whole tile, while the avatar was drawn halfway into the next one. Fixed in `WorldSim.walkTo` (finish the current step, keep its start time), with a fast-check property. While testing, a visual baseline failed only because the run was after midnight (toast "Night owl", a badge that depends on the hour): toasts are now masked in the screenshots, baselines rewritten. `pnpm check`, e2e 144/144, e2e:demo pass.
-- 2026-11-15 (IDE): user asked for a BugSack / BugGrabber like in games, with a Game part (visual) and a Code part, where errors are kept and can be read any time. Spec bug-sack (grabbers in client, world-server, engine, conductor; F8 Report a bug with a screenshot; lobby bug jar and Bug sack panel with Game and Code tabs, Fixed/Ignored, Copy for Kiro; data/bugs.jsonl through the leak scanner), TASKMAP row 17, sessions S40-S41. Before the user's test round. Hotel stopped; conductor started (log data/sessions/conduct-run14.txt).
-- 2026-11-15 (IDE): task 2 of bug-sack done (S41 work): client grabber, Report a bug, panel, jar drawn in code, screenshot upload in pieces (D18). `pnpm check`, e2e 164/164 with Edge and `--retries=1`, e2e:demo and check:demo-build pass; 29 baselines written or rewritten (lobby, menus, bug screens). Security scan not clean (see Open problems). Pending: merge and the user's look.
-- 2026-11-15 (IDE): user said "revisa si queda algo y preparemos para la entrega". README rewritten with the full feature list. STATUS Next updated. TASKMAP bug-sack marked needs-check. `pnpm check` and security scan pass; pushed. Hotel running for the user's test round.
-- 2026-11-16 (IDE): implemented all actionable items from the kiroween-review document: (1) D10 ratified; (2) journeys balance poll fix; (3) roadmap and kiro-usage updated.
-- 2026-11-16 (IDE): documentation updated for submission and long-term vision. roadmap-after-kiroween.md rewritten: multi-runtime as priority 1 (Ollama + OpenAI-compat runtimes, design and security decisions), ticket-room, distribution, quality. kiro-usage.md extended: regression suite, what Kiro did vs the developer, 10 sections. STATUS Open problems cleaned. Kiro credits exhausted; motor running with RUNTIME=fake for the demo recording. Credits renew ~Dec 1.
-
- (1) D10 ratified — import review uses agentlife-import-review (read-only tier), recorded in risks-and-decisions.md, cleaned from STATUS and HUMAN-CHECKS; (2) journeys.spec.ts flaky at 360x640 fixed (synchronous balance() call changed to expect.poll, so a racing wallet update can no longer fail the assertion); (3) .env.example, ASSETS.md and video-script.md already done in the previous session. README, TASKMAP and STATUS already up to date. `pnpm check` and security scan pass. Next: re-record the replay and the video for final-demo.
-
-- 2026-11-16 (IDE): user asked for a very easy way to start the hotel. Added `pnpm hotel` (scripts/hotel.ts + hotel-lib.ts with tests) and `Start AGENT LIFE.cmd`: reads .env (known keys only), checks ports, starts Docker Desktop on Windows if needed, falls back to scripted agents with the reason, finds Ollama, starts engine then world-server then client, opens the browser; the Kiro key goes to the engine only and is masked in the logs. Checked live: start, a second run refuses with a hint, --restart, Ctrl+C leaves no process on the ports. README Quick start section.
+- 2026-11-16 (IDE): implemented all actionable items from the kiroween-review document:- 2026-11-16 (IDE): user asked for a very easy way to start the hotel. Added `pnpm hotel` (scripts/hotel.ts + hotel-lib.ts with tests) and `Start AGENT LIFE.cmd`: reads .env (known keys only), checks ports, starts Docker Desktop on Windows if needed, falls back to scripted agents with the reason, finds Ollama, starts engine then world-server then client, opens the browser; the Kiro key goes to the engine only and is masked in the logs. Checked live: start, a second run refuses with a hint, --restart, Ctrl+C leaves no process on the ports. README Quick start section.
 
 - 2026-11-16 (IDE): user wants the tool dynamic: any AI, not only Kiro, several at once (Ollama, Grok...). Checked: Ollama qwen3.5:4b and llama3.1 both do tool calling on the OpenAI-compatible API (11 s). Spec multi-runtime written (providers.json, OpenAICompatRuntime with an engine-run tool loop as the sandbox, provider per role and per HR member, HR pickers, pnpm hotel keys), TASKMAP row 18. Kiro credits are out, so Kiro builds it in the IDE, not the conductor. Waiting for the user's go.
+- 2026-11-16 (IDE): user: "hagamoslo ahora". multi-runtime built in the IDE, 3 tasks, merged and pushed: providers.json, OpenAICompatRuntime with engine-run file tools (D19), provider per role and per HR member with pickers and the cloud notice, `model (Provider)` in reports and seats, `pnpm hotel --ai/--model` and cloud keys for the engine only. Live: a DiscordIA job fully on Ollama qwen3.5:4b, PASS; the first two tries showed the small model looping and skipping the json block, so the loop now refuses repeated calls, asks for the answer before the limit and reminds about the json block (design.md). 5 visual baselines rewritten (6 to 28 pixels of browser drift). Pending: the user's xAI or Groq key, if any, to try a cloud AI; final-demo.
 
 ## Next
 1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.
@@ -59,19 +51,21 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 | ui-tidy | 3 / 3 | main | Row 14. Top bar, Menu, Edit room in every room, Actions menu, Builder back to idle after 10 min (design.md) |
 | ghost-skins | 2 / 2 | main | Row 15. 23 parts drawn in code, wardrobe, worn from the HR desk and the Profile (design.md). Playwright: fourth test server (8798/5196). Not looked at by the user |
 | regression-suite | 3 / 3 | main | Row 16. Journeys, rules and visual comparisons in Playwright, run by the conductor before a merge and by CI. Run it and update baselines: README "Tests" section |
-| bug-sack | 2 / 2 | feat/bug-sack | Row 17. Task 1: shared `bugs.ts` (schemas, fingerprint, `BugBook`) and `bugs-node.ts` (masking, file format, inbox), world-server `BugStore` (`data/bugs.jsonl`, `AGENTLIFE_BUGS_FILE`, only with `ENGINE=http` or that variable), Code grabbers, `pnpm run bugs` (D17). Task 2: Game grabber, Report a bug (F8, screenshot sent in pieces, D18), Bug sack panel, bug jar in the lobby, `bug_news` push, Menu items and dot, off in the demo (design.md "Task 2"). Every Playwright test server has a scratch `AGENTLIFE_BUGS_FILE`. Not run live, not looked at by the user |
+| multi-runtime | 3 / 3 | main | Row 18. Any OpenAI-format AI with tool calls (Ollama, LM Studio, Groq, xAI, OpenAI, OpenRouter) per role (`agents.json`), per HR member, or per run (`pnpm hotel --ai`); the engine runs the file tools (D19). Live on Ollama 2026-11-16; no cloud AI tried (no key) |
+| bug-sack | 2 / 2 | main | Row 17. Task 1: shared `bugs.ts` (schemas, fingerprint, `BugBook`) and `bugs-node.ts` (masking, file format, inbox), world-server `BugStore` (`data/bugs.jsonl`, `AGENTLIFE_BUGS_FILE`, only with `ENGINE=http` or that variable), Code grabbers, `pnpm run bugs` (D17). Task 2: Game grabber, Report a bug (F8, screenshot sent in pieces, D18), Bug sack panel, bug jar in the lobby, `bug_news` push, Menu items and dot, off in the demo (design.md "Task 2"). Every Playwright test server has a scratch `AGENTLIFE_BUGS_FILE`. Not run live, not looked at by the user |
 
 ## Open problems
 - ui-tidy: a piece behind a taller one is picked by pressing its drawing above the tile (design.md); not fixed.
 - Flaky: `pipeline-editor.spec.ts` "board shows the editor" (e2e timing, passes alone); `pnpm check` under load on two world-server timing tests.
-- The demo replay (`run-001.json`) predates floors and the game layer. Kiro credits exhausted for the month (renewal ~Dec 1); re-record with `RUNTIME=fake` or wait.
+- The demo replay (`run-001.json`) predates floors and the game layer. Kiro credits exhausted for the month (renewal ~Dec 1); re-record with real agents on Ollama (`pnpm hotel --ai ollama`) or `RUNTIME=fake`.
+- multi-runtime: a 4B local model is slow (a one-line change took about 6 minutes) and may still miss the plan format on a bigger goal; the analyze timeout is 5 minutes for every provider.
 - ghost-skins: check every part at 1x on every role colour is a human check (not yet done).
 - regression-suite: visual baselines exist for Windows/Edge only; CI skips them. First Linux run will confirm the browser job passes.
 - waiting-fun: mood not kept across a restart; after 10 catches for the same scripted task id no wisp pays (fake engine reuses ids).
 
 
 ## Security
-- History rewritten twice with git filter-repo (noreply identity `14869836+adan291@users.noreply.github.com`, no personal emails, no key-shaped literals); backups in `data/backup/` (git-ignored). Local git config uses the noreply address. `pnpm security:scan` clean on 2026-11-15 on main; on `feat/bug-sack` it is not (see Open problems).
+- History rewritten twice with git filter-repo (noreply identity `14869836+adan291@users.noreply.github.com`, no personal emails, no key-shaped literals); backups in `data/backup/` (git-ignored). Local git config uses the noreply address. `pnpm security:scan` clean on 2026-11-16.
 - Nothing is pushed while the scan reports high or medium findings (push guard hook and git pre-push hook). Decisions on findings are the user's.
 
 ## Key dates

@@ -3,11 +3,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
+/**
+ * One role: `{ "runtime": "kiro-cli", "model": ... }` as before, `{ "runtime": "fake" }`, or a provider of
+ * config/providers.json (`{ "provider": "ollama", "model": "qwen3.5:4b" }`, multi-runtime). Without either: Kiro.
+ */
 const AgentRuntimeCfg = z.object({
-  runtime: z.enum(["fake", "kiro-cli"]),
+  runtime: z.enum(["fake", "kiro-cli"]).optional(),
+  provider: z.string().regex(/^[a-z][a-z0-9-]{0,29}$/).optional(),
   agent: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
 });
+export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeCfg>;
+
+/** Which provider a role uses: `fake`, `kiro`, or the id of another provider. */
+export function providerOfRole(cfg: AgentRuntimeConfig): string {
+  if (cfg.runtime === "fake") return "fake";
+  return cfg.provider ?? "kiro";
+}
 
 export const AgentsConfigSchema = z.object({
   architect: AgentRuntimeCfg,
@@ -81,10 +93,24 @@ function assertInsideProject(repo: RepoConfig): void {
   }
 }
 
-export function loadConfig(dir: string = DEFAULT_CONFIG_DIR): EngineConfig {
-  const agents = loadFile(dir, "agents.json", AgentsConfigSchema);
+export function loadConfig(dir: string = DEFAULT_CONFIG_DIR, env: NodeJS.ProcessEnv = process.env): EngineConfig {
+  const agents = withProviderOverride(loadFile(dir, "agents.json", AgentsConfigSchema), env);
   const repos = loadFile(dir, "repos.json", ReposConfigSchema);
   const limits = loadFile(dir, "limits.json", LimitsConfigSchema);
   repos.forEach(assertInsideProject);
   return { agents, repos, limits };
+}
+
+/**
+ * `AGENTLIFE_PROVIDER=<id>` (and `AGENTLIFE_MODEL`) puts the three roles on that provider for this run, so
+ * `pnpm hotel --ai ollama` works without editing config/agents.json. Team members keep their own provider.
+ */
+export function withProviderOverride(agents: AgentsConfig, env: NodeJS.ProcessEnv): AgentsConfig {
+  const provider = env["AGENTLIFE_PROVIDER"]?.trim();
+  if (!provider) return agents;
+  if (!/^[a-z][a-z0-9-]{0,29}$/.test(provider)) throw new Error(`config: AGENTLIFE_PROVIDER '${provider}' is not a provider id`);
+  if (provider === "kiro") return agents;
+  const model = env["AGENTLIFE_MODEL"]?.trim();
+  const role = (cfg: AgentRuntimeConfig): AgentRuntimeConfig => (cfg.runtime === "fake" ? cfg : { provider, ...(model ? { model } : {}) });
+  return { ...agents, architect: role(agents.architect), developer: role(agents.developer), qa: role(agents.qa) };
 }

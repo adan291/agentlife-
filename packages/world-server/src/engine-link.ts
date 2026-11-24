@@ -8,6 +8,7 @@ import type {
   DeliveryInfo,
   HireBody,
   HrState,
+  ProviderView,
   ImportView,
   JobDetails,
   JobKind,
@@ -43,6 +44,8 @@ export interface HrLink {
   approveImport(id: string, hash: string): Promise<ImportView>;
   rejectImport(id: string): Promise<void>;
   suggest(projectId: string): Promise<TeamSuggestion>;
+  /** The AI providers (multi-runtime). Optional: the scripted HR office has none. */
+  providers?(): Promise<ProviderView[]>;
 }
 
 /** The Library of the projects (project-memory). Every method rejects with the engine's own message when it refuses. */

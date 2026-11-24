@@ -110,7 +110,12 @@ describe("validatePipeline: members", () => {
       "5: The second review needs someone other than the Review. Choose another team member.",
     ]);
     const same = TEAM.map((m) => (m.id === "reviewer-1" ? { ...m, model: "m-q" } : m));
-    expect(rules(steps, same)).toEqual(["5: The second review needs a different model than the Review (both use m-q). Change the model of one of them."]);
+    expect(rules(steps, same)).toEqual([
+      "5: The second review needs a different model or provider than the Review (both use m-q). Change the model or the provider of one of them.",
+    ]);
+    // The same model name on another provider is another model (multi-runtime).
+    const otherProvider = same.map((m) => (m.id === "reviewer-1" ? { ...m, provider: "ollama" } : m));
+    expect(rules(steps, otherProvider)).toEqual([]);
   });
 });
 

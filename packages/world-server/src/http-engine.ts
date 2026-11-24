@@ -25,6 +25,7 @@ import {
   StartJobResponseSchema,
   TeamMemberSchema,
   TeamModelsResponseSchema,
+  ProvidersResponseSchema,
   TeamResponseSchema,
   TeamSuggestionSchema,
   type AgentEvent,
@@ -101,8 +102,11 @@ export class HttpEngineLink implements EngineLink {
           return { projectId: p.id, name: p.name, customised: t.customised, members: t.members };
         }),
       );
-      return { catalogue, teams, imports, sources, models };
+      // An older engine has no /providers: the panel then shows no provider picker.
+      const providers = await this.hr.providers?.().catch(() => undefined);
+      return { catalogue, teams, imports, sources, models, ...(providers ? { providers } : {}) };
     },
+    providers: async () => ProvidersResponseSchema.parse(await this.request("GET", "/providers")).providers,
     team: async (projectId) => TeamResponseSchema.parse(await this.request("GET", `/projects/${encodeURIComponent(projectId)}/team`)),
     hire: async (projectId, body) => TeamMemberSchema.parse(await this.request("POST", `/projects/${encodeURIComponent(projectId)}/team`, body)),
     update: async (projectId, memberId, body) =>

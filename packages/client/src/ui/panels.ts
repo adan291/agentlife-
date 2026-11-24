@@ -436,9 +436,10 @@ export function createPanels(
     send({ type: "hr_do", act });
   };
   const hrPanel = createHrPanel(document, {
-    hire: (projectId, templateId, displayName, model) => hrAct({ action: "hire", projectId, templateId, displayName, ...(model ? { model } : {}) }),
+    hire: (projectId, templateId, displayName, model, provider) =>
+      hrAct({ action: "hire", projectId, templateId, displayName, ...(model ? { model } : {}), ...(provider ? { provider } : {}) }),
     rename: (projectId, memberId, displayName) => hrAct({ action: "update", projectId, memberId, displayName }),
-    setModel: (projectId, memberId, model) => hrAct({ action: "update", projectId, memberId, model }),
+    setModel: (projectId, memberId, model, provider) => hrAct({ action: "update", projectId, memberId, model, ...(provider ? { provider } : {}) }),
     fire: (projectId, memberId) => hrAct({ action: "fire", projectId, memberId }),
     importFrom: (url) => hrAct({ action: "import", url }),
     approve: (id, hash) => hrAct({ action: "approve_import", id, hash }),

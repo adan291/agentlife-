@@ -1,4 +1,4 @@
-import { MemberNameSchema, SEATED_ROLES } from "@agentlife/shared";
+import { KIRO_PROVIDER, MemberNameSchema, SEATED_ROLES } from "@agentlife/shared";
 import type { BadgeDef, CatalogueEntry, EntityView, HrState, HrTeam, ImportView, TeamMember, TeamPick, TeamRole, TeamSuggestion } from "@agentlife/shared";
 import { badgeIcon } from "./badge-icons.ts";
 import type { PanelContent } from "./computer.ts";
@@ -7,9 +7,11 @@ import { levelLine, progressLines, statsLine } from "./progress.ts";
 
 /** The HR desk's actions, as the panel sends them (panels.ts turns them into `hr_do` messages). */
 export interface HrActions {
-  hire(projectId: string, templateId: string, displayName: string, model: string | undefined): void;
+  /** `provider`: the AI provider (multi-runtime); absent means Kiro. */
+  hire(projectId: string, templateId: string, displayName: string, model: string | undefined, provider?: string): void;
   rename(projectId: string, memberId: string, displayName: string): void;
-  setModel(projectId: string, memberId: string, model: string): void;
+  /** A new model, and with `provider` a move to another AI provider. */
+  setModel(projectId: string, memberId: string, model: string, provider?: string): void;
   fire(projectId: string, memberId: string): void;
   importFrom(url: string): void;
   approve(id: string, hash: string): void;
@@ -121,6 +123,34 @@ interface HireForm {
   templateId: string;
   name: string;
   model: string;
+  /** The AI provider to hire on; `kiro` by default. */
+  provider: string;
+}
+
+/**
+ * The providers a member can be put on: the available ones, Kiro first, plus the member's current one even when it is
+ * not available now (so the select shows the truth). Empty when the engine lists no provider besides Kiro.
+ */
+export function providerChoices(state: Pick<HrState, "providers">, current?: string): { value: string; label: string }[] {
+  const list = state.providers ?? [];
+  if (!list.some((p) => p.id !== KIRO_PROVIDER)) return [];
+  const shown = list.filter((p) => p.available || p.id === current || p.id === KIRO_PROVIDER);
+  return shown.map((p) => ({ value: p.id, label: p.available ? `${p.label}${p.local ? " (this computer)" : ""}` : `${p.label} (not available)` }));
+}
+
+/** The models a member of `role` may use on `provider`: the account's Kiro models, or the provider's own list. */
+export function modelsFor(state: Pick<HrState, "models" | "providers">, provider: string, role: TeamRole): string[] {
+  if (provider === KIRO_PROVIDER) return state.models[role] ?? [];
+  return state.providers?.find((p) => p.id === provider)?.models ?? [];
+}
+
+/** What choosing a provider means, said where it is chosen. */
+export function providerNote(state: Pick<HrState, "providers">, provider: string): string | undefined {
+  const p = state.providers?.find((x) => x.id === provider);
+  if (!p || p.id === KIRO_PROVIDER) return undefined;
+  if (!p.available) return p.reason ?? `${p.label} is not available.`;
+  if (p.cloud) return `Runs on ${p.label}: the files this agent reads are sent to ${p.label}. The engine gives it only file tools inside the job's copy; no shell, no network.`;
+  return `Runs on ${p.label} on this computer: nothing leaves the machine. The engine gives it only file tools inside the job's copy.`;
 }
 
 /**
@@ -143,7 +173,7 @@ export function createHrPanel(
   const formFor = (projectId: string, catalogue: readonly CatalogueEntry[]): HireForm => {
     let f = forms.get(projectId);
     if (!f) {
-      f = { templateId: catalogue[0]?.id ?? "", name: "", model: "" };
+      f = { templateId: catalogue[0]?.id ?? "", name: "", model: "", provider: KIRO_PROVIDER };
       forms.set(projectId, f);
     }
     return f;
@@ -157,7 +187,10 @@ export function createHrPanel(
     head.append(el(doc, "strong", undefined, m.displayName), el(doc, "span", "al-badge", roleLabel(m.role)), el(doc, "span", "al-muted", STANDING_TEXT[where]));
     row.appendChild(head);
     const template = state.catalogue.find((c) => c.id === m.templateId);
-    row.appendChild(el(doc, "p", "al-muted", `${template?.name ?? m.templateId} · ${m.model}`));
+    // The Night intern always runs on this computer: it gets no provider picker.
+    const local = template?.runtime === "ollama";
+    const on = m.provider && m.provider !== KIRO_PROVIDER ? ` on ${state.providers?.find((p) => p.id === m.provider)?.label ?? m.provider}` : "";
+    row.appendChild(el(doc, "p", "al-muted", `${template?.name ?? m.templateId} · ${m.model}${on}`));
     // Level and stats come from the real work this member did (team-progress); a member with no work yet is level 0.
     const lv = progressOf?.(team.projectId, m.id);
     if (lv) {
@@ -199,19 +232,46 @@ export function createHrPanel(
       renames.delete(key);
     });
     save.dataset["action"] = "rename";
-    const models = state.models[m.role] ?? [m.model];
+    const memberProvider = m.provider ?? KIRO_PROVIDER;
+    const known = modelsFor(state, memberProvider, m.role);
+    const models = known.length ? known : [m.model];
     const model = selectOf(
       doc,
       (models.includes(m.model) ? models : [m.model, ...models]).map((v) => ({ value: v, label: v })),
       m.model,
-      (v) => actions.setModel(team.projectId, m.id, v),
+      (v) => actions.setModel(team.projectId, m.id, v, m.provider),
       `Model for ${m.displayName}`,
     );
     model.dataset["field"] = "model";
     const fire = button(doc, "Fire", () => actions.fire(team.projectId, m.id), `Let ${m.displayName} go`);
     fire.dataset["action"] = "fire";
-    controls.append(rename, save, model, fire);
+    // Which AI the member runs on (multi-runtime). Moving it takes the first model the provider offers.
+    const choices = local ? [] : providerChoices(state, memberProvider);
+    if (choices.length) {
+      const provider = selectOf(
+        doc,
+        choices,
+        memberProvider,
+        (v) => {
+          if (v === memberProvider) return;
+          const first = modelsFor(state, v, m.role)[0];
+          if (!first) {
+            problems.set(team.projectId, `${choices.find((c) => c.value === v)?.label ?? v} lists no model: install or name one first.`);
+            return rerender();
+          }
+          problems.delete(team.projectId);
+          actions.setModel(team.projectId, m.id, first, v);
+        },
+        `AI provider for ${m.displayName}`,
+      );
+      provider.dataset["field"] = "provider";
+      controls.append(rename, save, provider, model, fire);
+    } else {
+      controls.append(rename, save, model, fire);
+    }
     row.appendChild(controls);
+    const note = providerNote(state, memberProvider);
+    if (note) row.appendChild(el(doc, "p", "al-muted al-provider-note", note));
     return row;
   }
 
@@ -233,10 +293,32 @@ export function createHrPanel(
     );
     template.dataset["field"] = "template";
     const entry = state.catalogue.find((c) => c.id === form.templateId);
-    const allowed = entry ? (state.models[entry.role] ?? []) : [];
-    const modelOptions = [{ value: "", label: entry ? `Default (${entry.defaultModel})` : "Default" }, ...allowed.map((v) => ({ value: v, label: v }))];
+    // The provider to hire on (multi-runtime); the intern has none, it always runs on this computer.
+    const choices = entry && entry.runtime !== "ollama" ? providerChoices(state, form.provider) : [];
+    if (!choices.some((c) => c.value === form.provider)) form.provider = KIRO_PROVIDER;
+    const onKiro = form.provider === KIRO_PROVIDER;
+    const allowed = entry ? modelsFor(state, form.provider, entry.role) : [];
+    // On Kiro the template's own model is the default; another provider needs a model of its own.
+    if (!onKiro && !allowed.includes(form.model)) form.model = allowed[0] ?? "";
+    const modelOptions = onKiro
+      ? [{ value: "", label: entry ? `Default (${entry.defaultModel})` : "Default" }, ...allowed.map((v) => ({ value: v, label: v }))]
+      : allowed.map((v) => ({ value: v, label: v }));
     const model = selectOf(doc, modelOptions, form.model, (v) => (form.model = v), "Model");
     model.dataset["field"] = "hire-model";
+    const provider = choices.length
+      ? selectOf(
+          doc,
+          choices,
+          form.provider,
+          (v) => {
+            form.provider = v;
+            form.model = "";
+            rerender();
+          },
+          "AI provider",
+        )
+      : undefined;
+    if (provider) provider.dataset["field"] = "hire-provider";
     const name = textInput(doc, form.name, "Name of the new member", (v) => (form.name = v));
     name.placeholder = "Name";
     name.dataset["field"] = "hire-name";
@@ -247,13 +329,21 @@ export function createHrPanel(
         problems.set(team.projectId, problem ?? "Choose who to hire.");
         return rerender();
       }
+      if (!onKiro && !form.model) {
+        problems.set(team.projectId, "That provider lists no model: install or name one first.");
+        return rerender();
+      }
       problems.delete(team.projectId);
-      actions.hire(team.projectId, form.templateId, n, form.model || undefined);
+      if (onKiro) actions.hire(team.projectId, form.templateId, n, form.model || undefined);
+      else actions.hire(team.projectId, form.templateId, n, form.model, form.provider);
       form.name = "";
     });
     hire.dataset["action"] = "hire";
-    row.append(template, model, name, hire);
+    if (provider) row.append(template, provider, model, name, hire);
+    else row.append(template, model, name, hire);
     box.appendChild(row);
+    const note = providerNote(state, form.provider);
+    if (note) box.appendChild(el(doc, "p", "al-muted al-provider-note", note));
     if (entry) box.appendChild(el(doc, "p", "al-muted", `${entry.description} It ${entry.tier === "read-only" ? "can only read" : "may change files only in its own copy of"} the project.`));
     return box;
   }

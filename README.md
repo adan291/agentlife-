@@ -83,19 +83,30 @@ pnpm hotel            # or double-click "Start AGENT LIFE.cmd" on Windows
 
 `pnpm hotel` checks what is there and picks the mode by itself:
 
-- **Real agents** when `KIRO_API_KEY` is set (in `.env`, see [.env.example](.env.example)) and Docker is running. On Windows it starts Docker Desktop if it is installed and not running.
+- **Real agents** when an AI and Docker are there: Kiro when `KIRO_API_KEY` is set (in `.env`, see [.env.example](.env.example)), else Ollama when it is running. On Windows it starts Docker Desktop if it is installed and not running.
 - **Scripted agents** otherwise, and it says why. They need no credits and no Docker, so the whole hotel works on any machine.
 - **Ollama** is used for the ambient phrases and the Library intern when it answers on `127.0.0.1:11434` (optional).
 
 | Command | What it does |
 |---|---|
 | `pnpm hotel` | real agents if possible, else scripted |
+| `pnpm hotel --ai ollama --model qwen3.5:4b` | the three roles run on that AI and model (see AI providers) |
 | `pnpm hotel --fake` | scripted agents (no credits, no Docker) |
 | `pnpm hotel --real` | real agents even if a check fails |
 | `pnpm hotel --restart` | stop a hotel already running on ports 8787, 8788, 5173 and start again |
 | `pnpm hotel --no-open` | do not open the browser |
 
 The logs of the three processes appear in the same window with a prefix (`[engine]`, `[world]`, `[client]`). Ctrl+C, or closing the window, stops all of them. Only the engine receives the Kiro key; it is never printed.
+
+### AI providers
+
+The agents run on Kiro by default, and on any AI that speaks the OpenAI chat format with tool calls: Ollama and LM Studio on your computer, or Groq, xAI Grok, OpenAI and OpenRouter in the cloud. The list is `packages/agent-engine/config/providers.json`; another compatible API is one more entry.
+
+- **For the whole team, one run:** `pnpm hotel --ai <provider> [--model <model>]`. Without `--model` the provider's first model is used (for Ollama, `LLM_MODEL`).
+- **Per role, always:** `{ "provider": "ollama", "model": "qwen3.5:4b" }` instead of `{ "runtime": "kiro-cli", ... }` in `packages/agent-engine/config/agents.json`.
+- **Per hired member:** pick the AI and the model at the HR desk. Several AIs can work on the same job, and a second review counts as "another model" when the provider differs.
+- **Cloud keys** go in `.env` (`GROQ_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`). Only the engine gets them; an AI without its key is shown as not available. A cloud AI receives the files its agent reads, and the HR desk says so when you choose it.
+- **Same rules on every AI:** outside Kiro the model gets only `list_files`, `read_file`, `search` and, for the Developer, `write_file`. The engine runs them inside the job's folder with the same deny list of secret files. There is no shell and no network, and the diff check, the Docker tests and your plan approval stay the same.
 
 For real jobs on your own code, create `D:\AgentHotel` (the allowed projects folder, see `config/hotel.json`), copy a small git project there and register it at the Reception desk in the lobby.
 

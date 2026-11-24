@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG_DIR, loadConfig } from "../src/config.ts";
+import { DEFAULT_CONFIG_DIR, loadConfig, withProviderOverride } from "../src/config.ts";
 
 const dirs: string[] = [];
 function copyConfig(): string {
@@ -49,5 +49,27 @@ describe("loadConfig", () => {
     expect(() => loadConfig(dir)).toThrow(/escapes the project/);
     writeFileSync(path.join(dir, "repos.json"), JSON.stringify([{ ...repo, source: path.resolve("abs") }]));
     expect(() => loadConfig(dir)).toThrow(/relative/);
+  });
+});
+
+describe("withProviderOverride (pnpm hotel --ai)", () => {
+  const agents = loadConfig(DEFAULT_CONFIG_DIR, {}).agents;
+  it("does nothing without AGENTLIFE_PROVIDER or with kiro", () => {
+    expect(withProviderOverride(agents, {})).toEqual(agents);
+    expect(withProviderOverride(agents, { AGENTLIFE_PROVIDER: "kiro", AGENTLIFE_MODEL: "x" })).toEqual(agents);
+  });
+  it("puts the three roles on the provider, with the model when given", () => {
+    const cfg = withProviderOverride(agents, { AGENTLIFE_PROVIDER: "ollama", AGENTLIFE_MODEL: "qwen3.5:4b" });
+    for (const role of ["architect", "developer", "qa"] as const) expect(cfg[role]).toEqual({ provider: "ollama", model: "qwen3.5:4b" });
+    expect(cfg.ambient).toEqual(agents.ambient);
+    expect(withProviderOverride(agents, { AGENTLIFE_PROVIDER: "xai" }).qa).toEqual({ provider: "xai" });
+  });
+  it("keeps a fake role and refuses a malformed id", () => {
+    const fake = { ...agents, qa: { runtime: "fake" as const } };
+    expect(withProviderOverride(fake, { AGENTLIFE_PROVIDER: "groq" }).qa).toEqual({ runtime: "fake" });
+    expect(() => withProviderOverride(agents, { AGENTLIFE_PROVIDER: "../x" })).toThrow(/not a provider id/);
+  });
+  it("loadConfig applies it", () => {
+    expect(loadConfig(DEFAULT_CONFIG_DIR, { AGENTLIFE_PROVIDER: "ollama" }).agents.developer.provider).toBe("ollama");
   });
 });
