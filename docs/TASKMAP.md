@@ -25,7 +25,8 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 15 | `ghost-skins` | S35 S36 | yes | needs-check | Outfits for the ghosts and the avatar (hat, top, accessory), bought with Ecto or unlocked by badges, worn from the HR desk and the Profile |
 | 16 | `regression-suite` | S37 S38 S39 | no | done | User journeys, layout rules and visual comparisons in Playwright, run by the conductor before every merge and by CI on every push |
 | 17 | `bug-sack` | S40 S41 | yes | needs-check | Every error caught by itself (Game and Code), Report a bug with F8, the Bug sack panel to read them any time |
-| 18 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
+| 18 | `multi-runtime` | IDE | yes | todo | Any AI, several at once: Kiro, Ollama, LM Studio, Groq, Grok, OpenAI, OpenRouter per role and per member; the engine runs the file tools |
+| 19 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
 

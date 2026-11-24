@@ -29,6 +29,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 
 - 2026-11-16 (IDE): user asked for a very easy way to start the hotel. Added `pnpm hotel` (scripts/hotel.ts + hotel-lib.ts with tests) and `Start AGENT LIFE.cmd`: reads .env (known keys only), checks ports, starts Docker Desktop on Windows if needed, falls back to scripted agents with the reason, finds Ollama, starts engine then world-server then client, opens the browser; the Kiro key goes to the engine only and is masked in the logs. Checked live: start, a second run refuses with a hint, --restart, Ctrl+C leaves no process on the ports. README Quick start section.
 
+- 2026-11-16 (IDE): user wants the tool dynamic: any AI, not only Kiro, several at once (Ollama, Grok...). Checked: Ollama qwen3.5:4b and llama3.1 both do tool calling on the OpenAI-compatible API (11 s). Spec multi-runtime written (providers.json, OpenAICompatRuntime with an engine-run tool loop as the sandbox, provider per role and per HR member, HR pickers, pnpm hotel keys), TASKMAP row 18. Kiro credits are out, so Kiro builds it in the IDE, not the conductor. Waiting for the user's go.
+
 ## Next
 1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.
 2. final-demo: re-record the replay with several floors and the game layer, video script, Devpost. Freeze 2026-12-01, submit by 2026-12-03.
