@@ -6,6 +6,8 @@ import type { Logger } from "../log.ts";
 import type { MemoryStore } from "../memory/store.ts";
 import type { DataPaths } from "../paths.ts";
 import type { ProjectRegistry, ResolvedProject } from "../projects/registry.ts";
+import { KIRO_PROVIDER, providerModelLabel } from "@agentlife/shared";
+import { ProviderError } from "../runtimes/openai-compat.ts";
 import type { AgentRuntime, Role } from "../runtimes/types.ts";
 import type { Store } from "../store.ts";
 import { memberForStep, type TeamResolver } from "../team/service.ts";
@@ -37,6 +39,32 @@ export interface PipelineDeps {
   notes?: JobNotes;
   /** The Library of each project. Its notes go into the prompts of the three roles. Without it every prompt says "(none)". */
   memory?: MemoryStore;
+  /** AI providers other than Kiro (multi-runtime). Without it a member's provider is ignored and the role's runtime runs. */
+  providers?: { runtime(id: string): AgentRuntime | undefined; label(id: string): string | undefined };
+  /** The provider of each role that is not on Kiro (config/agents.json). */
+  roleProviders?: Partial<Record<Role, string>>;
+  /** kiro-cli, for a member on Kiro when the role's default is another provider. */
+  kiro?: AgentRuntime;
+}
+
+/**
+ * The runtime of a step and the provider it runs on: the member's provider if it has one, else the role's. A member on
+ * a provider that cannot work here stops the step with the reason.
+ */
+export function runtimeForStep(
+  deps: PipelineDeps,
+  role: Role,
+  member: { provider?: string | undefined; displayName?: string } | undefined,
+): { runtime: AgentRuntime; provider: string | undefined } {
+  const provider = member?.provider ?? deps.roleProviders?.[role];
+  if (!deps.providers || member?.provider === undefined) return { runtime: deps.runtimes[role], provider: deps.providers ? provider : undefined };
+  if (member.provider === KIRO_PROVIDER) return { runtime: deps.kiro ?? deps.runtimes[role], provider: undefined };
+  const runtime = deps.providers.runtime(member.provider);
+  if (!runtime) {
+    const label = deps.providers.label(member.provider) ?? member.provider;
+    throw new ProviderError(`${member.displayName ?? "This member"} runs on ${label}, which is not available: set its key in .env or start it on this computer.`);
+  }
+  return { runtime, provider: member.provider };
 }
 
 const SAFE_TASK_ID = /^[A-Za-z0-9_-]+$/;
@@ -86,12 +114,14 @@ export async function runRole(
   const outputs: string[] = [];
   const member = memberForStep(deps.team, ctx, role);
   // The local intern has no tools: it may only do the small read-only steps. Refused before anything runs.
-  let runtime = deps.runtimes[role];
+  let { runtime, provider } = runtimeForStep(deps, role, member);
   if (member?.runtime === "ollama") {
     assertInternStep(step);
     if (!deps.intern) throw new Error("The Night intern is not available in this engine.");
     runtime = deps.intern;
+    provider = undefined;
   }
+  const model = member?.model ?? deps.models?.[role];
   const input = {
     role,
     step,
@@ -101,7 +131,10 @@ export async function runRole(
     signal: ctx.signal,
     rawLogPath: path.join(deps.paths.runs, ctx.taskId, `${step}.raw.jsonl`),
     ...(member ? { agent: member.agent, ...(member.model ? { model: member.model } : {}), ...(member.system ? { system: member.system } : {}) } : {}),
+    // Another provider has no agent file with the role's model: it gets the model in the input.
+    ...(provider && !member?.model && model ? { model } : {}),
   };
+  const providerLabel = provider ? deps.providers?.label(provider) : undefined;
   const tracker = createStepTracker({
     store: deps.store,
     taskId: ctx.taskId,
@@ -109,7 +142,7 @@ export async function runRole(
     agentId: role,
     step,
     title: ctx.title,
-    model: member?.model ?? deps.models?.[role],
+    model: model ? providerModelLabel(model, providerLabel) : undefined,
   });
   tracker?.start();
   try {

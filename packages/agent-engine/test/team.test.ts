@@ -58,6 +58,7 @@ function harness(over: { models?: ModelDirectory; agents?: boolean } = {}): Harn
       tiers,
       hasProject: (id) => id === "alpha" || id === "beta",
       defaultModels: { architect: "claude-haiku-5.5", developer: "auto", qa: "claude-haiku-5.5" },
+      providers: { get: (id: string) => ({ groq: { label: "Groq" }, ollama: { label: "Ollama" } })[id] },
       ...(over.agents === false
         ? {}
         : {
@@ -89,7 +90,7 @@ describe("default team", () => {
       ["developer", "Developer", "auto"],
       ["qa", "QA", "claude-haiku-5.5"],
     ]);
-    expect(h.service.resolve("alpha", "t1", "developer")).toEqual({ memberId: "developer", agent: "agentlife-developer", model: "auto", displayName: "Developer" });
+    expect(h.service.resolve("alpha", "t1", "developer")).toEqual({ memberId: "developer", agent: "agentlife-developer", model: "auto", displayName: "Developer", provider: "kiro" });
     expect(existsSync(h.file)).toBe(false);
     expect(existsSync(h.kiroHome)).toBe(false);
   });
@@ -416,5 +417,53 @@ describe("runRole with a team", () => {
     } finally {
       store.close();
     }
+  });
+});
+
+describe("a member on another AI provider (multi-runtime)", () => {
+  it("hires on a provider with its model, resolves the provider and the persona, and keeps a Kiro model in the agent file", async () => {
+    const h = harness();
+    const m = await h.service.hire("alpha", { templateId: "qa-strict", displayName: "Vera", provider: "groq", model: "llama-3.3-70b-versatile" });
+    expect(TeamMemberSchema.parse(m)).toMatchObject({ provider: "groq", model: "llama-3.3-70b-versatile" });
+    const r = h.service.resolveMember("alpha", "task-1", m.id)!;
+    expect(r).toMatchObject({ provider: "groq", model: "llama-3.3-70b-versatile" });
+    expect(r.system).toMatch(/strict QA reviewer/);
+    // Members on Kiro name Kiro, so they stay on it whatever the role's default is.
+    expect(h.service.resolve("alpha", "task-1", "architect")).toMatchObject({ provider: "kiro" });
+    expect(agentFile(h, `alpha-${m.id}`).model).toBe("claude-sonnet-5.5");
+  });
+
+  it("asks for a model, refuses an unknown provider and keeps the intern local", async () => {
+    const h = harness();
+    await expect(h.service.hire("alpha", { templateId: "qa-strict", displayName: "Vera", provider: "groq" })).rejects.toThrow(/Choose a model/);
+    await expect(h.service.hire("alpha", { templateId: "qa-strict", displayName: "Vera", provider: "nope", model: "m" })).rejects.toThrow(/no provider 'nope'/);
+    await expect(h.service.hire("alpha", { templateId: "night-intern", displayName: "Ivo", provider: "groq", model: "m" })).rejects.toThrow(/always runs on this computer/);
+  });
+
+  it("moves a member to another provider and back to Kiro", async () => {
+    const h = harness();
+    const m = await h.service.hire("alpha", { templateId: "qa-strict", displayName: "Vera" });
+    await expect(h.service.update("alpha", m.id, { provider: "ollama" })).rejects.toThrow(/Choose a model/);
+    const moved = await h.service.update("alpha", m.id, { provider: "ollama", model: "qwen3.5:4b" });
+    expect(moved).toMatchObject({ provider: "ollama", model: "qwen3.5:4b" });
+    expect(h.lines.at(-1)).toBe("alpha:qa:Vera now uses qwen3.5:4b on Ollama");
+    const back = await h.service.update("alpha", m.id, { provider: "kiro" });
+    expect(back).not.toHaveProperty("provider");
+    expect(back.model).toBe("claude-sonnet-5.5");
+  });
+
+  it("the default team takes the role's provider from the configuration", () => {
+    const h = harness();
+    const svc = new TeamService({
+      store: h.store,
+      catalogue,
+      models: new ModelDirectory({ rules }),
+      tiers,
+      hasProject: () => true,
+      defaultModels: { architect: "qwen3.5:4b" },
+      defaultProviders: { architect: "ollama" },
+    });
+    expect(svc.team("beta").members.find((x) => x.role === "architect")).toMatchObject({ provider: "ollama", model: "qwen3.5:4b" });
+    expect(svc.resolve("beta", "t", "architect")).toMatchObject({ provider: "ollama" });
   });
 });

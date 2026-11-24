@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import {
+  KIRO_PROVIDER,
   TEAM_MAX_MEMBERS,
   tierForRole,
   type HireBody,
@@ -39,6 +40,8 @@ export interface ResolvedMember {
    */
   runtime?: "ollama";
   system?: string;
+  /** The AI provider of the member (multi-runtime): `kiro` or another provider's id. */
+  provider?: string;
 }
 
 /** What the pipeline steps ask for. A role the team does not have gives undefined and the step uses the built-in agent. */
@@ -80,6 +83,10 @@ export interface TeamServiceOptions {
   hasProject: (projectId: string) => boolean;
   /** Model of each pipeline role in the default team (config/agents.json). */
   defaultModels?: Partial<Record<TeamRole, string>>;
+  /** Provider of each pipeline role in the default team when it is not Kiro (config/agents.json). */
+  defaultProviders?: Partial<Record<TeamRole, string>>;
+  /** The AI providers, to check a member's provider (multi-runtime). */
+  providers?: { get(id: string): unknown };
   /** Where the agent files of customised teams go. Without it no file is written (the fake runtime needs none). */
   agents?: { kiroHome: string; validate?: AgentValidator };
   /** Roles of open jobs on the project that are being worked on now; firing their member is refused. */
@@ -132,8 +139,30 @@ export class TeamService implements TeamResolver {
   private defaultTeam(): TeamMember[] {
     return (["architect", "developer", "qa"] as const).map((role) => {
       const t = this.o.catalogue.defaultFor(role);
-      return { id: role, displayName: t.name, templateId: t.id, role, model: this.o.defaultModels?.[role] ?? this.o.models.preferred(t.defaultModel) };
+      const provider = this.o.defaultProviders?.[role];
+      return {
+        id: role,
+        displayName: t.name,
+        templateId: t.id,
+        role,
+        model: this.o.defaultModels?.[role] ?? this.o.models.preferred(t.defaultModel),
+        ...(provider ? { provider } : {}),
+      };
     });
+  }
+  /** A member's provider must exist; a model on another provider than Kiro is only checked for its shape. */
+  private checkProvider(provider: string | undefined): void {
+    if (provider === undefined || provider === KIRO_PROVIDER) return;
+    if (!this.o.providers?.get(provider)) {
+      throw new BadRequestError("unknown_provider", `There is no provider '${provider}' in config/providers.json.`, [{ path: "provider", message: "unknown provider" }]);
+    }
+  }
+  private onKiro(provider: string | undefined): boolean {
+    return provider === undefined || provider === KIRO_PROVIDER;
+  }
+  private providerLabel(id: string): string {
+    const p = this.o.providers?.get(id) as { label?: string } | undefined;
+    return p?.label ?? id;
   }
 
   private requireProject(projectId: string): void {
@@ -170,7 +199,11 @@ export class TeamService implements TeamResolver {
         agent: this.agentOf(projectId, m, stored !== undefined),
         ...(m.model ? { model: m.model } : {}),
         displayName: m.displayName,
+        // Every member names its provider, so a member on Kiro stays on Kiro when the role's default is another AI.
+        provider: m.provider ?? KIRO_PROVIDER,
         ...(local && template ? { runtime: "ollama" as const, system: `${template.persona} ${ROLE_INSTRUCTIONS[template.role]}` } : {}),
+        // A member on another provider gets the persona as its system text (kiro-cli reads it from the agent file).
+        ...(!local && template && !this.onKiro(m.provider) ? { system: template.persona } : {}),
       };
       byId.set(m.id, resolved);
       if (!byRole.has(m.role)) byRole.set(m.role, resolved);
@@ -214,8 +247,11 @@ export class TeamService implements TeamResolver {
   }
 
   /** The model written into the agent file. A local member's file is only for the fallback, so it names the fallback model. */
-  private fileModel(template: { runtime?: string | undefined }, member: TeamMember): string {
-    return template.runtime === "ollama" ? INTERN_FALLBACK_MODEL : member.model;
+  private fileModel(template: { runtime?: string | undefined; defaultModel: string }, member: TeamMember): string {
+    if (template.runtime === "ollama") return INTERN_FALLBACK_MODEL;
+    // A member on another provider does not run as kiro-cli; its agent file (kept for a switch back) names a Kiro model.
+    if (!this.onKiro(member.provider)) return this.o.models.preferred(template.defaultModel);
+    return member.model;
   }
 
   private fileFor(projectId: string, member: TeamMember): AgentFile {
@@ -274,12 +310,27 @@ export class TeamService implements TeamResolver {
         throw new ConflictError("team_full", `A team holds at most ${TEAM_MAX_MEMBERS} members. Fire someone first.`);
       }
       this.checkName(members, body.displayName);
+      if (template.runtime === "ollama" && !this.onKiro(body.provider)) {
+        throw new BadRequestError("provider_fixed", "The Night intern always runs on this computer; it has no provider to choose.", [{ path: "provider", message: "not for this template" }]);
+      }
+      this.checkProvider(body.provider);
+      const onKiro = this.onKiro(body.provider);
+      if (!onKiro && body.model === undefined) {
+        throw new BadRequestError("model_required", "Choose a model for a member on another provider than Kiro.", [{ path: "model", message: "required" }]);
+      }
       const model = body.model ?? (template.runtime === "ollama" ? template.defaultModel : this.o.models.preferred(template.defaultModel));
-      // A local model is not one of the account's models, so the account's list does not apply to it.
-      if (template.runtime !== "ollama") await this.checkModel(template.role, model);
+      // A local model or a model of another provider is not one of the account's Kiro models, so that list does not apply.
+      if (template.runtime !== "ollama" && onKiro) await this.checkModel(template.role, model);
       let id = `${template.role}-${this.newId()}`;
       while (members.some((m) => m.id === id)) id = `${template.role}-${this.newId()}`;
-      const member: TeamMember = { id, displayName: body.displayName, templateId: template.id, role: template.role, model };
+      const member: TeamMember = {
+        id,
+        displayName: body.displayName,
+        templateId: template.id,
+        role: template.role,
+        model,
+        ...(onKiro ? {} : { provider: body.provider }),
+      };
       await this.commit(projectId, [...members, member]);
       this.say(projectId, member.role, `Hired ${member.displayName} (${template.name})`);
       return member;
@@ -292,11 +343,33 @@ export class TeamService implements TeamResolver {
       const old = members.find((m) => m.id === memberId);
       if (!old) throw new NotFoundError("unknown team member");
       if (body.displayName !== undefined) this.checkName(members, body.displayName, memberId);
-      if (body.model !== undefined && this.o.catalogue.get(old.templateId)?.runtime !== "ollama") await this.checkModel(old.role, body.model);
-      const next: TeamMember = { ...old, ...(body.displayName !== undefined ? { displayName: body.displayName } : {}), ...(body.model !== undefined ? { model: body.model } : {}) };
+      const local = this.o.catalogue.get(old.templateId)?.runtime === "ollama";
+      if (local && body.provider !== undefined && !this.onKiro(body.provider)) {
+        throw new BadRequestError("provider_fixed", "The Night intern always runs on this computer; it has no provider to choose.", [{ path: "provider", message: "not for this template" }]);
+      }
+      this.checkProvider(body.provider);
+      const provider = body.provider ?? old.provider;
+      const providerChanged = body.provider !== undefined && (body.provider === KIRO_PROVIDER ? undefined : body.provider) !== old.provider;
+      if (providerChanged && body.model === undefined && !this.onKiro(provider)) {
+        throw new BadRequestError("model_required", "Choose a model when you move a member to another provider.", [{ path: "model", message: "required" }]);
+      }
+      // Back on Kiro without a new model: the template's Kiro model, since the old one belonged to the other provider.
+      const template = this.o.catalogue.get(old.templateId);
+      const model = body.model ?? (providerChanged && this.onKiro(provider) && template ? this.o.models.preferred(template.defaultModel) : old.model);
+      if (!local && this.onKiro(provider) && (body.model !== undefined || providerChanged)) await this.checkModel(old.role, model);
+      const { provider: _drop, ...rest } = old;
+      const next: TeamMember = {
+        ...rest,
+        ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
+        model,
+        ...(this.onKiro(provider) ? {} : { provider }),
+      };
       await this.commit(projectId, members.map((m) => (m.id === memberId ? next : m)));
       if (next.displayName !== old.displayName) this.say(projectId, next.role, `Renamed ${old.displayName} to ${next.displayName}`);
-      if (next.model !== old.model) this.say(projectId, next.role, `${next.displayName} now uses ${next.model}`);
+      if (next.model !== old.model || next.provider !== old.provider) {
+        const on = next.provider ? ` on ${this.providerLabel(next.provider)}` : "";
+        this.say(projectId, next.role, `${next.displayName} now uses ${next.model}${on}`);
+      }
       return next;
     });
   }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { KIRO_PROVIDER } from "./providers.ts";
 import { MEMBER_ID_RE, TeamRoleSchema, type TeamRole } from "./team.ts";
 
 /**
@@ -69,6 +70,8 @@ export interface PipelineMember {
   role: TeamRole;
   displayName?: string;
   model?: string;
+  /** Absent: Kiro. */
+  provider?: string | undefined;
 }
 
 /** One broken rule. `index` is the step it belongs to, or null when it concerns the pipeline as a whole. */
@@ -170,8 +173,9 @@ export function validatePipeline(steps: readonly PipelineStep[], team: readonly 
     const at = steps.indexOf(second);
     if (a && b) {
       if (a.id === b.id) add(at, "The second review needs someone other than the Review. Choose another team member.");
-      else if (a.model !== undefined && b.model !== undefined && a.model === b.model) {
-        add(at, `The second review needs a different model than the Review (both use ${a.model}). Change the model of one of them.`);
+      // Another provider counts as another model (multi-runtime): the same model name on two providers is two models.
+      else if (a.model !== undefined && b.model !== undefined && a.model === b.model && (a.provider ?? KIRO_PROVIDER) === (b.provider ?? KIRO_PROVIDER)) {
+        add(at, `The second review needs a different model or provider than the Review (both use ${a.model}). Change the model or the provider of one of them.`);
       }
     }
   }
@@ -191,6 +195,7 @@ export const PipelineMemberViewSchema = z.object({
   displayName: z.string(),
   role: TeamRoleSchema,
   model: z.string(),
+  provider: z.string().optional(),
 });
 export type PipelineMemberView = z.infer<typeof PipelineMemberViewSchema>;
 

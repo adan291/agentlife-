@@ -3,11 +3,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
+/**
+ * One role: `{ "runtime": "kiro-cli", "model": ... }` as before, `{ "runtime": "fake" }`, or a provider of
+ * config/providers.json (`{ "provider": "ollama", "model": "qwen3.5:4b" }`, multi-runtime). Without either: Kiro.
+ */
 const AgentRuntimeCfg = z.object({
-  runtime: z.enum(["fake", "kiro-cli"]),
+  runtime: z.enum(["fake", "kiro-cli"]).optional(),
+  provider: z.string().regex(/^[a-z][a-z0-9-]{0,29}$/).optional(),
   agent: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
 });
+export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeCfg>;
+
+/** Which provider a role uses: `fake`, `kiro`, or the id of another provider. */
+export function providerOfRole(cfg: AgentRuntimeConfig): string {
+  if (cfg.runtime === "fake") return "fake";
+  return cfg.provider ?? "kiro";
+}
 
 export const AgentsConfigSchema = z.object({
   architect: AgentRuntimeCfg,

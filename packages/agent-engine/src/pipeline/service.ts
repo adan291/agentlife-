@@ -45,7 +45,7 @@ export class PipelineService {
       projectId,
       customised: stored !== undefined,
       steps: (stored ?? DEFAULT_PIPELINE).map((s) => ({ ...s })),
-      members: members.map((m) => ({ id: m.id, displayName: m.displayName, role: m.role, model: m.model })),
+      members: members.map((m) => ({ id: m.id, displayName: m.displayName, role: m.role, model: m.model, ...(m.provider ? { provider: m.provider } : {}) })),
     };
   }
 

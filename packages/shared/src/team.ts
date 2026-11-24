@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ProviderIdSchema } from "./providers.ts";
 import { PROJECT_ROLES, type ProjectRole } from "./room.ts";
 
 /**
@@ -33,7 +34,8 @@ export const TEMPLATE_MODEL_MAX = 60;
  * A model id is passed to `kiro-cli --model`, so it must look like one and can never start with a dash. A colon is
  * allowed for the tags of local Ollama models (`qwen3.5:4b`).
  */
-export const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+/** Kiro model ids, Ollama tags (`qwen3.5:4b`) and provider paths (`meta-llama/llama-3.3-70b`). */
+export const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$/;
 export const ModelIdSchema = z.string().trim().min(1).max(TEMPLATE_MODEL_MAX).regex(MODEL_ID_RE, "not a model id");
 export const BUILT_IN_SOURCE = "built-in";
 
@@ -113,6 +115,8 @@ export const TeamMemberSchema = z.object({
   templateId: TemplateIdSchema,
   role: TeamRoleSchema,
   model: ModelIdSchema,
+  /** The AI provider (multi-runtime). Absent: Kiro. */
+  provider: ProviderIdSchema.optional(),
 });
 export type TeamMember = z.infer<typeof TeamMemberSchema>;
 
@@ -134,6 +138,8 @@ export const HireBodySchema = z
     displayName: MemberNameSchema,
     /** Default: the template's own model. */
     model: ModelIdSchema.optional(),
+    /** Default: Kiro. */
+    provider: ProviderIdSchema.optional(),
   })
   .strict();
 export type HireBody = z.infer<typeof HireBodySchema>;
@@ -142,9 +148,10 @@ export const UpdateMemberBodySchema = z
   .object({
     displayName: MemberNameSchema.optional(),
     model: ModelIdSchema.optional(),
+    provider: ProviderIdSchema.optional(),
   })
   .strict()
-  .refine((b) => b.displayName !== undefined || b.model !== undefined, "nothing to change");
+  .refine((b) => b.displayName !== undefined || b.model !== undefined || b.provider !== undefined, "nothing to change");
 export type UpdateMemberBody = z.infer<typeof UpdateMemberBodySchema>;
 
 /** Models a member of each role may use (the account's models limited by the role's allowed list). */

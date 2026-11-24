@@ -22,6 +22,20 @@ export class ProviderError extends Error {
   }
 }
 
+/** The runtime of a provider that cannot work here: every step fails with the reason (the engine still starts). */
+export class UnavailableRuntime implements AgentRuntime {
+  readonly id: string;
+  private readonly reason: string;
+  constructor(id: string, reason: string) {
+    this.id = id;
+    this.reason = reason;
+  }
+  // eslint-disable-next-line require-yield
+  async *run(): AsyncIterable<RuntimeEvent> {
+    throw new ProviderError(this.reason);
+  }
+}
+
 export interface OpenAICompatOptions {
   providerId: string;
   /** "Ollama", "xAI Grok"... used in messages. */

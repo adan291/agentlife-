@@ -150,8 +150,9 @@ export function createEngineServer(deps: EngineServerDeps): http.Server {
       handle: ({ res }) => {
         // RUNTIME=fake overrides the config for every role (see engine.ts), so say so.
         const fake = process.env["RUNTIME"] === "fake";
-        const view = (r: { runtime: string; model?: string | undefined }) =>
-          fake ? { runtime: "fake", model: "fake" } : { runtime: r.runtime, ...(r.model ? { model: r.model } : {}) };
+        // A role on another provider (multi-runtime) shows the provider's id as its runtime.
+        const view = (r: { runtime?: string | undefined; provider?: string | undefined; model?: string | undefined }) =>
+          fake ? { runtime: "fake", model: "fake" } : { runtime: r.runtime ?? r.provider ?? "kiro-cli", ...(r.model ? { model: r.model } : {}) };
         sendJson(res, 200, RolesConfigResponseSchema, {
           architect: view(config.agents.architect),
           developer: view(config.agents.developer),

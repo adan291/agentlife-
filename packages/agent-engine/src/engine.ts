@@ -2,7 +2,7 @@ import type http from "node:http";
 import path from "node:path";
 import { createActivityEmitter } from "./activity.ts";
 import type { BugSink } from "./bugs.ts";
-import { loadConfig, type EngineConfig } from "./config.ts";
+import { loadConfig, providerOfRole, type EngineConfig } from "./config.ts";
 import { installAgents, ROLES } from "./agents.ts";
 import { dataPaths, PROJECT_ROOT } from "./paths.ts";
 import { createEngineServer, closeServer, listen, DEFAULT_HOST, DEFAULT_PORT, type Route } from "./http/server.ts";
@@ -27,9 +27,10 @@ import { NightStore } from "./night/store.ts";
 import { createDiscordNotifier, createMorningReporter, type NightNotifier } from "./night/morning.ts";
 import { SummaryStore } from "./night/summary-store.ts";
 import { isTerminal } from "./jobs/transitions.ts";
-import { scopeAgentId, type NightConfig, type JobState, type TeamRole } from "@agentlife/shared";
+import { KIRO_PROVIDER, scopeAgentId, type NightConfig, type JobState, type TeamRole } from "@agentlife/shared";
 import { FakeRuntime } from "./runtimes/fake.ts";
 import { KiroCliRuntime } from "./runtimes/kiro-cli.ts";
+import { UnavailableRuntime } from "./runtimes/openai-compat.ts";
 import { OllamaRuntime } from "./runtimes/ollama.ts";
 import { createPipelineSteps } from "./steps/index.ts";
 import { JobNotes } from "./steps/notes.ts";
@@ -170,9 +171,19 @@ function forceFake(): boolean {
 /** The role that works while a job is in this state (an agent in that role cannot be fired meanwhile). */
 const ROLE_OF_STATE: Partial<Record<JobState, TeamRole>> = { analyzing: "architect", developing: "developer", reviewing: "qa" };
 
-/** True when at least one role runs on kiro-cli, so the real pipeline steps are used. */
+/** True when at least one role runs on a real provider (kiro-cli or another AI), so the real pipeline steps are used. */
 function usesRealPipeline(config: EngineConfig): boolean {
-  return !forceFake() && ROLES.some((r) => config.agents[r].runtime === "kiro-cli");
+  return !forceFake() && ROLES.some((r) => providerOfRole(config.agents[r]) !== "fake");
+}
+/** The provider of each role that is not Kiro (multi-runtime); a role on Kiro or on the fake runtime is absent. */
+export function roleProviders(config: EngineConfig): Partial<Record<Role, string>> {
+  const out: Partial<Record<Role, string>> = {};
+  if (forceFake()) return out;
+  for (const role of ROLES) {
+    const p = providerOfRole(config.agents[role]);
+    if (p !== "kiro" && p !== "fake") out[role] = p;
+  }
+  return out;
 }
 
 /** Model label per role as shown to users: "fake" under RUNTIME=fake, else the configured model (if any). */
@@ -185,16 +196,32 @@ export function roleModels(config: EngineConfig): Partial<Record<Role, string>> 
   return out;
 }
 
-export function buildRuntimes(config: EngineConfig, fakeDelayMs: number, kiroHome: string): Record<Role, AgentRuntime> {
-  const out = {} as Record<Role, AgentRuntime>;
+/** The kiro-cli runtime of the roles, with the model configured for each role. */
+export function kiroRuntimeFor(config: EngineConfig, kiroHome: string): KiroCliRuntime {
   const models: Partial<Record<Role, string>> = {};
   for (const role of ROLES) {
     const model = config.agents[role].model;
     if (model) models[role] = model;
   }
-  const kiro = new KiroCliRuntime({ kiroHome, models });
+  return new KiroCliRuntime({ kiroHome, models });
+}
+/**
+ * The runtime of each role: kiro-cli, the fake runtime, or another provider (multi-runtime). A provider that cannot be used
+ * (no key, not on this computer) gets a runtime that fails each step with the reason, so the engine still starts.
+ */
+export function buildRuntimes(config: EngineConfig, fakeDelayMs: number, kiroHome: string, providers?: ProviderRegistry): Record<Role, AgentRuntime> {
+  const out = {} as Record<Role, AgentRuntime>;
+  const kiro = kiroRuntimeFor(config, kiroHome);
   for (const role of ROLES) {
-    out[role] = !forceFake() && config.agents[role].runtime === "kiro-cli" ? kiro : new FakeRuntime({ delayMs: fakeDelayMs });
+    const p = providerOfRole(config.agents[role]);
+    if (forceFake() || p === "fake") out[role] = new FakeRuntime({ delayMs: fakeDelayMs });
+    else if (p === KIRO_PROVIDER) out[role] = kiro;
+    else {
+      const label = providers?.label(p) ?? p;
+      out[role] =
+        providers?.runtime(p) ??
+        new UnavailableRuntime(p, providers?.get(p) ? `${label} is not available: set its key in .env or start it on this computer.` : `There is no provider '${p}' in config/providers.json.`);
+    }
   }
   return out;
 }
@@ -237,6 +264,8 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
     tiers,
     hasProject: (id) => projects.has(id),
     defaultModels: roleModels(config),
+    defaultProviders: roleProviders(config),
+    providers: providerRegistry,
     ...(opts.team?.agents
       ? { agents: opts.team.agents }
       : real
@@ -333,10 +362,14 @@ export async function startEngine(opts: EngineOptions = {}): Promise<Engine> {
         logger.warn("service agents could not be written", { error: e instanceof Error ? e.message : String(e) });
       }
     }
-    const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome);
+    const runtimes = buildRuntimes(config, opts.fakeDelayMs ?? 0, paths.kiroHome, providerRegistry);
     const models = roleModels(config);
+    // Members and roles on another AI provider (multi-runtime). Under RUNTIME=fake every step stays scripted.
+    const providerDeps = forceFake()
+      ? {}
+      : { providers: providerRegistry, roleProviders: roleProviders(config), kiro: kiroRuntimeFor(config, paths.kiroHome) };
     steps = real
-      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team, memory, ...(intern ? { intern } : {}), notes })
+      ? createPipelineSteps({ runtimes, store, paths, repos: config.repos, projects, limits: config.limits, logger, activity, models, team, memory, ...(intern ? { intern } : {}), notes, ...providerDeps })
       : createRuntimeSteps({ runtimes, store, logger, activity, models, team });
   }
   const ambient =
