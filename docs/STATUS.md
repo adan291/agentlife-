@@ -1,4 +1,4 @@
-﻿# Status
+# Status
 
 Updated: 2026-11-16 (multi-runtime tasks 1-3 done and merged into main; rows 1-18 are in main)
 
@@ -22,6 +22,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 
 - 2026-11-16 (IDE): user wants the tool dynamic: any AI, not only Kiro, several at once (Ollama, Grok...). Checked: Ollama qwen3.5:4b and llama3.1 both do tool calling on the OpenAI-compatible API (11 s). Spec multi-runtime written (providers.json, OpenAICompatRuntime with an engine-run tool loop as the sandbox, provider per role and per HR member, HR pickers, pnpm hotel keys), TASKMAP row 18. Kiro credits are out, so Kiro builds it in the IDE, not the conductor. Waiting for the user's go.
 - 2026-11-16 (IDE): user: "hagamoslo ahora". multi-runtime built in the IDE, 3 tasks, merged and pushed: providers.json, OpenAICompatRuntime with engine-run file tools (D19), provider per role and per HR member with pickers and the cloud notice, `model (Provider)` in reports and seats, `pnpm hotel --ai/--model` and cloud keys for the engine only. Live: a DiscordIA job fully on Ollama qwen3.5:4b, PASS; the first two tries showed the small model looping and skipping the json block, so the loop now refuses repeated calls, asks for the answer before the limit and reminds about the json block (design.md). 5 visual baselines rewritten (6 to 28 pixels of browser drift). Pending: the user's xAI or Groq key, if any, to try a cloud AI; final-demo.
+- 2026-11-24 (IDE): user asked whether the structure is right for a future app (hexagonal, a mix...), then to improve gateway.ts and whatever else needs it. Decided: modular monolith per process, ports at the edges (D21, docs/architecture.md). On `refactor/gateway-modules`: gateway.ts 1903 → 209 lines, 17 features under `world-server/src/gateway/features/` plus context and engine-events; `BadRequestError` moved to the engine's errors.ts; `scripts/test/architecture.test.ts` checks 11 layering rules. No behaviour change: 514 world-server tests untouched and passing, e2e 163 passed (1 known flaky). Pending: the user's merge; app-bugs still waits for its yes.
 
 ## Next
 1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.

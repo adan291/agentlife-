@@ -12,7 +12,7 @@ import {
   type Template,
 } from "@agentlife/shared";
 import { ConflictError, NotFoundError } from "../errors.ts";
-import { BadRequestError } from "../http/server.ts";
+import { BadRequestError } from "../errors.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import type { Catalogue } from "./catalogue.ts";
 import {

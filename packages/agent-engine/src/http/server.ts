@@ -16,7 +16,7 @@ import {
   reviewBaseOf,
 } from "@agentlife/shared";
 import type { EngineConfig } from "../config.ts";
-import { ConflictError, NotFoundError } from "../errors.ts";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors.ts";
 import type { JobRunner } from "../jobs/runner.ts";
 import { describeError, type BugSink } from "../bugs.ts";
 import { noopLogger, type Logger } from "../log.ts";
@@ -54,16 +54,8 @@ export interface RouteContext {
 }
 export type Route = { method: string; pattern: RegExp; handle: (ctx: RouteContext) => Promise<void> | void };
 
-export class BadRequestError extends Error {
-  readonly code: string;
-  readonly issues: { path: string; message: string }[] | undefined;
-  constructor(code: string, message: string, issues?: { path: string; message: string }[]) {
-    super(message);
-    this.name = "BadRequestError";
-    this.code = code;
-    this.issues = issues;
-  }
-}
+// A domain error (the request is refused for a reason the caller can fix); kept here as a re-export for the routes.
+export { BadRequestError };
 
 class UnauthorizedError extends Error {
   constructor() {
