@@ -21,3 +21,4 @@ data/
 test-results/
 playwright-report/
 dist-demo/
+dist-video/

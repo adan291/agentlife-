@@ -26,9 +26,11 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 
 - 2026-11-24 (IDE): user: "haz todo lo que tu puedas hacer". Done: refactor/gateway-modules merged and pushed (0dae3b6); the four local review documents in docs/ kept out of git through .git/info/exclude (one is personal; nothing deleted); demo replay re-recorded from a real run on haunted-todo with all three roles on Ollama (task-5eafee9f, PASS, tests in Docker), old file in data/backup-run-001-old.json; docs/devpost.md drafted with counted numbers; kiro-usage Limits and README demo text updated; flaky pipeline-editor e2e fixed. Decided: app-bugs after the submission. Left to the user: browser checks, the video, submitting.
 
+- 2026-11-25 (IDE): user asked whether Kiro could make the video. Built a recorder: `pnpm --filter @agentlife/client video` plays docs/video-script.md in Edge (demo build for the job scenes, a scripted hotel with scratch files for the Reception, shop, HR and wisp), narrates with the Windows voice Zira and writes data/video/agentlife.webm (1280x720, 2:34) and agentlife.srt. Frames checked by eye; a room tooltip over the report was fixed. Pending: the user listens to it, decides own voice or Zira, uploads and submits.
+
 ## Next
 1. User: browser checks (docs/HUMAN-CHECKS.md, the HR provider picker, ghost-skins at 1x, Edit room). Start with `pnpm hotel --ai ollama --model qwen3.5:4b`; tell Kiro what breaks.
-2. final-demo: replay re-recorded and Devpost drafted (docs/devpost.md) on 2026-11-24. Left: the user records the video (docs/video-script.md) and submits. Freeze 2026-12-01, submit by 2026-12-03.
+2. final-demo: replay re-recorded and Devpost drafted (docs/devpost.md) on 2026-11-24. The video is recorded by `pnpm --filter @agentlife/client video` (data/video/agentlife.webm + .srt, 2:34, Windows voice). Left: the user watches it, uploads it (YouTube or Vimeo) and submits. Freeze 2026-12-01, submit by 2026-12-03.
 3. After submission: docs/roadmap-after-kiroween.md (Tickets room, Jira first).
 4. Flaky to watch: journeys.spec.ts at 360x640 (conductor run 13); mailbox-report visual at 800x600 (badge toast, baselines rewritten 2026-11-15).
 

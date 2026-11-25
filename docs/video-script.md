@@ -19,6 +19,13 @@ Target: 2 min 40 s. Record the screen with the live engine and DiscordIA (or the
 | 2:22–2:36 | Kiro in the product | `packages/agent-engine/src/runtimes/kiro-cli.ts`, an agent file with `permissions.rules` | "The hotel's own agents run as headless kiro-cli processes. No trust flags. Every permission is in a file you can read." |
 | 2:36–2:40 | Close | Demo URL and repo URL on a dark background | "Try the demo. The code and the Kiro usage notes are in the repository." |
 
+## Automatic recording
+`pnpm --filter @agentlife/client video` (Windows, Edge) plays these scenes by itself and writes `data/video/agentlife.webm` (1280×720, about 2 min 35 s) and `data/video/agentlife.srt` (English subtitles).
+- The job scenes come from the demo build, a replay of a real run. The Reception, shop, HR and wisp scenes come from a scripted hotel whose wallet and wardrobe are scratch files.
+- The narration is the Windows voice "Microsoft Zira" (en-US) and is mixed into the file. To use your own voice, record over the picture and drop the generated audio.
+- The words are in `packages/client/video/record.spec.ts` (`LINES`), and the scene order follows the table above.
+- The HR scene shows the model "fake", because the scripted hotel has no real models.
+
 ## Recording notes
 
 - Use the demo replay (`?mode=demo` or `?autostart`) for the final cut so no local services are needed. Record the live run first to get the story, then re-record the UI parts at a good pace.
