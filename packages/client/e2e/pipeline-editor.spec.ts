@@ -173,10 +173,17 @@ test("the board shows the editor above the job card, and Save sends the pipeline
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Pipeline" })).toBeVisible();
   await expect(dialog.locator(".al-pipe-card")).toHaveCount(6);
-  // The editor comes first, the job card after it.
-  const editorBox = await dialog.locator(".al-pipe").boundingBox();
-  const cardBox = await dialog.locator(".al-job").boundingBox();
-  expect(editorBox!.y).toBeLessThan(cardBox!.y);
+  // The editor comes first, the job card after it. The card arrives with the engine's job_update and the panel can
+  // redraw in between, so both are awaited and the order is read again until it holds.
+  await expect(dialog.locator(".al-pipe")).toBeVisible();
+  await expect(dialog.locator(".al-job")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const editorBox = await dialog.locator(".al-pipe").boundingBox();
+      const cardBox = await dialog.locator(".al-job").boundingBox();
+      return editorBox !== null && cardBox !== null && editorBox.y < cardBox.y;
+    })
+    .toBe(true);
 
   await dialog.getByRole("button", { name: "Add Second review" }).click();
   // For a look by eye: set E2E_SHOT_DIR to a folder and the picture is written there.
