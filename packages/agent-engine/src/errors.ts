@@ -7,6 +7,17 @@ export class NotFoundError extends Error {
   }
 }
 
+/** The input is refused for a reason the caller can fix (HTTP 400). `code` is machine readable; `issues` name the fields. */
+export class BadRequestError extends Error {
+  readonly code: string;
+  readonly issues: { path: string; message: string }[] | undefined;
+  constructor(code: string, message: string, issues?: { path: string; message: string }[]) {
+    super(message);
+    this.name = "BadRequestError";
+    this.code = code;
+    this.issues = issues;
+  }
+}
 /** The request is valid but conflicts with the current state (HTTP 409). `code` is machine readable. */
 export class ConflictError extends Error {
   readonly code: string;

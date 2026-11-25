@@ -9,7 +9,7 @@ import {
   type TeamMember,
 } from "@agentlife/shared";
 import { ConflictError } from "../errors.ts";
-import { BadRequestError } from "../http/server.ts";
+import { BadRequestError } from "../errors.ts";
 import type { PipelineStore } from "./store.ts";
 
 /** What the service needs of the teams: the members of a project (throws for an unknown project). */

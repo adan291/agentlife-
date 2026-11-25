@@ -13,8 +13,7 @@ import {
   type UpdateMemberBody,
 } from "@agentlife/shared";
 import { agentName, type AgentFile } from "../agents.ts";
-import { ConflictError, NotFoundError } from "../errors.ts";
-import { BadRequestError } from "../http/server.ts";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors.ts";
 import { noopLogger, type Logger } from "../log.ts";
 import type { Catalogue } from "./catalogue.ts";
 import { AGENT_NAME_RE, AgentFileRefusedError, agentFileFor, ROLE_INSTRUCTIONS, writeAgentFile, writeAgentFiles, type AgentValidator } from "./generate.ts";
