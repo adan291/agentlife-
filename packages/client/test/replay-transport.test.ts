@@ -39,7 +39,8 @@ describe("ReplayTransport", () => {
     const welcome = msgs[0]!;
     expect(welcome.type).toBe("welcome");
     expect(ServerMsgSchema.safeParse(welcome).success).toBe(true);
-    if (welcome.type === "welcome") expect(welcome.models).toBeUndefined();
+    // The recorded run (2026-11-24, all roles on Ollama) names a model on every agent step.
+    if (welcome.type === "welcome") expect(welcome.models).toEqual({ architect: "qwen3.5:4b (Ollama)", developer: "qwen3.5:4b (Ollama)", qa: "qwen3.5:4b (Ollama)" });
   });
 
   it("takes the model per role from the recorded steps when there are any", () => {

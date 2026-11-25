@@ -8,7 +8,7 @@ Kiroween 2026 entry — category: **Resurrection**.
 
 **Live demo:** https://adan291.github.io/agentlife-/
 
-The demo runs in the browser with no backend. It replays a recorded real run: an Architect plan, a Developer diff, the test log and a QA review. Approve the plan in the mailbox to continue. Speed buttons: 1×, 4×, 16×.
+The demo runs in the browser with no backend. It replays a recorded real run on the `haunted-todo` project: an Architect plan, a Developer diff, the test log from Docker and a QA review. All three agents ran on a local model, Ollama `qwen3.5:4b`. Approve the plan in the mailbox to continue. Speed buttons: 1×, 4×, 16×.
 
 ## What the hotel has
 
@@ -26,6 +26,7 @@ The demo runs in the browser with no backend. It replays a recorded real run: an
   - *Daily quests* from real work: approve a plan, deliver a branch, accept a note.
   - *Edit room.* Move and rotate furniture on any floor; the server checks every move for reachability.
   - *Wisps* to catch while jobs run, emotes (keys 1–4) and a coffee machine for tired agents.
+- **Any AI, several at once.** Kiro by default; Ollama, LM Studio, Groq, xAI Grok, OpenAI or OpenRouter per role, per hired member or for a whole run (`pnpm hotel --ai ollama`). See "AI providers" below.
 - **Bug sack.** Every unhandled error (browser, PixiJS, world-server, agent-engine, Docker, conductor) is grouped and kept in `data/bugs.jsonl`. F8 or Menu → "Report a bug" saves a note with a screenshot. The panel has Game and Code tabs, Fixed / Ignored status and "Copy for Kiro".
 
 ## What happens in a job
