@@ -44,6 +44,7 @@ The product's Developer, Architect and QA agents run as `kiro-cli` processes. Th
 - Prompt templates: [packages/agent-engine/prompts/](packages/agent-engine/prompts/). Repository contents go into fenced blocks that the text cannot close.
 - Spike: [docs/spikes/](docs/spikes/) records the check that showed writes outside the working directory are denied with `--v3` and no trust flags.
 - The engine validates every diff (paths, binaries, size) before the report step uses it.
+- Kiro is the default runtime behind the `AgentRuntime` interface. The multi-runtime spec, also built with Kiro, added an OpenAI-compatible runtime for Ollama, LM Studio, Groq, xAI, OpenAI and OpenRouter. There the engine itself runs the file tools inside the job's folder, with the same deny list as the Kiro agent files (D19 in [docs/risks-and-decisions.md](docs/risks-and-decisions.md)).
 
 ## 6. Build sessions with `pnpm session`
 
@@ -83,5 +84,6 @@ Kiro Crew is the Discord side of the same workflow. A Crew session can read the 
 
 ## Limits
 
-- The live mode needs a Kiro plan with headless access and a `KIRO_API_KEY`. Judges cannot run it without those, which is why the demo replays a recorded run.
+- With Kiro, the live mode needs a plan with headless access and a `KIRO_API_KEY`. Without one, the same pipeline runs on a local model (`pnpm hotel --ai ollama`) or another OpenAI-compatible AI (multi-runtime). The public demo replays a recorded real run (2026-11-24, all three roles on Ollama `qwen3.5:4b`), so judges need nothing installed.
+- A small local model is slow (a one-file change takes a few minutes) and follows the output formats less reliably than Kiro's models; the engine's format checks and retries catch most of it.
 - Model output is not deterministic. The prompts are in [packages/agent-engine/prompts/](packages/agent-engine/prompts/), and the engine checks each step's output format before using it.

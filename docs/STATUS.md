@@ -24,9 +24,11 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 - 2026-11-16 (IDE): user: "hagamoslo ahora". multi-runtime built in the IDE, 3 tasks, merged and pushed: providers.json, OpenAICompatRuntime with engine-run file tools (D19), provider per role and per HR member with pickers and the cloud notice, `model (Provider)` in reports and seats, `pnpm hotel --ai/--model` and cloud keys for the engine only. Live: a DiscordIA job fully on Ollama qwen3.5:4b, PASS; the first two tries showed the small model looping and skipping the json block, so the loop now refuses repeated calls, asks for the answer before the limit and reminds about the json block (design.md). 5 visual baselines rewritten (6 to 28 pixels of browser drift). Pending: the user's xAI or Groq key, if any, to try a cloud AI; final-demo.
 - 2026-11-24 (IDE): user asked whether the structure is right for a future app (hexagonal, a mix...), then to improve gateway.ts and whatever else needs it. Decided: modular monolith per process, ports at the edges (D21, docs/architecture.md). On `refactor/gateway-modules`: gateway.ts 1903 → 209 lines, 17 features under `world-server/src/gateway/features/` plus context and engine-events; `BadRequestError` moved to the engine's errors.ts; `scripts/test/architecture.test.ts` checks 11 layering rules. No behaviour change: 514 world-server tests untouched and passing, e2e 163 passed (1 known flaky). Pending: the user's merge; app-bugs still waits for its yes.
 
+- 2026-11-24 (IDE): user: "haz todo lo que tu puedas hacer". Done: refactor/gateway-modules merged and pushed (0dae3b6); the four local review documents in docs/ kept out of git through .git/info/exclude (one is personal; nothing deleted); demo replay re-recorded from a real run on haunted-todo with all three roles on Ollama (task-5eafee9f, PASS, tests in Docker), old file in data/backup-run-001-old.json; docs/devpost.md drafted with counted numbers; kiro-usage Limits and README demo text updated; flaky pipeline-editor e2e fixed. Decided: app-bugs after the submission. Left to the user: browser checks, the video, submitting.
+
 ## Next
-1. User test round with the hotel + DiscordIA: use it, tell Kiro what breaks, bugs go to the Bug sack.
-2. final-demo: re-record the replay with several floors and the game layer, video script, Devpost. Freeze 2026-12-01, submit by 2026-12-03.
+1. User: browser checks (docs/HUMAN-CHECKS.md, the HR provider picker, ghost-skins at 1x, Edit room). Start with `pnpm hotel --ai ollama --model qwen3.5:4b`; tell Kiro what breaks.
+2. final-demo: replay re-recorded and Devpost drafted (docs/devpost.md) on 2026-11-24. Left: the user records the video (docs/video-script.md) and submits. Freeze 2026-12-01, submit by 2026-12-03.
 3. After submission: docs/roadmap-after-kiroween.md (Tickets room, Jira first).
 4. Flaky to watch: journeys.spec.ts at 360x640 (conductor run 13); mailbox-report visual at 800x600 (badge toast, baselines rewritten 2026-11-15).
 
@@ -35,7 +37,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 |---|---|---|---|
 | world-room, agent-engine, agent-pipeline, build-crew | all | main | MVP pipeline, 3 live runs on haunted-todo |
 | room-hints, room-ux, room-fixes, ui-shell, job-insight | all | main | Room UI; most not looked at by the user in a browser |
-| demo-replay | 7 / 7 | main | Public demo https://adan291.github.io/agentlife-/ (recorded before floors) |
+| demo-replay | 7 / 7 | main | Public demo https://adan291.github.io/agentlife-/. `run-001.json` re-recorded 2026-11-24: haunted-todo, all roles on Ollama qwen3.5:4b, PASS, models in the tooltips |
 | project-registry | 6 / 6 | main | Live check done with DiscordIA 2026-11-13 |
 | hotel-floors | 5 / 5 | main | Elevator checked by the user; lobby start and plaque fixed 2026-11-13 |
 | build-board | 2 / 2 | main | Not looked at in a browser |
@@ -57,8 +59,8 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 
 ## Open problems
 - ui-tidy: a piece behind a taller one is picked by pressing its drawing above the tile (design.md); not fixed.
-- Flaky: `pipeline-editor.spec.ts` "board shows the editor" (e2e timing, passes alone); `pnpm check` under load on two world-server timing tests.
-- The demo replay (`run-001.json`) predates floors and the game layer. Kiro credits exhausted for the month (renewal ~Dec 1); re-record with real agents on Ollama (`pnpm hotel --ai ollama`) or `RUNTIME=fake`.
+- Flaky: `pnpm check` under load on two world-server timing tests. (`pipeline-editor.spec.ts` fixed 2026-11-24: 60/60 without retries.)
+- The demo replays one job in one room: it shows no floors, shop or XP (the replay format holds one job). Changing that is replay work, not a re-recording; left for after the submission.
 - multi-runtime: a 4B local model is slow (a one-line change took about 6 minutes) and may still miss the plan format on a bigger goal; the analyze timeout is 5 minutes for every provider.
 - ghost-skins: check every part at 1x on every role colour is a human check (not yet done).
 - regression-suite: visual baselines exist for Windows/Edge only; CI skips them. First Linux run will confirm the browser job passes.
