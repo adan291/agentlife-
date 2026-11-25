@@ -27,6 +27,11 @@ Definition of done for every row: all tasks `[x]`, verifier `VERDICT: PASS`, rev
 | 17 | `bug-sack` | S40 S41 | yes | needs-check | Every error caught by itself (Game and Code), Report a bug with F8, the Bug sack panel to read them any time |
 | 18 | `multi-runtime` | IDE | yes | needs-check | Any AI, several at once: Kiro, Ollama, LM Studio, Groq, Grok, OpenAI, OpenRouter per role and per member; the engine runs the file tools |
 | 19 | `final-demo` | — | yes | todo | Re-record the replay with several floors, video, Devpost (user with Kiro) |
+| 20 | `app-bugs` | — | yes | todo | Errors of the user's own applications through the Sentry protocol, Diagnose with checked evidence, Fix with a red-green regression test, Maven projects. Spec on branch `feat/app-bugs` |
+| 21 | `field-kit` | — | yes | todo | AGENT LIFE offline from a USB drive: portable Linux folder with Node, Ollama and models, start.sh with no network, checksums, Docker or podman sandbox (docs/roadmap-field-kit.md) |
+| 22 | `offline-rag` | — | yes | todo | Load PDF, HTML and Markdown documentation and ask with checked citations, in the Library and as agent context |
+| 23 | `command-deck` | — | yes | todo | Portable VSCodium with an extension: per-project command buttons, terminal, the hotel's jobs and mailbox, the bug suite |
+| 24 | `ada-stack` | — | yes | todo | Ada projects (GNAT, gprbuild) with tests in the sandbox, GNAT log intake for the bug suite |
 
 Row 1 is merged; its live check (a real project in D:\AgentHotel) is done with the user and does not block row 2. Status `skip` keeps the conductor from re-running it.
 

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-16 (multi-runtime tasks 1-3 done and merged into main; rows 1-18 are in main)
+Updated: 2026-11-25 (submission tagged `kiroween-2026` on main 6ca4ed1; branch feat/field-kit holds the offline roadmap, TASKMAP rows 20-24; nothing new is merged into main before the submission)
 
 Keep this file short (under 15 000 characters): it is loaded into every session through workflow.md. Per-spec implementation notes go in the spec's design.md; when an entry here stops being current, move it to docs/STATUS-history.md. That file holds everything written here up to 2026-11-13, the conversation lines up to 2026-11-14 and the long spec rows of 2026-11-14.
 
@@ -28,10 +28,12 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 
 - 2026-11-25 (IDE): user asked whether Kiro could make the video. Built a recorder: `pnpm --filter @agentlife/client video` plays docs/video-script.md in Edge (demo build for the job scenes, a scripted hotel with scratch files for the Reception, shop, HR and wisp), narrates with the Windows voice Zira and writes data/video/agentlife.webm (1280x720, 2:34) and agentlife.srt. Frames checked by eye; a room tooltip over the report was fixed. Pending: the user listens to it, decides own voice or Zira, uploads and submits.
 
+- 2026-11-25 (IDE): user wants a Kiro-like IDE with a Warp-style terminal and custom command buttons, linked to AGENT LIFE and the bug suite, all offline (Ollama, a local RAG with documentation, skills) and on a USB drive, for an air-gapped Linux client with Ada. Then: "haz todo lo que tu puedas hacer". Done: tag `kiroween-2026` (the submitted version), branch `feat/field-kit` from it, docs/roadmap-field-kit.md (pieces, gaps, client approval as a precondition, phase-0 questions), TASKMAP rows 20 app-bugs and 21-24 field-kit, offline-rag, command-deck, ada-stack. Order chosen by Kiro (user had not set one): field-kit, offline-rag, command-deck, ada-stack. FreeLLM left out of the kit (cloud free tiers). Pending from the user: does the client visit have a date, what comes first, the phase-0 answers; and the submission (video, Devpost).
+
 ## Next
 1. User: browser checks (docs/HUMAN-CHECKS.md, the HR provider picker, ghost-skins at 1x, Edit room). Start with `pnpm hotel --ai ollama --model qwen3.5:4b`; tell Kiro what breaks.
 2. final-demo: replay re-recorded and Devpost drafted (docs/devpost.md) on 2026-11-24. The video is recorded by `pnpm --filter @agentlife/client video` (data/video/agentlife.webm + .srt, 2:34, Windows voice). Left: the user watches it, uploads it (YouTube or Vimeo) and submits. Freeze 2026-12-01, submit by 2026-12-03.
-3. After submission: docs/roadmap-after-kiroween.md (Tickets room, Jira first).
+3. After submission, on branch `feat/field-kit`: write the `field-kit` spec from docs/roadmap-field-kit.md and get the user's yes; `app-bugs` (branch `feat/app-bugs`) needs a rebase on main first. Tickets room: docs/roadmap-after-kiroween.md.
 4. Flaky to watch: journeys.spec.ts at 360x640 (conductor run 13); mailbox-report visual at 800x600 (badge toast, baselines rewritten 2026-11-15).
 
 ## Specs
