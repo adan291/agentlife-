@@ -1,0 +1,16 @@
+# Implementation Plan
+- [ ] 1. Design and the client's environment
+  - Write design.md: the kit layout, how Node, Ollama and the models are bundled, the sandbox choice, the SBOM and checksum tools, and the answers to the phase-0 questions of docs/roadmap-field-kit.md that are known. Ask the user for the missing answers and for a yes before building
+  - _Requirements: all_
+- [ ] 2. Kit build
+  - `pnpm kit build`: kit.json, Node runtime, production dependencies, built client, Ollama binary and models, relative paths only, size report, install-to-home.sh; unit tests
+  - _Requirements: 1.1, 1.2, 1.3, 1.4_
+- [ ] 3. Start and stop without the network
+  - start.sh, stop.sh, the engine on the kit's Ollama for all roles, loopback only, other providers off, configurable timeouts; the network-blocked end-to-end script
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.2_
+- [ ] 4. Sandbox without Docker
+  - Sandbox port with Docker, rootless podman and bubblewrap adapters under the same rules, refusal when none is there, test images shipped as archives; tests for the choice
+  - _Requirements: 3.1, 3.2, 3.3, 5.1_
+- [ ] 5. Security review material
+  - SBOM.json with a license allowlist, SHA256SUMS and verify.sh, audit and leak scan as build gates, KIT.md; README "Offline kit" and the decision record
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.3_

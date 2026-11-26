@@ -1,0 +1,13 @@
+# Implementation Plan
+- [ ] 1. Design
+  - Write design.md: passage splitting per format, the SQLite and sqlite-vec schema, the embedding model, the hybrid search, the citation check, where libraries live, and the skills format. Ask the user for a yes before building
+  - _Requirements: all_
+- [ ] 2. Loading and search
+  - Folder import for PDF, HTML and Markdown, passages with their place, embeddings through the kit's Ollama, incremental re-indexing, hybrid search; unit tests
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.1_
+- [ ] 3. Ask with checked citations
+  - The answer step, the citation check, the Library "Ask" tab with the cited passages; tests and a Playwright check
+  - _Requirements: 2.1, 2.2, 2.3, 4.1_
+- [ ] 4. Agents: search_docs and skills
+  - Libraries per project, the read-only `search_docs` tool, `skills/` discovery and `load_skill`, the shipped skills, citations in the report; pipeline test; README and the decision record
+  - _Requirements: 3.1, 3.2, 3.3, 4.2, 4.3_

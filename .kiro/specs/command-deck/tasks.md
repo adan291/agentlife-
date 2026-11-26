@@ -1,0 +1,16 @@
+# Implementation Plan
+- [ ] 1. Design
+  - Write design.md: the extension's package (`packages/command-deck`), the commands file schema in `@agentlife/shared`, the terminal and block model (VS Code terminal shell integration), how it joins the world-server protocol, and the portable VSCodium settings. Ask the user for a yes before building
+  - _Requirements: all_
+- [ ] 2. Command buttons
+  - `.agentlife/commands.json` schema, the button bar, add, edit, reorder and remove, `${input:...}` prompts, review of a foreign file; unit tests
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 5.1_
+- [ ] 3. Runs as blocks
+  - Blocks with output, exit code and duration, fold, search, copy, run again, Explain with the local model, Send to the hotel; tests
+  - _Requirements: 2.1, 2.2, 2.3, 5.1_
+- [ ] 4. Hotel and bug suite panel
+  - World-server connection, the floor's job, approvals, reports and diffs, the app bugs list with Diagnose and Fix; extension tests against a scripted world-server
+  - _Requirements: 3.1, 3.2, 3.3, 5.2_
+- [ ] 5. In the kit
+  - Portable VSCodium with the `.vsix`, no telemetry, no updates, no marketplace, started by start.sh; README and the decision record
+  - _Requirements: 4.1, 4.2, 5.3_

@@ -27,9 +27,10 @@ Sin esa aprobación, el kit no se usa en el cliente.
 | RAG | Embeddings con Ollama (`nomic-embed-text` u otro), guardados en SQLite con sqlite-vec en un solo fichero | Encaja con el stack. Se une a la Library del hotel (project-memory) |
 | Respuestas del RAG | Cada respuesta cita el documento y el fragmento, y el motor comprueba que la cita existe | La misma idea que la comprobación de evidencias de app-bugs |
 | Editor | VSCodium en modo portable, con extensiones cargadas desde `.vsix` | Base abierta de VS Code, sin tienda ni telemetría. Kiro no se puede redistribuir |
-| Terminal con botones | Extensión propia, "command deck": botones definidos en un fichero por proyecto, más paneles del hotel (trabajos, buzón) y del bug suite | Es la pieza que une todo. Wave Terminal (Apache-2.0) queda como alternativa si se quiere una terminal aparte |
-| Skills | Ficheros Markdown con instrucciones que el agente carga cuando las necesita, como las skills de Kiro | Funcionan sin red |
-| FreeLLM y similares | No van en el kit. Si acaso, son un proveedor más del multi-runtime para proyectos personales con red | Son proxies hacia planes gratuitos en la nube: sin red no sirven, y con código de un cliente son un riesgo |
+| Terminal con botones | Extensión propia, "command deck": una barra de botones sobre la terminal, definidos en `.agentlife/commands.json` por proyecto (compilar, tests, arrancar el hotel, abrir el bug suite) y otros que crea el usuario desde el propio panel. Cada ejecución queda como un bloque con su salida, su código de salida y su duración, como en Warp, y un bloque fallido tiene "Explain" (Ollama) y "Send to the hotel" (trabajo nuevo). Paneles del hotel (trabajos, buzón, aprobar el plan) y del bug suite | Es la pieza que une todo. Wave Terminal (Apache-2.0) queda como alternativa si se quiere una terminal aparte |
+| Skills | Ficheros Markdown con instrucciones (`skills/<nombre>/SKILL.md`), como las de Kiro. El motor las ofrece a los agentes por nombre y descripción, y carga el texto solo cuando un agente la pide. El kit trae algunas (Ada, GNAT, convenciones del cliente), y el usuario añade las suyas | Funcionan sin red, con cualquier proveedor del multi-runtime |
+| FreeLLM y similares | No van en el kit. Como el multi-runtime acepta cualquier API compatible con OpenAI, se pueden añadir como un proveedor más en `config/providers.json`, marcado como nube, solo para proyectos personales con red | Son proxies hacia planes gratuitos en la nube: sin red no sirven, y con código de un cliente son un riesgo (los planes gratuitos suelen usar los datos) |
+| Vulnerabilidades | En el repositorio: avisos de seguridad de Dependabot (sin `dependabot.yml`, sin PR semanales) y `pnpm audit --prod --audit-level high` en CI. En el kit: el script que lo empaqueta ejecuta la misma comprobación y se niega a crear el kit si hay hallazgos graves | Sin red nadie avisa, así que la comprobación se hace al empaquetar |
 
 ## Huecos conocidos
 1. **Docker en el cliente:** hace falta otra forma de aislar los tests, al menos tan estricta como la de hoy.
@@ -45,8 +46,8 @@ Orden decidido el 2026-11-25. El usuario no había fijado prioridad, y se puede 
 |---|---|---|---|
 | 0 | (sin spec) | Lista de comprobación del entorno del cliente, abajo. La rellena el usuario | — |
 | 1 | `field-kit` | Carpeta portable para Linux x86_64 con Node, AGENT LIFE, Ollama y los modelos. `start.sh` arranca todo sin conectarse a nada, con sumas de verificación y una prueba con la red cortada. El aislamiento de tests usa Docker o podman | multi-runtime (hecho) |
-| 2 | `offline-rag` | Cargar PDF, HTML y Markdown, y preguntar con citas comprobadas. Un panel en la Library del hotel, y los agentes la usan como contexto | field-kit |
-| 3 | `command-deck` | VSCodium portable con la extensión: botones por proyecto, terminal, trabajos y buzón del hotel, y el bug suite | field-kit, y app-bugs para la parte del bug suite |
+| 2 | `offline-rag` | Cargar PDF, HTML y Markdown, y preguntar con citas comprobadas. Un panel en la Library del hotel, y los agentes la usan como contexto. Incluye las skills | field-kit |
+| 3 | `command-deck` | VSCodium portable con la extensión: barra de botones sobre la terminal, bloques de salida con Explain y Send to the hotel, trabajos y buzón del hotel, y el bug suite | field-kit, y app-bugs para la parte del bug suite |
 | 4 | `ada-stack` | Proyectos Ada (GNAT, gprbuild) con tests en el aislamiento, y lectura de logs de GNAT para el bug suite | field-kit, app-bugs |
 
 `app-bugs` (fila 20 del TASKMAP, rama `feat/app-bugs`) sigue siendo un spec propio. Hay que ponerlo al día con `main` antes de construirlo, porque las tareas 2 y 3 usan el nuevo patrón de `gateway/features/`.
@@ -60,5 +61,8 @@ Orden decidido el 2026-11-25. El usuario no había fijado prioridad, y se puede 
 - ¿Quién aprueba el software, y qué pide (licencias, SBOM, análisis antivirus)?
 - ¿Qué documentación se quiere en el RAG, y se puede sacar del cliente o tiene que cargarse allí?
 
+## Specs
+Cada fase tiene su carpeta en `.kiro/specs/` con `requirements.md` y `tasks.md`: `field-kit`, `offline-rag`, `command-deck` y `ada-stack`. `design.md` lo escribe la primera tarea de cada spec, cuando se sepa cómo es el entorno del cliente.
+
 ## Cómo empezar en una sesión nueva
-Rama `feat/field-kit`. Primero leer `docs/STATUS.md` y este fichero. Después escribir el spec `field-kit` (requirements, design, tasks) siguiendo `docs/architecture.md`, y pedir el sí del usuario antes de construir.
+Rama `feat/field-kit`, ya creada a partir del tag `kiroween-2026`. Primero leer `docs/STATUS.md`, este fichero y el spec que toque. Después hacer la tarea 1 de `field-kit` (el diseño) y pedir el sí del usuario antes de construir. Cada spec trabaja en su propia rama, `feat/<spec>`, creada desde `feat/field-kit`.

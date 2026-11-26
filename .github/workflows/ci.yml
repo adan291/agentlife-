@@ -23,6 +23,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # Known vulnerabilities in the runtime dependencies fail the build (high and critical only). Second net besides the
+      # Dependabot security alerts of the repository settings; there is no dependabot.yml, so no weekly version PRs.
+      - run: pnpm audit --prod --audit-level high
       - run: pnpm --filter @agentlife/client build
       - run: pnpm --filter @agentlife/client check:demo-build
 
