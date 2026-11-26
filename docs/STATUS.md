@@ -30,7 +30,7 @@ Newest last. Kiro IDE and Kiro Crew (Discord) both append here; older lines are 
 
 ## Next
 1. User: browser checks (docs/HUMAN-CHECKS.md, the HR provider picker, ghost-skins at 1x, Edit room). Start with `pnpm hotel --ai ollama --model qwen3.5:4b`; tell Kiro what breaks.
-2. final-demo: replay re-recorded and Devpost drafted (docs/devpost.md) on 2026-11-24. The video is recorded by `pnpm --filter @agentlife/client video` (data/video/agentlife.webm + .srt, 2:34, Windows voice). Left: the user watches it, uploads it (YouTube or Vimeo) and submits. Freeze 2026-12-01, submit by 2026-12-03.
+2. final-demo: replay re-recorded and Devpost drafted (docs/devpost.md) on 2026-11-24. The video is recorded by `pnpm --filter @agentlife/client video` (data/video/agentlife.webm + .srt, 2:34, Windows voice). Left: the user watches it, uploads it to YouTube (the rules accept only YouTube) and submits. Freeze 2026-12-01, submit by 2026-12-03.
 3. After submission: docs/roadmap-after-kiroween.md (Tickets room, Jira first).
 4. Flaky to watch: journeys.spec.ts at 360x640 (conductor run 13); mailbox-report visual at 800x600 (badge toast, baselines rewritten 2026-11-15).
 
